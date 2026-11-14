@@ -46,8 +46,8 @@ hardware-encoded path is planned for v1.1.
 ## A feature your app needs isn't there
 
 Not supported yet: a 720p format, Live Photo, depth data and a live webcam: your app sees them as unavailable, as on a
-device without them. Zoom ramps (`rampToVideoZoomFactor`) are silently ignored (the zoom doesn't move), and focus can't be
-locked. Expo Go and Flutter's `camera` plugin in landscape are known
+device without them. Zoom (`videoZoomFactor`, and on iOS 27 `rampToVideoZoomFactor`) is accepted but the picture never
+zooms; on iOS 26 a ramp is ignored (the factor doesn't move). Focus can't be locked. Expo Go and Flutter's `camera` plugin in landscape are known
 gaps.
 
 ## Apple's AVCam sample crashes when you take a photo

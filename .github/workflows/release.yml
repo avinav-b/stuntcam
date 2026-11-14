@@ -1,0 +1,165 @@
+# SPDX-License-Identifier: Apache-2.0
+# release: builds the npm package on a GitHub-hosted macOS runner with scripts/package.sh and stages it on npm with
+# `npm stage publish` (trusted publishing over OIDC: no npm token exists anywhere). A staged version is not installable:
+# a maintainer reviews it on npmjs.com (Staged Packages) or with `npm stage approve <id>`, which needs their 2FA, and
+# only then is it released, with the tag it was staged with.
+#
+# Triggers: pushing a tag v<VERSION> (build + stage), or running it by hand (workflow_dispatch): a dry run that builds,
+# checks and uploads the package as a workflow artifact, and stages it only if `stage` is ticked on a v* tag.
+# The package must be built with the Xcode the frozen stub's hash and the shipped restore rules were measured with
+# (PACKAGER_XCODE_BUILD); the `xcode-27` image has it installed side by side. Actions are pinned by commit.
+name: release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: Also stage the package on npm (only from a v* tag)
+        type: boolean
+        default: false
+permissions: {}
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  NPM_VERSION: 11.19.0   # the same npm packs in both jobs, so the staged tarball is byte-identical to the built one
+jobs:
+  build:
+    runs-on: xcode-27
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: zsh -euo pipefail {0}
+    env:
+      PACKAGER_XCODE_BUILD: 27A266a
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Version
+        id: version
+        run: |
+          V=$(<VERSION)
+          # the same pattern as scripts/package.sh
+          [[ $V =~ '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$' ]] || { echo "::error::VERSION isn't semver: $V"; exit 1; }
+          if [[ $GITHUB_REF_TYPE == tag && $GITHUB_REF_NAME != v$V ]]; then
+            echo "::error::tag $GITHUB_REF_NAME doesn't match VERSION $V"; exit 1
+          fi
+          # a prerelease never becomes `latest`
+          [[ $V == *-* ]] && T=next || T=latest
+          echo "version=$V" >> $GITHUB_OUTPUT; echo "tag=$T" >> $GITHUB_OUTPUT
+          echo "version $V, npm tag $T, ref $GITHUB_REF"
+      - name: Select Xcode ${{ env.PACKAGER_XCODE_BUILD }}
+        run: |
+          found=
+          for x in /Applications/Xcode*.app(N); do
+            b=$(DEVELOPER_DIR=$x/Contents/Developer xcodebuild -version 2>/dev/null | sed -n 's/^Build version //p') || b=
+            echo "$x: ${b:-?}"
+            if [[ $b == $PACKAGER_XCODE_BUILD ]]; then found=$x; break; fi
+          done
+          [[ -n $found ]] || { echo "::error::no Xcode with build $PACKAGER_XCODE_BUILD on this runner"; exit 1; }
+          sudo xcode-select -s $found/Contents/Developer
+          echo "DEVELOPER_DIR=$found/Contents/Developer" >> $GITHUB_ENV
+          DEVELOPER_DIR=$found/Contents/Developer xcodebuild -version; sw_vers
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.27.x'
+          cache: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - name: npm ${{ env.NPM_VERSION }}
+        run: |
+          npm install -g npm@$NPM_VERSION && npm --version && go version
+          echo "SIMCAM_HOME=$RUNNER_TEMP/simcam-home" >> $GITHUB_ENV
+      - name: Build the package (scripts/package.sh)
+        run: scripts/package.sh
+      - name: Check the package
+        env:
+          V: ${{ steps.version.outputs.version }}
+        run: |
+          P=build/package
+          ls -l $P
+          [[ -f $P/stuntcam-$V.tgz ]] || { echo "::error::no $P/stuntcam-$V.tgz"; exit 1; }
+          M=$P/stuntcam/share/stuntcam/manifest.txt
+          sed -n 1,2p $M
+          [[ $(sed -n 1p $M) == "stuntcam $V commit "* ]] || { echo "::error::manifest line 1 isn't stuntcam $V"; exit 1; }
+          [[ $(sed -n 2p $M) == *" xcode $PACKAGER_XCODE_BUILD" ]] || { echo "::error::not packaged with Xcode $PACKAGER_XCODE_BUILD"; exit 1; }
+          [[ -x $P/stuntcam/bin/stuntcam ]] || { echo "::error::bin/stuntcam isn't executable"; exit 1; }
+          $P/stuntcam/bin/stuntcam version
+          (cd $P && shasum -a 256 stuntcam-$V.tgz | tee stuntcam-$V.tgz.sha256)
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: npm-package
+          path: |
+            build/package/stuntcam-*.tgz
+            build/package/stuntcam-*.tgz.sha256
+            build/package/filelist.txt
+            build/package/stuntcam/share/stuntcam/manifest.txt
+          if-no-files-found: error
+          retention-days: 30
+
+  verify:
+    # every run, dry runs included: the Linux repack that `stage` publishes must equal the built tarball
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions: {}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: npm-package
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - name: npm ${{ env.NPM_VERSION }}
+        run: npm install -g npm@$NPM_VERSION && npm --version
+      - name: Repack equals the built tarball
+        env:
+          V: ${{ needs.build.outputs.version }}
+        run: |
+          set -euo pipefail
+          sha256sum -c "stuntcam-$V.tgz.sha256"
+          mkdir pkg out && tar -xzf "stuntcam-$V.tgz" -C pkg
+          test -x pkg/package/bin/stuntcam
+          (cd pkg/package && npm pack --ignore-scripts --pack-destination ../../out)
+          echo "$(cut -d' ' -f1 "stuntcam-$V.tgz.sha256")  out/stuntcam-$V.tgz" | sha256sum -c
+
+  stage:
+    needs: [build, verify]
+    if: github.ref_type == 'tag' && (github.event_name == 'push' || inputs.stage)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: npm-release
+    permissions:
+      id-token: write   # OIDC for npm trusted publishing (and provenance)
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: npm-package
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - name: npm ${{ env.NPM_VERSION }}
+        run: npm install -g npm@$NPM_VERSION && npm --version
+      - name: Stage on npm
+        env:
+          V: ${{ needs.build.outputs.version }}
+          TAG: ${{ needs.build.outputs.tag }}
+        run: |
+          set -euo pipefail
+          sha256sum -c "stuntcam-$V.tgz.sha256"
+          mkdir pkg && tar -xzf "stuntcam-$V.tgz" -C pkg
+          cd pkg/package
+          test -x bin/stuntcam
+          # `npm stage publish` packs the current folder: it must pack byte-for-byte what package.sh packed
+          npm pack --ignore-scripts --pack-destination ..
+          (cd .. && echo "$(cut -d' ' -f1 "../stuntcam-$V.tgz.sha256")  stuntcam-$V.tgz" | sha256sum -c)
+          npm stage publish --ignore-scripts --tag "$TAG" --access public
+          echo "Staged stuntcam@$V (tag $TAG). Approve it on npmjs.com (Staged Packages) or with: npm stage approve <id>"

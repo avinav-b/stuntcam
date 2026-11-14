@@ -114,11 +114,11 @@ not armed; use `id=`. On GitHub-hosted macOS runners the engine and its self-tes
 - **Audio:** a generated tone by default, so the Mac's microphone and its permission are never involved. The tone is
   recorded even when your app's microphone permission is "not determined" (a known difference from a device).
 - **Scanning:** QR and EAN-13 through AVFoundation's metadata output and Vision.
-- **Device behaviour:** orientation and rotation, front-camera preview mirroring, torch, zoom, focus and exposure points,
+- **Device behaviour:** orientation and rotation, front-camera preview mirroring, torch, focus and exposure points,
   and the interruption apps get when they go to the background.
 
 **Known limits:** 4K60 video records at about 16–32 fps (the simulator's software encoder; 1080p60 is fine); no 720p
-format yet; zoom ramps (`rampToVideoZoomFactor`) are ignored; front photos keep the same EXIF orientation with mirroring
+format yet; zoom is accepted but the picture doesn't zoom (on iOS 26 ramps are ignored); front photos keep the same EXIF orientation with mirroring
 on; focus can't be locked; flash is offered but never fires; Live Photo, depth data, bracketed capture and MultiCam are
 reported as unsupported; no live webcam until v1.1.
 
