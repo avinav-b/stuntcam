@@ -1,0 +1,196 @@
+# SPDX-License-Identifier: Apache-2.0
+# setup-stuntcam (design §10, CI): install stuntcam from npm on a macOS runner, cache the canary passes, and arm a
+# simulator with `stuntcam up`. TEMPLATE: scripts/package.sh writes the action, with @VERSION@ replaced by the VERSION
+# file, to build/package/setup-stuntcam/action.yml. NOT PUBLISHED: to use it, the generated action needs a release tag in
+# a public repo, e.g. uses: avinav-b/setup-stuntcam@v1
+name: setup-stuntcam
+description: Install stuntcam (a camera for the iOS Simulator) and arm a simulator with it
+branding:
+  icon: camera
+  color: purple
+inputs:
+  version:
+    description: stuntcam version to install from npm (ignored when tarball is set)
+    default: "@VERSION@"
+  tarball:
+    description: path to a local stuntcam-<version>.tgz to install instead of the npm registry (testing a build)
+    default: ""
+  up:
+    description: run `stuntcam up` after installing ("false" only installs and puts stuntcam on PATH)
+    default: "true"
+  udid:
+    description: >-
+      simulator to arm (`up --udid`). Default: the only booted iOS simulator; with none booted, a "stuntcam-ci" iPhone on
+      the newest iOS runtime (created if needed, left shut down so `up` boots it armed). Several booted: pass one.
+    default: ""
+  mode:
+    description: "`up --mode`: boot (shut-down simulator, Xcode Run and hosted tests get the camera) or launchd (already booted)"
+    default: ""
+  grant:
+    description: bundle ids to grant camera + microphone (`up --grant`), separated by spaces
+    default: ""
+  args:
+    description: >-
+      more `stuntcam up` arguments, split like a shell does (quotes group, nothing is expanded), e.g.
+      --source "image:fixtures/my qr.png"
+    default: ""
+outputs:
+  path:
+    description: absolute path of the installed stuntcam binary
+    value: ${{ steps.install.outputs.path }}
+  version:
+    description: "`stuntcam version` of the installed binary"
+    value: ${{ steps.install.outputs.version }}
+  udid:
+    description: the simulator `stuntcam up` armed ("" when up is false)
+    value: ${{ steps.sim.outputs.udid }}
+runs:
+  using: composite
+  steps:
+    # GitHub runs `shell: bash` as `bash -eo pipefail`: no `cmd | grep -q` (grep exits at the first match, cmd gets SIGPIPE
+    # and the pipeline fails at random), and no pipeline whose grep may match nothing.
+    - name: Check the runner
+      shell: bash
+      run: |
+        [[ "$RUNNER_OS" == macOS && "$(uname -m)" == arm64 ]] || { echo "::error::setup-stuntcam needs an Apple-silicon macOS runner"; exit 1; }
+        runtimes="$(xcrun simctl list runtimes)"
+        [[ "$runtimes" == *$'\n'"iOS "* ]] || { echo "::error::no iOS Simulator runtime on this runner"; exit 1; }
+    - name: Install stuntcam
+      id: install
+      shell: bash
+      env:
+        STUNTCAM_VERSION: ${{ inputs.version }}
+        STUNTCAM_TARBALL: ${{ inputs.tarball }}
+      run: |
+        set -euo pipefail
+        d="$RUNNER_TEMP/stuntcam"
+        mkdir -p "$d"
+        spec="stuntcam@$STUNTCAM_VERSION"
+        if [[ -n "$STUNTCAM_TARBALL" ]]; then spec="$(cd "$(dirname "$STUNTCAM_TARBALL")" && pwd)/$(basename "$STUNTCAM_TARBALL")"; fi
+        # a prefix of its own: nothing global, nothing in the project's package.json
+        npm install --prefix "$d" --no-save --no-audit --no-fund "$spec"
+        bin="$(cd "$d/node_modules/stuntcam/bin" && pwd)/stuntcam"
+        "$bin" version --check
+        v="$("$bin" version)"
+        echo "$d/node_modules/.bin" >> "$GITHUB_PATH"
+        echo "path=$bin" >> "$GITHUB_OUTPUT"
+        echo "version=$v" >> "$GITHUB_OUTPUT"
+        echo "verdicts=${SIMCAM_HOME:-$HOME/Library/Application Support/stuntcam}/verdicts" >> "$GITHUB_OUTPUT"
+        echo "cache=$RUNNER_TEMP/stuntcam-verdict-cache" >> "$GITHUB_OUTPUT"
+        # runtime builds, e.g. 23D8133-24A434: a new runtime build starts from no cached verdicts (sed matches nothing safely)
+        rt="$(xcrun simctl list runtimes | sed -nE 's/^iOS [0-9.]+ \([0-9.]+ - ([0-9A-Za-z]+)\).*/\1/p' | paste -sd- -)"
+        echo "key=stuntcam-verdicts-$(printf '%s' "$v" | tr -c 'A-Za-z0-9.' '-')-${rt:-none}" >> "$GITHUB_OUTPUT"
+    - name: Restore cached canary passes
+      # design §10: verdicts are cached. The key is new on every run (actions/cache never overwrites a key), so each run
+      # saves what it measured; restore-keys pick the newest entry for this stuntcam build and these runtimes.
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ steps.install.outputs.cache }}
+        key: ${{ steps.install.outputs.key }}-${{ github.run_id }}-${{ github.run_attempt }}
+        restore-keys: |
+          ${{ steps.install.outputs.key }}-
+    - name: Use the cached passes
+      shell: bash
+      env:
+        CACHE_DIR: ${{ steps.install.outputs.cache }}
+        VERDICTS_DIR: ${{ steps.install.outputs.verdicts }}
+      run: |
+        set -euo pipefail
+        mkdir -p "$CACHE_DIR" "$VERDICTS_DIR"
+        # plain passes only (a fail or a short-lived retried/relaunched pass stays on the runner that measured it);
+        # never over a verdict this runner already has
+        node -e '
+          const fs = require("fs"), path = require("path");
+          const [src, dst] = process.argv.slice(1);
+          for (const f of fs.readdirSync(src).filter(f => f.endsWith(".json"))) {
+            let r; try { r = JSON.parse(fs.readFileSync(path.join(src, f), "utf8")); } catch { continue; }
+            if (r.verdict !== "pass" || f !== r.key + ".json" || r.retried || r.relaunched || r.failed_first || /retried:\[/.test(r.result || "")) continue;
+            if (!fs.existsSync(path.join(dst, f))) fs.copyFileSync(path.join(src, f), path.join(dst, f));
+          }' "$CACHE_DIR" "$VERDICTS_DIR"
+    - name: Pick a simulator
+      id: sim
+      if: inputs.up == 'true'
+      shell: bash
+      env:
+        UP_UDID: ${{ inputs.udid }}
+        UP_MODE: ${{ inputs.mode }}
+      run: |
+        set -euo pipefail
+        if [[ -n "$UP_UDID" ]]; then echo "udid=$UP_UDID" >> "$GITHUB_OUTPUT"; exit 0; fi
+        # the only booted iOS simulator; none booted (a fresh runner): a "stuntcam-ci" iPhone on the newest iOS runtime
+        pick="$(node -e '
+          const { execFileSync } = require("child_process");
+          const j = a => JSON.parse(execFileSync("xcrun", ["simctl", "list", "-j", ...a], { encoding: "utf8", maxBuffer: 64 << 20 }));
+          const rts = j(["runtimes", "available"]).runtimes.filter(r => r.platform === "iOS" && r.isAvailable)
+            .sort((a, b) => a.version.localeCompare(b.version, undefined, { numeric: true }));
+          const ios = new Set(rts.map(r => r.identifier));
+          const devs = Object.entries(j(["devices", "available"]).devices).filter(([rt]) => ios.has(rt))
+            .flatMap(([rt, ds]) => ds.map(d => ({ ...d, rt })));
+          const booted = devs.filter(d => d.state === "Booted");
+          if (booted.length === 1) { console.log("use " + booted[0].udid); process.exit(0); }
+          if (booted.length > 1) { console.log("error " + booted.length + " iOS simulators are booted (" + booted.map(d => d.name).join(", ") + "): pass the one to arm as udid"); process.exit(0); }
+          const rt = rts[rts.length - 1];
+          if (!rt) { console.log("error no available iOS runtime: pass udid"); process.exit(0); }
+          const mine = devs.find(d => d.name === "stuntcam-ci" && d.rt === rt.identifier);
+          if (mine) { console.log("use " + mine.udid); process.exit(0); }
+          // the newest numbered iPhone, a Pro before the others (the list is not in age order)
+          const score = t => { const m = /^iPhone (\d+)( Pro)?( Max)?$/.exec(t.name); return m ? +m[1] * 10 + (m[2] && !m[3] ? 2 : m[2] ? 1 : 0) : -1; };
+          const t = (rt.supportedDeviceTypes || []).filter(t => t.productFamily === "iPhone" && score(t) >= 0).sort((a, b) => score(a) - score(b)).pop();
+          if (!t) { console.log("error iOS " + rt.version + " lists no iPhone device type: pass udid"); process.exit(0); }
+          console.log("create " + t.identifier + " " + rt.identifier);
+        ')"
+        case "$pick" in
+          "use "*) udid="${pick#use }";;
+          "create "*) set -- ${pick#create }; udid="$(xcrun simctl create stuntcam-ci "$1" "$2")"; echo "created simulator stuntcam-ci ($udid, $1, $2)";;
+          *) echo "::error::setup-stuntcam: ${pick#error } (input udid)"; exit 1;;
+        esac
+        # launchd mode arms a booted simulator; boot mode (the default) boots a shut-down one armed
+        if [[ "$UP_MODE" == launchd ]]; then xcrun simctl bootstatus "$udid" -b >/dev/null; fi
+        echo "udid=$udid" >> "$GITHUB_OUTPUT"
+    - name: stuntcam up
+      if: inputs.up == 'true'
+      shell: bash
+      env:
+        STUNTCAM_BIN: ${{ steps.install.outputs.path }}
+        UP_UDID: ${{ steps.sim.outputs.udid }}
+        UP_MODE: ${{ inputs.mode }}
+        UP_GRANT: ${{ inputs.grant }}
+        UP_ARGS: ${{ inputs.args }}
+      run: |
+        set -euo pipefail
+        a=(--udid "$UP_UDID")
+        [[ -n "$UP_MODE" ]] && a+=(--mode "$UP_MODE")
+        # xargs splits like a shell (quotes group words) without expanding globs, $vars or $(commands). Its output goes to a
+        # file, not `< <(…)` (whose exit status bash drops), so an unbalanced quote fails the step instead of silently
+        # dropping the words; -r: no input, no printf (GNU xargs would otherwise pass one empty word)
+        printf '%s' "$UP_GRANT" | xargs -r printf '%s\0' > "$RUNNER_TEMP/stuntcam-grant.args"
+        printf '%s' "$UP_ARGS" | xargs -r printf '%s\0' > "$RUNNER_TEMP/stuntcam-up.args"
+        while IFS= read -r -d '' g; do a+=(--grant "$g"); done < "$RUNNER_TEMP/stuntcam-grant.args"
+        while IFS= read -r -d '' x; do a+=("$x"); done < "$RUNNER_TEMP/stuntcam-up.args"
+        "$STUNTCAM_BIN" up "${a[@]}"
+        "$STUNTCAM_BIN" status
+    - name: Keep the canary passes
+      if: always() && inputs.up == 'true' && steps.install.outcome == 'success'
+      shell: bash
+      env:
+        CACHE_DIR: ${{ steps.install.outputs.cache }}
+        VERDICTS_DIR: ${{ steps.install.outputs.verdicts }}
+      run: |
+        set -euo pipefail
+        rm -rf "$CACHE_DIR"; mkdir -p "$CACHE_DIR" "$VERDICTS_DIR"
+        node -e '
+          const fs = require("fs"), path = require("path");
+          const [src, dst] = process.argv.slice(1);
+          let n = 0;
+          for (const f of fs.readdirSync(src).filter(f => f.endsWith(".json"))) {
+            let r; try { r = JSON.parse(fs.readFileSync(path.join(src, f), "utf8")); } catch { continue; }
+            if (r.verdict !== "pass" || f !== r.key + ".json" || r.retried || r.relaunched || r.failed_first || /retried:\[/.test(r.result || "")) continue;
+            fs.copyFileSync(path.join(src, f), path.join(dst, f)); n++;
+          }
+          console.log(n + " canary pass(es) to cache");' "$VERDICTS_DIR" "$CACHE_DIR"
+    - name: Save the canary passes
+      if: always() && inputs.up == 'true' && steps.install.outcome == 'success'
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ steps.install.outputs.cache }}
+        key: ${{ steps.install.outputs.key }}-${{ github.run_id }}-${{ github.run_attempt }}

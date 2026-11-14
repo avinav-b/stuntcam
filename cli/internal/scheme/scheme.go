@@ -1,0 +1,95 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// Package scheme finds Xcode schemes that insert their own libraries (DYLD_INSERT_LIBRARIES in a launch or test action's
+// environment, e.g. Reveal or an in-house debug dylib). Boot mode's boot environment displaces them; `stuntcam chain add`
+// brings them back (design §4.1 "Scheme-level inserts").
+package scheme
+
+import (
+	"encoding/xml"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+type Insert struct {
+	Scheme string   // .xcscheme path
+	Libs   []string // the libraries named (variables like $(BUILT_PRODUCTS_DIR) kept as written)
+}
+
+type envVar struct {
+	Key     string `xml:"key,attr"`
+	Value   string `xml:"value,attr"`
+	Enabled string `xml:"isEnabled,attr"`
+}
+
+type xcscheme struct {
+	Launch struct {
+		Env []envVar `xml:"EnvironmentVariables>EnvironmentVariable"`
+	} `xml:"LaunchAction"`
+	Test struct {
+		Env []envVar `xml:"EnvironmentVariables>EnvironmentVariable"`
+	} `xml:"TestAction"`
+}
+
+// Scan walks root (bounded depth, skipping dependency and build folders) for .xcscheme files that insert libraries.
+func Scan(root string, maxDepth int) []Insert {
+	var out []Insert
+	base := strings.Count(filepath.Clean(root), string(filepath.Separator))
+	filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			switch d.Name() {
+			case "node_modules", "Pods", "build", "DerivedData", ".git", ".dart_tool", ".build":
+				return filepath.SkipDir
+			}
+			if strings.Count(p, string(filepath.Separator))-base > maxDepth {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(p, ".xcscheme") {
+			return nil
+		}
+		if in, ok := parse(p); ok {
+			out = append(out, in)
+		}
+		return nil
+	})
+	return out
+}
+
+func parse(p string) (Insert, bool) {
+	b, err := os.ReadFile(p)
+	if err != nil {
+		return Insert{}, false
+	}
+	var s xcscheme
+	if xml.Unmarshal(b, &s) != nil {
+		return Insert{}, false
+	}
+	in := Insert{Scheme: p}
+	for _, v := range append(s.Launch.Env, s.Test.Env...) {
+		if v.Key != "DYLD_INSERT_LIBRARIES" || v.Enabled == "NO" {
+			continue
+		}
+		for _, l := range strings.Split(v.Value, ":") {
+			if l = strings.TrimSpace(l); l != "" && !contains(in.Libs, l) {
+				in.Libs = append(in.Libs, l)
+			}
+		}
+	}
+	return in, len(in.Libs) > 0
+}
+
+func contains(s []string, x string) bool {
+	for _, v := range s {
+		if v == x {
+			return true
+		}
+	}
+	return false
+}

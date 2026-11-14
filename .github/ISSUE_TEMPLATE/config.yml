@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+blank_issues_enabled: false
+contact_links:
+  - name: Troubleshooting
+    url: https://github.com/avinav-b/stuntcam/blob/main/docs/TROUBLESHOOTING.md
+    about: The common "no camera" cases and their fixes
+  - name: Support policy
+    url: https://github.com/avinav-b/stuntcam/blob/main/docs/SUPPORT.md
+    about: What's verified (Xcode, runtimes, camera stacks) and what to expect

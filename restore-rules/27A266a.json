@@ -1,0 +1,70 @@
+{
+  "proto": 1,
+  "xcode": "27.0",
+  "xcode_build": "27A266a",
+  "source": "measured: spike m11 (Q1a-1d, Xcode GUI section), W1 e4 (measured internally), W4 e26 (measured internally, W4 e26: sanitizer, Zombies, backtrace and Guard Malloc schemes), e28 and e42 (measured internally, W4 e42: test-runner). The loader (engine/loader/loader.c) reads this file: `stuntcam up` stages restore-rules/ under $SIMCAM_HOME/restore-rules/ and records the Xcode build in sims/<udid>/config.json; the loader reads <rules_dir>/<build>.json (design §4.1, B-MF5)",
+  "root": "the simulator runtime root ($SIMULATOR_ROOT, else $DYLD_ROOT_PATH); paths below starting with / are relative to it",
+  "loader_reads": "rules[].name and rules[].libs (ordered; each {path, if?, unless?}; a condition is VAR=value, PREFIX* (any variable with that prefix) or VAR (set)). Everything else is documentation. A missing rule or file falls back to the loader's built-in copy of this file",
+  "never_dlopened": "libclang_rt.* (sanitizer runtimes) and libgmalloc.dylib, in every rule and the chain: they only work inserted at launch (ASan aborts with 'Interceptors are not working' when dlopened; a second TSan runtime gets mapped). Hard-coded in the loader, not read from here",
+  "rules": [
+    {
+      "name": "hosted-tests",
+      "when": "XCTestBundleInjectPath set and an XCTest marker present (XCInjectBundleInto, XCTestConfigurationFilePath, XCTestBundlePath or XCTestSessionIdentifier)",
+      "load": "exactly the XCTestBundleInjectPath list, de-duplicated; /usr/lib/... entries prefixed with the root; our own libraries and the never_dlopened ones skipped",
+      "measured": {
+        "xcodebuild": ["/usr/lib/libRPAC.dylib", "<DerivedData>/<App>.app/Frameworks/libXCTestBundleInject.dylib", "/usr/lib/libMainThreadChecker.dylib"],
+        "xcodebuild_asan": ["__TESTBUNDLE__/Frameworks/libclang_rt.asan_iossim_dynamic.dylib", "+ the three above (the app links its own runtime)"],
+        "xcodebuild_tsan": ["__TESTBUNDLE__/Frameworks/libclang_rt.tsan_iossim_dynamic.dylib", "+ the three above (the app links its own runtime)"],
+        "xcode_gui_cmd_u": ["/usr/lib/libRPAC.dylib", "/usr/lib/libLogRedirect.dylib", "<DerivedData>/<App>.app/Frameworks/libXCTestBundleInject.dylib", "/usr/lib/libMainThreadChecker.dylib"]
+      },
+      "without_rule": "xcodebuild test hangs (test bundle never injected)"
+    },
+    {
+      "name": "ui-test-target",
+      "when": "XCODE_SCHEME_NAME set (app launched by XCUIApplication), no hosted-test rule",
+      "libs": [
+        {"path": "/usr/lib/libLogRedirect.dylib", "if": "IDE_CHOSEN_LOGGING_METHOD=2"},
+        {"path": "/usr/lib/libMainThreadChecker.dylib", "unless": "SIMCAM_MTC=0"},
+        {"path": "/usr/lib/libRPAC.dylib", "if": "PERFC_*"}
+      ],
+      "engine": true
+    },
+    {
+      "name": "ui-test-runner",
+      "when": "executable path contains -Runner.app/",
+      "load": "its own XCTestBundleInjectPath list (hosted-tests rule)",
+      "engine": false
+    },
+    {
+      "name": "test-runner",
+      "when": "read by the runner hook (libsimcamrunnerhook.dylib, engine/runnerhook/runnerhook.m), not the loader: `stuntcam exec -- xcodebuild test` on a launchd-armed or unarmed destination sets TEST_RUNNER_DYLD_INSERT_LIBRARIES=<hook>, which replaces the runner's own insert list (XCTestBundleInjectPath then reads /usr/lib/libRPAC.dylib:<hook>:<hook>); the hook dlopens these in its constructor",
+      "libs": [
+        {"path": "@testhost/Frameworks/libXCTestBundleInject.dylib", "if": "XCInjectBundleInto"},
+        {"path": "/usr/lib/libMainThreadChecker.dylib", "unless": "SIMCAM_MTC=0"},
+        {"path": "/usr/lib/libRPAC.dylib", "if": "PERFC_*"}
+      ],
+      "paths": "@testhost/<rel>: where dyld resolves XCTest's '<built products>/<App>.app/<rel>' entry: the leaf in DYLD_LIBRARY_PATH first (Xcode's iPhoneSimulator.platform/Developer/usr/lib copy), then the built and the installed host. /usr/... gets the runtime root. Launch-only libraries and already-mapped basenames are skipped",
+      "measured": {
+        "hosted_unarmed": ["/usr/lib/libRPAC.dylib", "<built products>/M11App.app/Frameworks/libXCTestBundleInject.dylib (mapped from Xcode's platform usr/lib)", "<root>/usr/lib/libMainThreadChecker.dylib"],
+        "ui_runner_boot_mode": ["/usr/lib/libRPAC.dylib", "<root>/usr/lib/libMainThreadChecker.dylib"],
+        "with_TEST_RUNNER_DYLD_INSERT_LIBRARIES": "/usr/lib/libRPAC.dylib:<hook>:<hook> (RPAC still loads; MTC and libXCTestBundleInject don't, and hosted tests hang without the latter: w4 e26)"
+      },
+      "engine": false
+    },
+    {
+      "name": "xcode-run",
+      "when": "an Xcode marker (MTC_*, PERFC_* or IDE_* variable, or DYLD_LIBRARY_PATH inside DerivedData), no rule above",
+      "libs": [
+        {"path": "/usr/lib/libLogRedirect.dylib", "if": "IDE_CHOSEN_LOGGING_METHOD=2"},
+        {"path": "/usr/lib/libMainThreadChecker.dylib", "unless": "SIMCAM_MTC=0"},
+        {"path": "/usr/lib/libRPAC.dylib", "if": "PERFC_*"},
+        {"path": "/usr/lib/libViewDebuggerSupport.dylib"}
+      ],
+      "measured_set": ["libLogRedirect", "libMainThreadChecker", "libRPAC", "libViewDebuggerSupport"],
+      "not_inserted_by_xcode_27_0": ["libBacktraceRecording (any queue-debugging setting)", "libgmalloc (the scheme's DYLD_INSERT_LIBRARIES option)", "sanitizer runtimes (the app links them)"],
+      "notes": "each of these removes itself from DYLD_INSERT_LIBRARIES on load, so only libViewDebuggerSupport is visible in a plain run's env; MTC has no on/off signal (SIMCAM_MTC=0 skips it). Under ⌘R nothing in the app names the launching Xcode (e26), so which file applies comes from the build recorded at arm time"
+    }
+  ],
+  "switches": {"SIMCAM_XCODE_LIBS=0": "no restores", "SIMCAM_MTC=0": "skip libMainThreadChecker"},
+  "unverified": ["Xcode 26.6 / 27.1 / 27.2 (U4 part 2)", "Detox / idb inserts (displaced; design §4.1 rule 4: announced, not restored)"]
+}

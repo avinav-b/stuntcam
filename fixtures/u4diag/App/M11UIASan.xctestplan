@@ -1,0 +1,26 @@
+{
+  "configurations" : [
+    {
+      "id" : "6B1F3C52-8E1A-4E43-9A51-0E43A5A11A01",
+      "name" : "Default",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "addressSanitizer" : {
+      "enabled" : true
+    }
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:M11App.xcodeproj",
+        "identifier" : "035FCED90514DA6C31CBF41F",
+        "name" : "M11AppUITests"
+      }
+    }
+  ],
+  "version" : 1
+}

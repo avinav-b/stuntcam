@@ -1,0 +1,42 @@
+.DS_Store
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+node_modules/
+.build/
+*.dSYM/
+
+# Added with the prototype import
+# Build outputs (./build.sh, canary/build.sh, fixtures/plain/build.sh; Metro/Flutter caches live in build/ too)
+/results/
+/results
+*.app/
+*.ipa
+*.xcarchive/
+
+# JavaScript / Expo
+.expo/
+
+# CocoaPods
+Pods/
+
+# Flutter / Dart (and any local Flutter SDK checkout)
+.dart_tool/
+.flutter-plugins-dependencies
+/flutter/
+/flutter-sdk/
+.pub-cache/
+
+# Xcode local env
+.xcode.env.local
+
+# Helper binaries compiled from tools/*.swift|*.m|*.c by tools/build.sh
+/tools/bin/
+
+# Python
+__pycache__/
+*.pyc
+
+# Go CLI build output
+/cli/bin/

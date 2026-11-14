@@ -1,0 +1,99 @@
+# SPDX-License-Identifier: Apache-2.0
+name: M11App
+options:
+  bundleIdPrefix: dev.simcam.m11
+  deploymentTarget:
+    iOS: "17.0"
+targets:
+  M11App:
+    type: application
+    platform: iOS
+    sources: [Sources]
+    info:
+      path: Sources/Info.plist
+      properties:
+        UILaunchScreen: {}
+        NSCameraUsageDescription: "spike"
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+          UISceneConfigurations:
+            UIWindowSceneSessionRoleApplication:
+              - UISceneConfigurationName: Default
+                UISceneDelegateClassName: "$(PRODUCT_MODULE_NAME).SceneDelegate"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.simcam.m11.app
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_STYLE: Automatic
+  M11Lite:
+    type: application
+    platform: iOS
+    sources: [LiteSources]
+    info:
+      path: LiteSources/Info.plist
+      properties:
+        UILaunchScreen: {}
+        NSCameraUsageDescription: "spike"
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+          UISceneConfigurations:
+            UIWindowSceneSessionRoleApplication:
+              - UISceneConfigurationName: Default
+                UISceneDelegateClassName: SD
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.simcam.m11.lite
+        GENERATE_INFOPLIST_FILE: NO
+        CLANG_ENABLE_OBJC_ARC: YES
+  M11AppTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [UnitTests]
+    dependencies:
+      - target: M11App
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: dev.simcam.m11.tests
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/M11App.app/M11App"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+  M11AppUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [UITests]
+    dependencies:
+      - target: M11App
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: dev.simcam.m11.uitests
+        TEST_TARGET_NAME: M11App
+schemes:
+  M11App:
+    build:
+      targets:
+        M11App: all
+        M11Lite: all
+        M11AppTests: [test]
+        M11AppUITests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets: [M11AppTests, M11AppUITests]
+  M11Unit:
+    build:
+      targets:
+        M11App: all
+        M11AppTests: [test]
+    test:
+      config: Debug
+      targets: [M11AppTests]
+  M11UI:
+    build:
+      targets:
+        M11App: all
+        M11AppUITests: [test]
+    test:
+      config: Debug
+      targets: [M11AppUITests]

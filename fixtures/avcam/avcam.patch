@@ -1,0 +1,59 @@
+stuntcam fixture patch for Apple's sample "AVCam: Building a camera app" (zip sha256 5a1981f9...0e53; see README.md).
+Apply from the top of the unzipped sample: git apply avcam.patch (or patch -p1 < avcam.patch).
+
+Part (a), AVCam/Capture/PhotoCapture.swift: the Live Photo fix. Set the Live Photo movie URL only when Live Photo capture
+  is enabled on the photo output. Without it the shutter crashes wherever Live Photo is unsupported (as under stuntcam).
+Part (b), AVCam/CameraView.swift: build with Xcode 27.0. Compile the iOS 27.1-only toolbar-edge modifier only when
+  AVCAM_SDK_27_1 is set; build.sh sets it when the SDK is 27.1 or later, so there the sample is unchanged. Applying by
+  hand with SDK 27.1+: add AVCAM_SDK_27_1 to Active Compilation Conditions yourself.
+
+--- a/AVCam/Capture/PhotoCapture.swift
++++ b/AVCam/Capture/PhotoCapture.swift
+@@ -90,7 +90,10 @@
+         photoSettings.maxPhotoDimensions = photoOutput.maxPhotoDimensions
+         
+         // Set the movie URL if the photo output supports Live Photo capture.
+-        photoSettings.livePhotoMovieFileURL = features.isLivePhotoEnabled ? URL.movieFileURL : nil
++        // stuntcam fixture, part (a), the Live Photo fix: also require Live Photo capture to be enabled on the output.
++        // updateConfiguration enables it only where it's supported; where it isn't (stuntcam, a camera without Live Photo),
++        // a movie URL makes capturePhoto throw. Where Live Photo is supported, nothing changes.
++        photoSettings.livePhotoMovieFileURL = features.isLivePhotoEnabled && photoOutput.isLivePhotoCaptureEnabled ? URL.movieFileURL : nil
+         
+         // Set the priority of speed versus quality during this capture.
+         if let prioritization = AVCapturePhotoOutput.QualityPrioritization(rawValue: features.qualityPrioritization.rawValue) {
+--- a/AVCam/CameraView.swift
++++ b/AVCam/CameraView.swift
+@@ -108,6 +108,9 @@
+     CameraView(camera: PreviewCameraModel())
+ }
+ 
++// stuntcam fixture, part (b), builds with Xcode 27.0: `toolbarVerticalEdge` is new in the iOS 27.1 SDK, so this
++// modifier is compiled only when AVCAM_SDK_27_1 is set (fixtures/avcam/build.sh sets it with SDK 27.1 or later).
++#if AVCAM_SDK_27_1
+ /// A modifier that extends a view across the side where the system places the vertical toolbar.
+ @available(iOS 27.1, *)
+ private struct ToolbarEdgeSafeArea: ViewModifier {
+@@ -127,6 +130,7 @@
+         content.ignoresSafeArea(edges: edges)
+     }
+ }
++#endif
+ 
+ private extension View {
+ 
+@@ -136,11 +140,15 @@
+     /// view inside the safe area.
+     @ViewBuilder
+     func ignoresSafeAreaAtToolbarEdge() -> some View {
++#if AVCAM_SDK_27_1
+         if #available(iOS 27.1, *) {
+             modifier(ToolbarEdgeSafeArea())
+         } else {
+             self
+         }
++#else
++        self // part (b): as the sample does before iOS 27.1
++#endif
+     }
+ }
+ 
