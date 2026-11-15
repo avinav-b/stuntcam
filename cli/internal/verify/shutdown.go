@@ -15,7 +15,7 @@ import (
 	"github.com/avinav-b/stuntcam/cli/internal/simctl"
 )
 
-// The private device is shut down after the verdict, not before it is returned (w4 e36 proposal 2: 3.2 s of every
+// The private device is shut down after the verdict, not before it is returned (the shutdown took 3.2 s of every
 // verify). Run hands the shutdown and the per-runtime lock to a detached child (ShutdownCommand: the CLI itself, in its own
 // session, so neither the CLI exiting nor a Ctrl-C in its terminal stops it):
 //   - the lock dir gets a "shutdown" marker (udid, time) and the child's pid as its owner pid; the child shuts the device
@@ -27,12 +27,12 @@ import (
 //   - if the child can't be started, or can't be made the lock's owner, Run kills it and shuts the device down itself;
 //   - the child lives at most ShutdownLife (then exits, leaving a dead owner's lock), shuts the device down again only while
 //     the lock is still its own (or its parent's), and a marker older than ShutdownLife (+ slack) is a dead owner's even if
-//     its pid has been reused (w4 e38).
+//     its pid has been reused.
 
 // ShutdownCommand is the hidden CLI command the detached child runs (cmd/stuntcam dispatches it to FinishShutdown).
 const ShutdownCommand = "_private-shutdown"
 
-// ShutdownLife bounds the detached child: it exits after this long whatever simctl is doing (w4 e38). A var for tests.
+// ShutdownLife bounds the detached child: it exits after this long whatever simctl is doing. A var for tests.
 var ShutdownLife = 75 * time.Second
 
 // staleSlack is how much older than ShutdownLife a marker must be before its lock counts as a dead owner's: the parent
@@ -40,7 +40,7 @@ var ShutdownLife = 75 * time.Second
 const staleSlack = 5 * time.Second
 
 // ShutdownWait bounds how long a verify waits for the previous verify's device to finish shutting down: the child's whole
-// life, so a waiter never gives up on a child that would still finish (w4 e38; was 60 s against a child that could run
+// life, so a waiter never gives up on a child that would still finish (a shorter wait, e.g. 60 s, would give up on a child that can run
 // ~65 s plus its simctl calls).
 var ShutdownWait = ShutdownLife + staleSlack
 
@@ -188,7 +188,7 @@ func readMarker(dir string) (udid string, at time.Time, ok bool) {
 }
 
 // markerStale: the lock has a shutdown marker older than the child can live, so its owner pid (if alive) is not that
-// child any more (w4 e38: a reused pid would otherwise hold the lock for good).
+// child any more (a reused pid would otherwise hold the lock for good).
 func markerStale(dir string) bool {
 	_, at, ok := readMarker(dir)
 	return ok && !at.IsZero() && time.Since(at) > ShutdownLife+staleSlack

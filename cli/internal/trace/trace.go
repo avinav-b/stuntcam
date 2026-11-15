@@ -80,7 +80,7 @@ func Parse(b []byte) (File, error) {
 		l := sc.Text()
 		if first {
 			if l != "stuntcam-trace 1" {
-				if v, ok := strings.CutPrefix(l, "stuntcam-trace "); ok { // a newer engine's format (review L6)
+				if v, ok := strings.CutPrefix(l, "stuntcam-trace "); ok { // a newer engine's format
 					return f, fmt.Errorf("%w (format %s; this stuntcam reads format 1: update the CLI)", ErrNotTrace, strings.TrimSpace(v))
 				}
 				return f, ErrNotTrace
@@ -391,7 +391,7 @@ func Build(f File, others []File, udid, sim string, running *bool) Report {
 				p.Ms[k] = ms(v - a.origin)
 			}
 		}
-		if p.Error != 0 { // the engine stamps the grab before the photo queue fails it: nothing was delivered (review L1)
+		if p.Error != 0 { // the engine stamps the grab before the photo queue fails it: nothing was delivered
 			p.TimestampS = nil
 		} else if ts && s12 {
 			d := ms(p.HostNs["timestamp"] - p.HostNs["slot12"])

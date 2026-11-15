@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-# summarize.py <results dir> <case-rt>... : one markdown row per run (w4 e25): pauses seen by the watchdog, sentinel events,
+# summarize.py <results dir> <case-rt>... : one markdown row per run: pauses seen by the watchdog, sentinel events,
 # latches, and whether every operation completed. Run with python3 -I.
 import os, re, sys
 base = sys.argv[1]

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// features-probe (w4 e22): which camera features does AVFoundation say the camera supports, and what happens when an app
+// features-probe: which camera features does AVFoundation say the camera supports, and what happens when an app
 // turns them on. Measurement only: it logs, it doesn't check. Every line is
 //   PROBE| <CFAbsoluteTime, 3 dp> <s since launch> <text>
 // (CFAbsoluteTime is the engine log's clock, engine/src/simcam.m LOG).
@@ -29,7 +29,7 @@ let mode = arg("-mode") ?? "read"
 let featureArg = arg("-feature") ?? "baseline"
 let cameraArg = arg("-camera") ?? "back-wide"
 let noCatch = arg("-nocatch") == "1"   // capturePhoto without SCTry: an exception it raises is uncaught, as in an app
-let movieSeconds = Double(arg("-seconds") ?? "") ?? 3   // w4 e23b: movie length for movie features (e22: 3 s)
+let movieSeconds = Double(arg("-seconds") ?? "") ?? 3   // movie length for movie features (default 3 s)
 
 // ---------- formatting ----------
 func fourcc(_ v: UInt32) -> String {
@@ -258,7 +258,7 @@ func movieInfo(_ u: URL) -> String {
     x += " track:\(t.mediaType.rawValue)"
     if t.mediaType == .video {
       x += ":\(Int(t.naturalSize.width))x\(Int(t.naturalSize.height))@\(String(format: "%.1f", t.nominalFrameRate)) frames~\(Int((Double(t.nominalFrameRate) * t.timeRange.duration.seconds).rounded()))"
-      // w4 e23b: the samples actually in the file (no decode), and samples / track duration
+      // the samples actually in the file (no decode), and samples / track duration
       if let r = try? AVAssetReader(asset: a) { let o = AVAssetReaderTrackOutput(track: t, outputSettings: nil); o.alwaysCopiesSampleData = false
         if r.canAdd(o) { r.add(o) }; var n = 0
         if r.startReading() { while let sb = o.copyNextSampleBuffer() { n += CMSampleBufferGetNumSamples(sb) } }
@@ -276,7 +276,7 @@ func movieInfo(_ u: URL) -> String {
   return x
 }
 
-var ifsEnabled = Set<String>()   // w4 e23b: what `ifsupported` turned on
+var ifsEnabled = Set<String>()   // what `ifsupported` turned on
 struct Feature {
   let name: String; let kind: String   // photo | movie
   var configure: (AVCaptureSession, AVCaptureDevice, AVCaptureDeviceInput, AVCapturePhotoOutput?, AVCaptureMovieFileOutput?) -> Void = { _, _, _, _, _ in }
@@ -425,7 +425,7 @@ let features: [Feature] = {
     return AVCapturePhotoBracketSettings(rawPixelFormatType: 0, processedFormat: [AVVideoCodecKey: AVVideoCodecType.jpeg], bracketedSettings: b)
   }
   a.append(br)
-  // w4 e23b: AVCam-style "enable if supported" for the three features design §6.5 wants unsupported: flash .auto / .on if
+  // AVCam-style "enable if supported" for the three features design §6.5 wants unsupported: flash .auto / .on if
   // offered, a 3-photo bracket if maxBracketedCapturePhotoCount >= 3, MultiCam if back-wide + front-wide is a supported set.
   // Logs IFSUPPORTED lines; RESULT carries enabled=<list> (none = nothing turned on)
   var ifs = Feature(name: "ifsupported", kind: "photo")
@@ -475,7 +475,7 @@ let features: [Feature] = {
       set("device.activeVideoMin/MaxFrameDuration=1/\(Int(mx))") { do { try d.lockForConfiguration(); d.activeVideoMinFrameDuration = CMTime(value: 1, timescale: CMTimeScale(mx)); d.activeVideoMaxFrameDuration = CMTime(value: 1, timescale: CMTimeScale(mx)); d.unlockForConfiguration() } catch { log("lock error \(error)") } }
       log("SET-RESULT activeVideoMinFrameDuration=\(d.activeVideoMinFrameDuration.seconds)") } }
   a.append(fps)
-  // w4 e23b: 1080p at its highest frame rate (e22 measured only 4K60)
+  // 1080p at its highest frame rate (fps above takes the highest rate of any format)
   var f10 = Feature(name: "fps1080", kind: "movie")
   f10.configure = { _, d, _, _, _ in
     let ok: (AVCaptureDevice.Format) -> Bool = { CMVideoFormatDescriptionGetDimensions($0.formatDescription).height == 1080 && $0.videoSupportedFrameRateRanges.contains { $0.maxFrameRate >= 60 } }

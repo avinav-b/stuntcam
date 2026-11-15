@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// libu4mark.dylib (w4 e26): stands in for a tool that inserts its own library per launch (Detox's
+// libu4mark.dylib: stands in for a tool that inserts its own library per launch (Detox's
 // SIMCTL_CHILD_DYLD_INSERT_LIBRARIES, idb). Its constructor appends "<pid> loaded <exe>" to $U4MARK_OUT (if set).
 #include <stdio.h>
 #include <stdlib.h>

@@ -7,8 +7,8 @@ import (
 	"time"
 )
 
-// SIMCAM_VERIFY_TIMING=1 prints one "TIMING <epoch s> <event>" line to stderr at each verify phase boundary (the lines
-// w4 e36 added to a patched copy of the CLI to split the warm time into phases; w4 e37 measures with these).
+// SIMCAM_VERIFY_TIMING=1 prints one "TIMING <epoch s> <event>" line to stderr at each verify phase boundary, for
+// splitting a verify's wall time into phases.
 var timingOn = os.Getenv("SIMCAM_VERIFY_TIMING") == "1"
 
 func mark(format string, a ...any) {

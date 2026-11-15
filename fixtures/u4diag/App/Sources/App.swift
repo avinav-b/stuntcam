@@ -26,7 +26,7 @@ func imagesReport() -> String {
     return s
 }
 func hostPathTest() {
-    for dir in ["\(outDir)/hp"] {   // m11 Q5 also probed ~/Library/Application Support/stuntcam and /tmp; only our own log dir now
+    for dir in ["\(outDir)/hp"] {   // only our own log dir: can the app write to a host path
         do {
             try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
             let f = "\(dir)/w.\(pid).txt"; try "pid \(pid)".write(toFile: f, atomically: true, encoding: .utf8)
@@ -45,7 +45,7 @@ func mode() -> String {
 
 final class Cam: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     let session = AVCaptureSession(); let lk = NSLock(); var nframes = 0
-    var frames: Int { lk.lock(); defer { lk.unlock() }; return nframes }   // read on main, written on "frames" (TSan-clean, w4 e26)
+    var frames: Int { lk.lock(); defer { lk.unlock() }; return nframes }   // read on main, written on "frames" (TSan-clean)
     func start(_ done: @escaping (String) -> Void) {
         let devs = AVCaptureDevice.DiscoverySession(deviceTypes: [.builtInWideAngleCamera], mediaType: .video, position: .unspecified).devices
         note("camera devices=\(devs.map { "\($0.localizedName)/\($0.position.rawValue)" })")
@@ -109,7 +109,7 @@ func archName() -> String {
     #endif
 }
 
-// U4 (w4 e26): what the scheme's diagnostics actually do in this process
+// U4: what the scheme's diagnostics actually do in this process
 func u4Diag() -> String {
     let h = UnsafeMutableRawPointer(bitPattern: -2)   // RTLD_DEFAULT
     func sym(_ n: String) -> Bool { dlsym(h, n) != nil }

@@ -16,14 +16,14 @@
 //     inconclusive, which is never cached;
 //   - SIGINT/SIGTERM/SIGHUP shut the device down (unless Keep), release the lock and exit 130;
 //   - otherwise the verdict is returned without waiting for the device's shutdown: a detached child takes over the shutdown
-//     and the lock, and the next verify for that runtime waits (bounded) for it (shutdown.go, w4 e37);
-//   - an unchanged canary is not reinstalled or re-granted; the installed copy is hashed each time (install.go, w4 e37);
-//   - on iOS 27 and later the canary launches no earlier than PostBootSettle (8 s) after bootstatus (w4 e38);
+//     and the lock, and the next verify for that runtime waits (bounded) for it (shutdown.go);
+//   - an unchanged canary is not reinstalled or re-granted; the installed copy is hashed each time (install.go);
+//   - on iOS 27 and later the canary launches no earlier than PostBootSettle (8 s) after bootstatus;
 //   - a pass that needed the canary's in-process retry of a photo's frame-gap check is a retried pass (Result.Retried): it
-//     is reported as such and cached for RetriedPassTTL only (w4 e38);
+//     is reported as such and cached for RetriedPassTTL only;
 //   - a content fail (core=FAIL that isn't a crash) is confirmed by one more launch before it is cached: a second content
 //     fail is the verdict and cached; a pass after it is a pass reported with the fail (Result.FailedFirst) and cached for
-//     RetriedPassTTL only, like a relaunched pass; no verdict from the confirming launch leaves the fail uncached (w4 e40).
+//     RetriedPassTTL only, like a relaunched pass; no verdict from the confirming launch leaves the fail uncached.
 package verify
 
 import (
@@ -81,14 +81,14 @@ type Result struct {
 	CanarySeconds int      `json:"canary_s,omitempty"`
 	Notes         []string `json:"notes,omitempty"`
 	// Retried is the canary's retried:[…] list (photo stages whose first attempt missed only the frame-gap check and were
-	// run again at the end of the same launch; w4 e37/e38), "" if none. A pass with it is a retried pass (RetriedPass).
+	// run again at the end of the same launch), "" if none. A pass with it is a retried pass (RetriedPass).
 	Retried string `json:"retried,omitempty"`
 	// Relaunched is the first launch's RESULT when the whole canary had to be relaunched (an inconclusive or crashed first
 	// launch) and the second launch decided the verdict; "" if the first launch did. A pass after a relaunch is short-lived
 	// like a retried pass: the second launch can't tell a post-boot stall from a regression that only hits the first launch
-	// after a boot (review r2).
+	// after a boot.
 	Relaunched string `json:"relaunched,omitempty"`
-	// FailedFirst is a content fail's RESULT when the launch run to confirm it passed (w4 e40), "" otherwise. A fail is
+	// FailedFirst is a content fail's RESULT when the launch run to confirm it passed, "" otherwise. A fail is
 	// cached forever, so one launch's fail is confirmed before it is cached; a pass after it is short-lived like a relaunched
 	// pass, and reported with the fail: one launch did fail, and a flaky check or an intermittent engine bug both look so.
 	FailedFirst string `json:"failed_first,omitempty"`
@@ -165,7 +165,7 @@ func Classify(result string) (State, string) {
 }
 
 // Retried returns the canary's retried:[…] list (stages whose first attempt missed only timing checks and were run again
-// at the end of the same launch, w4 e37), or "".
+// at the end of the same launch), or "".
 func Retried(result string) string {
 	i := strings.Index(result, " retried:[")
 	if i < 0 {
@@ -198,7 +198,7 @@ func trim(s string, n int) string {
 
 func cachePath(key string) string { return filepath.Join(home.Verdicts(), key+".json") }
 
-// RetriedPassTTL is how long a retried pass is cached (w4 e38). The canary's in-process retry of a photo's frame-gap check
+// RetriedPassTTL is how long a retried pass is cached. The canary's in-process retry of a photo's frame-gap check
 // runs ~13 s later in the same, already warm process, so it can't tell a post-boot stall (what it is for) from a
 // regression that only hits the first photo of a process: both show as "-> retry ok". A plain pass is cached until the
 // key changes; a retried pass is re-run by the first verify or `up` after an hour, which bounds how long such a regression
@@ -236,7 +236,7 @@ type Confirmation struct {
 }
 
 // confirmFail runs one more launch (again) after a content fail, so a fail is cached only when two launches in a row
-// failed on content (w4 e40: e39's 17.5 photo-then-stop fail came from an engine race that a second launch passed, and the
+// failed on content (a photo-then-stop fail on 17.5 came from an engine race that a second launch passed, and the
 // cached fail made `up` refuse that build until a --fresh verify). Anything else is returned as it is, without a launch.
 func confirmFail(res string, again func() string) Confirmation {
 	if !ContentFail(res) {
@@ -294,7 +294,7 @@ func cached(key string, now time.Time) (r Result, ok bool, why string, present b
 
 // lookup is the verdict without a canary run: this Mac's cache, else a shipped verdict from shippedDir. Any entry this Mac
 // has for key (also an expired retried or relaunched pass, or an unreadable one) means this Mac measured this build itself:
-// the shipped verdict is not used then, and the canary runs again (review).
+// the shipped verdict is not used then, and the canary runs again.
 func lookup(key, shippedDir string, now time.Time) (Result, bool, string) {
 	c, ok, why, present := cached(key, now)
 	switch {
@@ -627,7 +627,7 @@ func Run(set artifacts.Set, o Options) (Result, error) {
 
 // launches is how decide reaches the device: run launches the canary once (n: the log suffix: 1, 1r, 2, c) and returns its
 // RESULT line and whether every launch was refused / the canary ran at all; reboot re-arms and reboots after refused
-// launches; redo reinstalls and re-grants a skipped install after a launch that didn't start. Fakes in tests (review L9).
+// launches; redo reinstalls and re-grants a skipped install after a launch that didn't start. Fakes in tests.
 type launches struct {
 	run    func(n string) (result string, refused, ran bool)
 	reboot func() error
@@ -749,17 +749,17 @@ func proPhonesNewestFirst(ts []simctl.DeviceType) []simctl.DeviceType {
 
 // PostBootSettle is the earliest the canary is launched after bootstatus returns, on runtimes that need it (settleFloor).
 // iOS 27.0 has a post-boot window in which the canary's photos stall the frame pump and its frames come slowly:
-//   - w4 e37: with the reinstall skipped the canary launched ~2.3 s after bootstatus; launch -> first output took 2.7 s
+//   - with the reinstall skipped the canary launched ~2.3 s after bootstatus; launch -> first output took 2.7 s
 //     (0.5 s on 26.3) and a photo's frame gap missed the 100 ms check on 27/30 warm verifies (116-886 ms), each passed only
-//     by the canary's in-process retry. Before e37 the launch came 5-12 s after bootstatus (guard + install + grant).
-//   - w4 e38, 27.0 idle, by floor: 0 (launch at bootstatus + 2.2 s): 5/5 photo-jpeg misses (265-553 ms), slow launch
+//     by the canary's in-process retry. With guard + install + grant the launch comes 5-12 s after bootstatus.
+//   - 27.0 idle, by floor: 0 (launch at bootstatus + 2.2 s): 5/5 photo-jpeg misses (265-553 ms), slow launch
 //     2.2-3.0 s. 5 s: the launch is quick again (0.5 s) but the canary runs inside the window: 4/10 missed frames A's frame
 //     count (3 frames in 1 s; never retried in-process, so a +15 s relaunch) and 5/10 a photo-jpeg gap (143-520 ms).
-//     8 s: 0/8 misses (largest gap 95 ms). 11 s: 1/6 (a 123 ms hvc1 gap, e36's residual class) at +3 s more.
+//     8 s: 0/8 misses (largest gap 95 ms). 11 s: 1/6 (a 123 ms hvc1 gap) at +3 s more.
 //
 // So 8 s. It overlaps the SpringBoard guard and any install or grant: only the remainder is slept (~5.8 s on a warm
-// verify, which is what e37's skipped install had given back). 26.3 and 17.5 get none: on 26.3 the launch at bootstatus +
-// 2.2 s gave 0 misses in 30 (e37) and 76 (e38, idle and AVCam) warm verifies, the same as with a 5 s floor (12 runs).
+// verify, which is what skipping the install had given back). 26.3 and 17.5 get none: on 26.3 the launch at bootstatus +
+// 2.2 s gave 0 misses in 106 warm verifies (idle and under an AVCam xcodebuild loop), the same as with a 5 s floor (12 runs).
 const PostBootSettle = 8 * time.Second
 
 // settleFloor is the post-boot settle for an iOS version: PostBootSettle on 27 and later (and on a version it can't read,
@@ -809,7 +809,7 @@ func bootInstall(ctl simctl.Ctl, udid string, set artifacts.Set, force bool, set
 	if err := arm.ArmBoot(ts, udid, set, arm.Vars(udid, set, arm.Options{StubLog: true})); err != nil {
 		return plan, err
 	}
-	// SpringBoard guard (w2 e9, e10a): install and launch only once SpringBoard has kept one pid for 2 s
+	// SpringBoard guard: install and launch only once SpringBoard has kept one pid for 2 s
 	guardSpringBoard(ctl, filepath.Join(ctl.Set, udid), udid, 150*time.Millisecond)
 	if err := installGrantFn(ctl, udid, plan); err != nil {
 		return plan, err

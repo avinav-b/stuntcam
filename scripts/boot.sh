@@ -19,7 +19,7 @@ if [[ $MODE == stub ]]; then
   env "${(@)ARMV/#/SIMCTL_CHILD_}" xcrun simctl boot $UDID || { echo "$0: simctl boot failed" >&2; exit 1; }
 else
   # launchd mode sets the SIMCTL_CHILD_ extras with launchctl setenv after the boot. A variable that is also in the boot env
-  # (simctl boot passes SIMCTL_CHILD_* on by itself) never reads back there, so arming failed and rolled back (w3 e13, w4 e46):
+  # (simctl boot passes SIMCTL_CHILD_* on by itself) never reads back there, so arming failed and rolled back:
   # boot without them in that mode. plain boots without anything, so it drops them too (and a later launchd-arm.sh can arm it)
   typeset -a UNS; UNS=(); for v in ${(f)"$(env | grep -oE '^SIMCTL_CHILD_[A-Za-z0-9_]+')"}; do [[ -n $v ]] && UNS+=(-u $v); done
   rm -f $ROOT/build/bootlogdir-$RT.txt; env $UNS xcrun simctl boot $UDID || { echo "$0: simctl boot failed" >&2; exit 1; }

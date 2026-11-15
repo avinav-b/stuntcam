@@ -1,9 +1,9 @@
 #!/bin/zsh
 # SPDX-License-Identifier: Apache-2.0
-# activation.sh <rt> [case ...] — W4 PR A + B: bounded lazy activation and CoreMotion's load-time decision
-#   (the lazy-activation plan), on a sim armed by
+# activation.sh <rt> [case ...] — bounded lazy activation and CoreMotion's load-time decision
+#   (design §4.1, "Activation"), on a sim armed by
 #   scripts/boot.sh <rt> stub. Prints "PASS <case> — evidence" / "FAIL <case> — evidence" (one line per case, also appended
-#   to results/activation-<rt>-<tag>.txt) and exits 1 if any case failed. Cases marked * in the plan also run on 17.5.
+#   to results/activation-<rt>-<tag>.txt) and exits 1 if any case failed. On 17.5: act-slow-ok act-slow-timeout act-fail + the -175 cases.
 #   A timing case that fails is run once more before it counts (another agent's load can starve the machine); both
 #   verdicts and the load average are printed.
 #   THREADS_N (default 100): launches of the `threads` case. MOTION_N (default 10): launches of `motion-only`.
@@ -16,27 +16,27 @@
 #     act-fail act-timeout-throw act-swapthrow act-crash-prepare act-crash-fig act-handler-restore act-fake-sdk act-armed-crash act-never
 #     act-late act-175-record act-got act-main act-reenter threads threads-slow orient-nomotion orient-sameturn orient-bg orient-bg-turnback
 #     motion-only motion-threads none motion-gate camera-then-motion mutation-L56 mutation-L57 act-traced
-#   PR B: orient-nomotion-marker camera-then-motion-real motion-after-gate motion-latched motion-pf-expiry motion-crash
-#     mutation-L58 mutation-L59 mutation-L60   (PRB=1: only these and the motion-related PR A cases)
-#   PR B review: orient-crash mutation-L61 pf-prune motion-stock-threads (in the PR B list)
-#   e29 (attitude stand-in, PR B review round 2): motion-attitude motion-attitude-stock orient-crash-main mutation-L62
-#     orient-crash-ensure mutation-L63 pf-prune-race mutation-L64 (in the PR B list)
-#   e31 (review): app-send-crash mutation-L65 (in the PR B list)
-#   e34 (review round 2): pf-prune-kept (in the PR B list)
-#   e54 (review follow-ups): trace-crash-start mutation-L69 trace-crash2 trace-repick trace-unwritable
+#   CoreMotion at load: orient-nomotion-marker camera-then-motion-real motion-after-gate motion-latched motion-pf-expiry motion-crash
+#     mutation-L58 mutation-L59 mutation-L60   (PRB=1: only these and the motion-related activation cases)
+#   tracker faults, marker pruning: orient-crash mutation-L61 pf-prune motion-stock-threads (in PRB_CASES)
+#   attitude stand-in, motion-key scope: motion-attitude motion-attitude-stock orient-crash-main mutation-L62
+#     orient-crash-ensure mutation-L63 pf-prune-race mutation-L64 (in PRB_CASES)
+#   app-answerable sends: app-send-crash mutation-L65 (in PRB_CASES)
+#   prune vs a fresh marker: pf-prune-kept (in PRB_CASES)
+#   op trace file, deferred-stop flush: trace-crash-start mutation-L69 trace-crash2 trace-repick trace-unwritable
 #     mutation-L71 flush-race mutation-L73 (the E54 list; they read traces with cli/bin/stuntcam, build it first)
-#   e57 (review): mutation-L70 (M54_OLD_CRASH: trace-crash2's negative control), in the E54 list
-#   e59 (review): late-waiter mutation-L74 (a stop waiter starved past the flush bound; L74), in the E54 list
-# Verdicts: PASS, FAIL, and UNSURE (not counted as a failure; the run's last line counts them). Crash reports (review
-# L3): a case that wants the host's .ips for a crash it caused matches reports by pid, never by count or mtime. The pids come
+#   crash-handler race: mutation-L70 (M54_OLD_CRASH: trace-crash2's negative control), in the E54 list
+#   late stop waiter: late-waiter mutation-L74 (a stop waiter starved past the flush bound; L74), in the E54 list
+# Verdicts: PASS, FAIL, and UNSURE (not counted as a failure; the run's last line counts them). Crash
+# reports: a case that wants the host's .ips for a crash it caused matches reports by pid, never by count or mtime. The pids come
 # from the launch's own lines: the fault line "[simcam <pid>] M16_*: fault ..." where the case has one, else the launch's
 # first "[simcam <pid>]" line. A report counts if its process name is the app's and its "pid" is one of those, in
 # DiagnosticReports or Retired/ (tools/ipspid.py), captured at or after the case's start (CASE_START: a reused pid never
 # matches an older report); a missing one is waited for up to 30 s (reports were seen 12 s late). If
 # every engine-side check passes and a pid still has no report, the case is UNSURE ("no crash report written for pid ..."):
 # macOS stops writing reports for a process after many crashes, so a missing report is host state, not an engine verdict
-# (e29 and e31: whenever m5app crashes got no report, DiagnosticReports held exactly 25 m5app reports, the rest in Retired/;
-# e31 also saw orient-crash-ensure's second report missing with only 5 there, cause unknown). A case that wants NO report
+# (seen: whenever m5app crashes got no report, DiagnosticReports held exactly 25 m5app reports, the rest in Retired/;
+# once orient-crash-ensure's second report was missing with only 5 there, cause unknown). A case that wants NO report
 # (act-slow-timeout) counts this launch's pid only.
 #   act-traced attaches lldb from the command line (SB API, scripts/lldb-attach.py; no GUI). Not here: act-tsan (a TSan app +
 #   engine boot)
@@ -92,7 +92,7 @@ clear_sentinel() {   # host-side clear of one bundle's sentinel state (see the h
   done
   rm -f $STATE/preflight-fail-$BUILD
 }
-# PR B: plant_marker <path> <content> <until epoch> (a marker the engine would have written: content, mtime = until)
+# plant_marker <path> <content> <until epoch> (a marker the engine would have written: content, mtime = until)
 plant_marker() { mkdir -p ${1:h}; print -r -- "$2" > $1; setmtime $1 $3; }
 mstock() { cnt 'simcam: CoreMotion is stock this launch' $1/dylib.log; }   # the one-shot stock line (record queue -> per-pid log)
 mstand() { [[ $(cnt "PASS order.$2.(available|rate|timestamps)" $1/app.log) == 3 && $(cnt 'motion: hooked 16' $1/app.log) == 1 && $(mstock $1) == 0 ]]; }   # the stand-in answered
@@ -185,7 +185,7 @@ c_act-latch() {
   else bad "hangs=$H L3: preflight=$(cnt PREFLIGHT $L3/app.log) latched=$(cnt 'latched after' $L3/dylib.log) marker=$M3 fc=$f3; L4: gate=$(cnt 'TIMING gate entered' $L4/app.log) until=$(cnt 'latched until' $L4/dylib.log) fc=$f4 (stock $f0); L5 pass=$(pass_n $L5) markers=$mk5"; fi
   clear_sentinel $BP
 }
-c_act-cli-clear() {   # review item 1: the real CLI's clear unlatches (this build's marker lives only next to the events.log in use)
+c_act-cli-clear() {   # the real CLI's clear unlatches (this build's marker lives only next to the events.log in use)
   local e=$(ev $BP) T=$(tmpdir $BP) cli=$ROOT/cli/bin/stuntcam n0 d3 d4 ms mt ls1 ls2
   clear_sentinel $BP; n0=$(nl $e)
   run plain cc-1 M16_SLOW_ACTIVATE_MS=1500 M5APP_EXPECT=stock
@@ -385,7 +385,7 @@ c_act-fail() {
   [[ -z $out ]] && ok "stock + one stderr line + DONE each, no marker; throw -> crash activate counted ($sum)" || bad "failed:$out ($sum)"
   clear_sentinel $BP
 }
-c_act-timeout-throw() {   # review item 2: a timeout, then prepare throws: exactly one counted strike, so the next launch arms
+c_act-timeout-throw() {   # a timeout, then prepare throws: exactly one counted strike, so the next launch arms
   clear_sentinel $BP; local e=$(ev $BP) n0 d1 d2 c; n0=$(nl $e)
   run plain tt1 M16_SLOW_ACTIVATE_MS=1500 M16_ACTIVATE_FAIL=throw M5APP_EXPECT=stock; d1=$(res plain tt1); sleep 1
   c=$(since $e $n0 | grep -cE '^[0-9]+ [0-9]+ (hang|crash) ')
@@ -440,7 +440,7 @@ c_act-handler-restore() {
   local d1 d2 b1 a1 b2 a2 m2
   clear_sentinel $BP; run plain hr1 M16_ACTIVATE_FAIL=preflight M5APP_SIGCHECK=1 M5APP_EXPECT=stock; d1=$(res plain hr1)
   b1=$(grep -oE 'sigcheck before SIGSEGV handler=[^ ]+' $d1/app.log | cut -d= -f2); a1=$(grep -oE 'sigcheck SIGSEGV handler=[^ ]+' $d1/app.log | cut -d= -f2)
-  # review item 8: also read the handler while the never-finishing prepare runs (500 ms in): it must be ours (the minimal one),
+  # also read the handler while the never-finishing prepare runs (500 ms in): it must be ours (the minimal one),
   # or the restore checks would pass without it ever going in
   clear_sentinel $BP; run plain hr2 M16_SLOW_ACTIVATE_MS=600000 M5APP_SIGCHECK=1 M5APP_SIGCHECK_AT_MS=500 M5APP_EXPECT=stock; d2=$(res plain hr2)
   b2=$(grep -oE 'sigcheck before SIGSEGV handler=[^ ]+' $d2/app.log | cut -d= -f2); a2=$(grep -oE 'sigcheck SIGSEGV handler=[^ ]+' $d2/app.log | cut -d= -f2)
@@ -450,8 +450,8 @@ c_act-handler-restore() {
   clear_sentinel $BP
 }
 c_act-fake-sdk() {
-  # the fault comes at 1600 ms (not the plan's 3000): M5APP_EXPECT=stock exits ~1 s after the first call returns. It is a
-  # related-image fault (CoreMedia, on a global queue: M16_FIG_FAULT_AT_MS, review item 7), which the minimal handler would record
+  # the fault comes at 1600 ms (not 3000): M5APP_EXPECT=stock exits ~1 s after the first call returns. It is a
+  # related-image fault (CoreMedia, on a global queue: M16_FIG_FAULT_AT_MS), which the minimal handler would record
   # as `crash activate` if gActRunning were still set: the waiter clears it before anything else, so the chain through the
   # fake SDK to our minimal handler must record nothing. (An app-code fault, as before, is never recorded either way.)
   clear_sentinel $BP; local e=$(ev $BP) n0 d; n0=$(nl $e)
@@ -481,7 +481,7 @@ c_act-never() {
 }
 c_act-late() {
   clear_sentinel $BP; local e=$(ev $BP) n0 mx d; n0=$(nl $e); mx=$(maxact $e)
-  # prepare ends 300 ms after the timeout (review item 9: 1050 left 50 ms, less than one 100 ms wait slice plus wake-up latency, for
+  # prepare ends 300 ms after the timeout (1050 left 50 ms, less than one 100 ms wait slice plus wake-up latency, for
   # the waiter's CAS to beat prepare's); still well inside the launch, so "finished after … staying stock" is logged
   run plain lt M16_SLOW_ACTIVATE_MS=1300 M5APP_EXPECT=stock; d=$(res plain lt)
   local h=$(since $e $n0 | grep -c 'hang activate') nums=$(since $e $n0 | awk '{print $2}' | sort -u | tr '\n' ' ')
@@ -694,7 +694,7 @@ c_mutation-L56() {   # M16_NO_ACTTIMEOUT=1 brings back today's unbounded inline 
   clear_sentinel $BP
 }
 
-# ---------------------------------------------------------------- PR B: CoreMotion decided at load from markers (plan §3, §2.6)
+# ---------------------------------------------------------------- CoreMotion decided at load from markers
 c_orient-nomotion-marker() {   # a planted latched-motion marker instead of M5_NO_MOTION: the same landscape angles, CoreMotion stock with its line
   clear_sentinel $BO; local now=$(date +%s) a0 a1 d1
   p12 orient landscapeLeft nmk0; a0=$(angles $PD)
@@ -706,7 +706,7 @@ c_orient-nomotion-marker() {   # a planted latched-motion marker instead of M5_N
   else bad "marker '$a1' vs none '$a0'; hooked=$(cnt 'motion: hooked' $d1/app.log) traps=$(cnt 'one-shot forwarding traps' $d1/app.log) accel=$(grep -oE 'motion accel=[a-z]+' $d1/app.log) stocklines=$(mstock $d1)"; fi
   clear_sentinel $BO
 }
-c_camera-then-motion-real() {   # a REAL preflight failure: stand-in this launch (D2), preflight-fail written, the next motion-only is stock
+c_camera-then-motion-real() {   # a REAL preflight failure: stand-in this launch, preflight-fail written, the next motion-only is stock
   clear_sentinel $BP; local d1 d2 pf=$STATE/preflight-fail-$BUILD now=$(date +%s) m
   run plain ctr1 M5APP_ORDER=camera-then-motion SIMCAM_PF_BREAK=1 M16_PF_FAIL_REAL=1; d1=$(res plain ctr1); m=$(mtime $pf)
   run plain ctr2 M5APP_ORDER=motion-only M5APP_EXPECT_MOTION=stock; d2=$(res plain ctr2)
@@ -751,7 +751,7 @@ c_motion-pf-expiry() {   # preflight-fail expires after 24 h; a passing prefligh
   run plain mpe2 M5APP_ORDER=motion-only M5APP_EXPECT_MOTION=stock; d2=$(res plain mpe2); mstockok $d2 motion-only && r2=ok || r2="fresh (control): $(grep -E 'order.motion-only' $d2/app.log | sed 's/M5APP| //' | tr '\n' ' ' | cut -c1-120)"
   run plain mpe3; d3=$(res plain mpe3); [[ $(pass_n $d3) == 14 && ! -f $pf ]] && r3=ok || r3="passing camera launch: pass=$(pass_n $d3) pf=$([[ -f $pf ]] && echo kept || echo gone)"
   run plain mpe4 M5APP_ORDER=motion-only; d4=$(res plain mpe4); mstand $d4 motion-only && r4=ok || r4="after: $(grep -E 'order.motion-only' $d4/app.log | sed 's/M5APP| //' | tr '\n' ' ' | cut -c1-120) lines=$(mstock $d4)"
-  # review: a fresh marker that the same launch's passing preflight unlinks before the first motion call: the stock
+  # a fresh marker that the same launch's passing preflight unlinks before the first motion call: the stock
   # line still names it with a real until (from the load-time stat), never "?"
   plant_marker $pf "preflight failed" $(( now + 82800 ))
   run plain mpe5 M5APP_ORDER=camera-then-motion M5APP_EXPECT_MOTION=stock; d5=$(res plain mpe5)
@@ -819,7 +819,7 @@ c_orient-crash() {   # a fault in the orientation tracker (camera code) counts a
     "events '$OC_EV' fault pids '$OC_PIDS' reports=$CR; N+2 latched=$(cnt 'latched after' $OC_D3/dylib.log) '${l3:-no verdict}'"
   clear_sentinel $BO
 }
-c_mutation-L61() {   # M17_TRACKER_MOTION_SCOPE=1: upd under the motion key again (the review blocker): orient-crash must catch it
+c_mutation-L61() {   # M17_TRACKER_MOTION_SCOPE=1: upd under the motion key again: orient-crash must catch it
   orient_crash_seq l61 M17_TRACKER_MOTION_SCOPE=1; local l3=$(grep -m1 -E '(PASS|FAIL) coord-bg' $OC_D3/app.log)
   if [[ $OC_EV == 'crash-motionx2 ' && $(cnt 'latched after' $OC_D3/dylib.log) == 0 ]]; then ok "mutant caught: '$OC_EV', N+2 camera not latched (${l3#*\| }; orient-crash wants provider and a latched camera)"
   else bad "mutant not caught: events '$OC_EV'; N+2 latched=$(cnt 'latched after' $OC_D3/dylib.log) '${l3:-no verdict}'"; fi
@@ -847,7 +847,7 @@ c_mutation-L60() {   # M17_NO_HANDLER_MARKER=1: the second strike writes no mark
   clear_sentinel $BP
 }
 
-# ---------------------------------------------------------------- e29: the attitude stand-in, PR B review round 2
+# ---------------------------------------------------------------- the attitude stand-in
 mprobe() {   # mprobe <tag> <probe args...>: one fixtures/motion-probe launch (XENV from MPX, one K=V per line); sets MD
   local t=$1; shift
   XENV="${MPX:-}" $ROOT/fixtures/motion-probe/drive.sh $RT $TAG-$t boot "$@" >/dev/null 2>&1; MD=$SIMCAM_RESULTS/motion-$RT-$TAG-$t
@@ -920,7 +920,7 @@ c_mutation-L63() {   # M17_ENSURE_KEEP_KEY=1: ActEnsure's main-thread tracker ru
   else bad "mutant not caught: events '$OE_EV' ($OE_F); N+2 latched=$(cnt 'latched after' $OE_D3/dylib.log)"; fi
   clear_sentinel $BP
 }
-c_app-send-crash() {   # low 3 (e31 guard): the app's first camera call from its CMMotionManager subclass's interval getter, which
+c_app-send-crash() {   # the app's first camera call from its CMMotionManager subclass's interval getter, which
   # the stand-in reads inside its motion scope; a fault in that call's trap (camera code, M16_TRAP_FAULT) must be camera, never motion
   orient_early_seq asc M16_TRAP_FAULT=1 M16_TRAP_FAULT=1 motion-subclass-camera; local disc=$(grep -oE 'camera-then-motion discovery=[0-9]+' $OE_D3/app.log) eng=0; oe_reports
   camera_ev_ok "$OE_EV" && [[ $OE_NP == 2 && $OE_F == 'fault in ActEnsure now (main thread, feature key none); fault in ActEnsure now (main thread, feature key none)' && $(cnt 'latched after' $OE_D3/dylib.log) == 1 && $disc == *=0 ]] && eng=1
@@ -928,7 +928,7 @@ c_app-send-crash() {   # low 3 (e31 guard): the app's first camera call from its
     "faults '$OE_F' (pids '$OE_PIDS') events '$OE_EV' reports=$CR; N+2 latched=$(cnt 'latched after' $OE_D3/dylib.log) $disc"
   clear_sentinel $BP
 }
-c_mutation-L65() {   # M17_APP_SEND_KEEP_KEY=1: the app-answerable sends keep the motion key (low 3 undone): app-send-crash must catch it
+c_mutation-L65() {   # M17_APP_SEND_KEEP_KEY=1: the app-answerable sends keep the motion key (that guard undone): app-send-crash must catch it
   orient_early_seq l65 M16_TRAP_FAULT=1 M16_TRAP_FAULT=1 motion-subclass-camera M17_APP_SEND_KEEP_KEY=1
   if [[ $OE_EV == 'crash-motionx2 ' && $OE_F == *'feature key motion'* && $(cnt 'latched after' $OE_D3/dylib.log) == 0 ]]; then ok "mutant caught: '$OE_EV' ($OE_F), N+2 camera not latched (app-send-crash wants provider/activate, key none, a latched camera)"
   else bad "mutant not caught: events '$OE_EV' ($OE_F); N+2 latched=$(cnt 'latched after' $OE_D3/dylib.log)"; fi
@@ -936,7 +936,7 @@ c_mutation-L65() {   # M17_APP_SEND_KEEP_KEY=1: the app-answerable sends keep th
 }
 pfrace_seq() {   # pfrace_seq <tag> [K=V ...]: plain writes preflight-fail (a real failure) paused mid-write for 15 s (K=V go to it);
   # meanwhile the canary (forced preflight failure: no marker of its own) runs PREPARE 1's prune. Sets PR_MK PR_UT PR_RM PR_W,
-  # and PR_P1 (review L7: the canary got past PREPARE 1, its 'TIMING gate entered' line, while the write's file was
+  # and PR_P1 (the canary got past PREPARE 1, its 'TIMING gate entered' line, while the write's file was
   # there before and after the canary's run: "tmp" (the temp file), "inplace" (L64: the marker itself), or what was missing)
   local t=$1; shift; local mk=$STATE/preflight-fail-$BUILD dc tb ta
   clear_sentinel $BP; clear_sentinel $BC
@@ -961,7 +961,7 @@ c_pf-prune-race() {   # a preflight-fail marker another process is writing is ne
   else bad "write $PR_W, canary $PR_P1, prune lines=$PR_RM, marker=$PR_MK until-now=${PR_UT}s"; fi
   clear_sentinel $BP; clear_sentinel $BC
 }
-c_pf-prune-kept() {   # the prune's "kept" branch (L4): a fresh marker renamed over the expired one after PREPARE 1's stat, before
+c_pf-prune-kept() {   # the prune's "kept" branch: a fresh marker renamed over the expired one after PREPARE 1's stat, before
   # its rename aside, is put back, not unlinked. Plain prunes another build's expired preflight-fail, paused 4 s before the
   # rename (M16_PRUNE_PAUSE_MS); in the pause the host renames a fresh one (until +1 h) over it, as SCWriteMarker does.
   clear_sentinel $BP; local now=$(date +%s) d w=never m=$STATE/preflight-fail-0000cafef00d tmp=$STATE/.preflight-fail-0000cafef00d.tmp-host
@@ -983,7 +983,7 @@ c_mutation-L64() {   # M17_MARKER_INPLACE=1: markers written in place again (ope
   clear_sentinel $BP; clear_sentinel $BC
 }
 
-# ---------------------------------------------------------------- W4 e54
+# ---------------------------------------------------------------- op trace file, deferred-stop flush
 # The op trace's file (core/trace.inc; ledger L69-L71) and a start's flush of a deferred stop (fig/session_state.inc; L73).
 # Traces are read with the CLI (`stuntcam trace --json --pid`), the parser `stuntcam trace` users get.
 SCLI=$ROOT/cli/bin/stuntcam
@@ -1044,9 +1044,9 @@ c_trace-crash2() {   # L70: two threads in the crash handler at once: one whole 
   elif (( C2_WHOLE == C2_N )); then unsure "a whole trace in all $C2_N launches, but both threads reached the handler in only $C2_BOTH$C2_DET"
   else bad "$C2_WHOLE of $C2_N launches left a whole trace$C2_DET"; fi
 }
-c_mutation-L70() {   # M54_OLD_CRASH=1 (W4 e57): no CAS, both threads format into one buffer and write one temp file, 20 ms apart:
+c_mutation-L70() {   # M54_OLD_CRASH=1: no CAS, both threads format into one buffer and write one temp file, 20 ms apart:
   # trace-crash2's check must see a launch without a whole trace (torn, empty, unparseable or a temp file left). A launch
-  # tears about half the time (e57: 6 of 13), so up to 10 launches (a miss ~0.1%)
+  # tears about half the time (6 of 13 in one run), so up to 10 launches (a miss ~0.1%)
   # A catch is a launch with both threads in the handler (2 crash lines) and no whole trace; see crash2_seq
   C2_STOP_BAD=1 crash2_seq tc2m M54_OLD_CRASH=1
   if (( C2_CAUGHT )); then ok "mutant caught: launch $C2_N of up to 10, both threads in the handler, left no whole trace ($C2_BOTH with both threads)$C2_DET"
@@ -1097,11 +1097,11 @@ c_flush-race() {   # L73: the flush returns only after the stop's DidStopRunning
   flush_seq fr
   [[ $FR_LINE == *"outstanding=1"*"was queued first (in order)"* ]] && ok "$FR_LINE" || bad "${FR_LINE:-no M54_FLUSH_RACE line}"
 }
-c_mutation-L73() {   # M54_OLD_FLUSH=1: the pre-e54 dispatch_sync returns before the waiter is queued
+c_mutation-L73() {   # M54_OLD_FLUSH=1: the unfixed dispatch_sync returns before the waiter is queued
   flush_seq frm M54_OLD_FLUSH=1
   [[ $FR_LINE == *"NOT queued yet (out of order)"* ]] && ok "mutant caught: $FR_LINE" || bad "mutant not caught: ${FR_LINE:-no M54_FLUSH_RACE line}"
 }
-# late_seq <tag> [K=V ...] (W4 e59, L74): flush-race's flush, but the stop's waiter starts 650 ms late (M59_LATE_WAITER), as if
+# late_seq <tag> [K=V ...] (L74): flush-race's flush, but the stop's waiter starts 650 ms late (M59_LATE_WAITER), as if
 # starved of CPU: the flush gives up at kM40WaitS (500 ms) and the start would go ahead; the photo's didFinishCapture is
 # 2 s late, so it is still due when the waiter runs. Sets LW_LATE (the fault's line), LW_TO (the flush's timeout line),
 # LW_FR (the M54_FLUSH_RACE line), LW_W (the waiter's verdict line), LW_MS (its wait in ms, or -), LW_STOP (plain's stop line)
@@ -1121,7 +1121,7 @@ c_late-waiter() {   # L74: the flush timed out with the mark kept: the late wait
     ok "$LW_LATE; flush: $LW_TO; the waiter: $LW_W; plain: ${LW_STOP:-no stop line}"
   else bad "late=${LW_LATE:-none} | flush: ${LW_TO:-no timeout line} | race: ${LW_FR:-none} | waiter: ${LW_W:-none} | plain: ${LW_STOP:-none}"; fi
 }
-c_mutation-L74() {   # M59_OLD_FLUSHMARK=1: e57's clearing of the mark on timeout: the late waiter waits for its photo again
+c_mutation-L74() {   # M59_OLD_FLUSHMARK=1: the mark cleared on timeout again: the late waiter waits for its photo again
   late_seq lwm M59_OLD_FLUSHMARK=1
   if [[ $LW_TO == *"M59_OLD_FLUSHMARK"* && -n $LW_W && $LW_W != *"flushed by a start"* ]]; then ok "mutant caught: the late waiter wasn't flushed: $LW_W; plain: ${LW_STOP:-no stop line}"
   else bad "mutant not caught: flush: ${LW_TO:-no timeout line} | waiter: ${LW_W:-none}"; fi

@@ -152,8 +152,8 @@ func LoadFile(path, bundle, build string) (App, error) {
 	return Analyze(bundle, Parse(lines), build, time.Now()), sc.Err()
 }
 
-// ClosesCamera reports whether a latch of this feature closes the camera. A `motion` latch (W4 PR B) only makes CoreMotion
-// stock from the next launch; the camera is unaffected (plan D6).
+// ClosesCamera reports whether a latch of this feature closes the camera. A `motion` latch only makes CoreMotion
+// stock from the next launch; the camera is unaffected.
 func ClosesCamera(feature string) bool { return feature != "motion" }
 
 // Effect says in words what a set of latched features does to the app's next launches.
@@ -187,9 +187,9 @@ func (a App) LatchedFeatures() []string {
 	return out
 }
 
-// Marker is a file the engine writes in the bundle's state dir (W4): latched-<build> holds the latched camera features of one
+// Marker is a file the engine writes in the bundle's state dir: latched-<build> holds the latched camera features of one
 // build (a valid one makes that build's next launches camera-stock without activating, and CoreMotion stock);
-// latched-motion-<build> (PR B) holds `motion` (CoreMotion stock, the camera unaffected). Its mtime is the time it stops
+// latched-motion-<build> holds `motion` (CoreMotion stock, the camera unaffected). Its mtime is the time it stops
 // counting.
 type Marker struct {
 	Build    string
@@ -284,11 +284,11 @@ func Clear(udid, bundle, why string) error {
 		return fmt.Errorf("bad bundle id %q", bundle)
 	}
 	dir := filepath.Join(home.StateDir(udid), bundle)
-	// the clear line first, as the engine's SCClearAtLoad does (review 2)
+	// the clear line first, as the engine's SCClearAtLoad does
 	p := EventsFile(udid, bundle)
 	aerr := os.MkdirAll(filepath.Dir(p), 0o755)
 	if aerr == nil {
-		aerr = AppendClear(p, why, true) // the markers go even if this fails, as in SCClearAtLoad; the error is returned (r2 LOW 2)
+		aerr = AppendClear(p, why, true) // the markers go even if this fails, as in SCClearAtLoad; the error is returned
 	}
 	if ents, err := os.ReadDir(dir); err == nil {
 		for _, e := range ents {
@@ -317,7 +317,7 @@ func firstField(s string) string {
 // featureOf folds unknown feature names into "engine", as the engine's SCFeatureIndex does.
 func featureOf(f string) string {
 	switch f {
-	case "session", "photo", "movie", "provider", "engine", "activate", "motion": // gSCFeatures in core/safety.inc (W4: activate, motion)
+	case "session", "photo", "movie", "provider", "engine", "activate", "motion": // gSCFeatures in core/safety.inc
 		return f
 	}
 	return "engine"

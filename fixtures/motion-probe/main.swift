@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// motion-probe (w4 e24, design U2): two CMMotionManager instances recording accelerometer updates at an IMU rate, optionally
+// motion-probe (design U2): two CMMotionManager instances recording accelerometer updates at an IMU rate, optionally
 // next to a running AVCaptureSession, in either start order. A measurement app: it logs, it checks nothing. README.md.
 // Launch arguments: -camera 0|1 (default 0)  -order motionFirst|cameraFirst (default motionFirst)  -dur <s> (10)  -hz <Hz> (100)
 import UIKit
@@ -140,7 +140,7 @@ final class VC: UIViewController {
   }
 }
 
-// ---- -attitude 1|stock (w4 e29): the device-motion attitude stand-in ----
+// ---- -attitude 1|stock: the device-motion attitude stand-in ----
 // -attitude 1: CMMotionManager.availableAttitudeReferenceFrames, then startDeviceMotionUpdates(using: .xArbitraryZVertical,
 // to:) at -hz for 2 s (-dur is ignored), a queue-less startDeviceMotionUpdates(using:) read after 0.5 s, and
 // attitudeReferenceFrame. Every sample is checked:
@@ -149,8 +149,8 @@ final class VC: UIViewController {
 //   -expect portrait|portraitUpsideDown|landscapeLeft|landscapeRight (1e-3); every sample equal to the first (1e-6: held
 //   still); magneticField zero and uncalibrated; and against a REAL CMAttitude built from the same quaternion with
 //   CoreMotion's own (private) -initWithQuaternion: (a test oracle only): its rotationMatrix, its angles' matrix,
-//   multiplyByInverseOfAttitude:. Then copy, a * a^-1, and coding (e31): the archive is byte-identical to Apple's for the
-//   same q and, with the stand-in active, decodes to an M5Attitude (e34, M1: m1.multiply, m1.isEqual, m1.decodeClass).
+//   multiplyByInverseOfAttitude:. Then copy, a * a^-1, and coding: the archive is byte-identical to Apple's for the
+//   same q and, with the stand-in active, decodes to an M5Attitude (M1: m1.multiply, m1.isEqual, m1.decodeClass).
 //   24 checks in all. -m1 a|b|c: one M1 step only, then END (a throwaway measurement launch).
 // The rate must be >= 90% of -hz. Lines: "ATT PASS|FAIL <check> ...", then "ATT SUMMARY pass=<n> fail=<n>".
 // -armcam 1: one camera call before the motion calls (the control file's orientation= applies only once the camera arms).
@@ -282,7 +282,7 @@ final class AttitudeProbe {
         let self1 = a.copy() as! CMAttitude; self1.multiply(byInverseOf: a)
         R(abs(abs(self1.quaternion.w) - 1) < 1e-12 && abs(self1.roll) + abs(self1.pitch) + abs(self1.yaw) < 1e-9, "multiply.self", "a * a^-1 = identity: q=\(qs(self1.quaternion))")
       } else { R(false, "multiply.oracle", "no oracle CMAttitude") }
-      // coding (review L5): the archive must be Apple's own for the same q (class name CMAttitude, CoreMotion's keys),
+      // coding: the archive must be Apple's own for the same q (class name CMAttitude, CoreMotion's keys),
       // so an app decodes a saved attitude without the engine; it decodes to a real CMAttitude with the same quaternion
       let data = try? NSKeyedArchiver.archivedData(withRootObject: a, requiringSecureCoding: true)
       let appleData = appleAttitude(a.quaternion).flatMap { try? NSKeyedArchiver.archivedData(withRootObject: $0, requiringSecureCoding: true) }
@@ -295,7 +295,7 @@ final class AttitudeProbe {
       m1(a)
     }
   }
-  // review round 2 M1: an attitude decoded from an archive of the stand-in, used with the stand-in as the ARGUMENT
+  // M1: an attitude decoded from an archive of the stand-in, used with the stand-in as the ARGUMENT
   // (Apple's methods may read the argument's private storage, which an M5Attitude doesn't have). -m1 a|b|c runs one step
   // only, then ends (a throwaway launch: a crash ends the log after "M1 <step> begin"); no -m1: all three, asserted.
   func m1(_ a: CMAttitude) {

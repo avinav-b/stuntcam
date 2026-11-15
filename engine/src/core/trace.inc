@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // Part of simcam.m (single translation unit; included in order, after core/safety.inc): the op trace ring that
-// `stuntcam trace` reads (design §4.5, §9's shutter mark; W4 e48).
+// `stuntcam trace` reads (design §4.5, §9's shutter mark).
 //
 // Ring. A fixed array of TR_N (64) entries per process. TRRecord(op, settingsID, arg) takes the next index with one
 // fetch_add and fills that slot: every field is a relaxed atomic, and a per-slot sequence number (0 while the slot is being
@@ -25,7 +25,7 @@
 //                     frame is taken (pump queue, right after will-capture; L68): its mach time is that instant, arg = the
 //                     same in host-clock nanoseconds. An error completion delivers no photo, so none carries it.
 //   still-complete    IrisStillImageComplete posted (arg = ErrorStatus; a latch or the photo-error hook gives non-zero)
-//   did-finish        AVF ran the delegate's didFinishCaptureForResolvedSettings: (w4 e40's done mark)
+//   did-finish        AVF ran the delegate's didFinishCaptureForResolvedSettings: (the photo-done mark; ledger L66)
 //   movie-start       FileSinkStartRecording posted DidStartRecording (sid = movie settings id; a failed writer: movie-stop)
 //   movie-stop        DidStopRecording posted (arg = status)
 //   latch-<feature>   the watchdog latched a feature in-process (two hangs)
@@ -37,7 +37,7 @@
 // fallback, design §4.3); with the sentinel off, the first of the two that can be written. Rewritten whole (temp file +
 // rename, so a reader never sees half a file) by a utility queue at most once per kTRFlushMs after an op, at exit, and by the
 // crash handler. Nothing is recorded or written before the camera arms, so an app that never uses the camera writes none.
-// The newest kTRKeep files per bundle are kept (pruned when a process writes its first). W4 e54 (review):
+// The newest kTRKeep files per bundle are kept (pruned when a process writes its first). Robustness:
 // - the directory is picked when the camera arms (TRArmFile, on the activation queue right after ActRun releases its
 //   waiters), not at the first flush, so a crash in the first kTRFlushMs still writes a trace (M54_LATE_TRACE_DIR=1: the
 //   old place, the first flush; ledger L69);
@@ -46,13 +46,13 @@
 //   handler reads the current slot's index, so a re-pick never changes a path it may be reading;
 // - only the first thread in the crash handler writes the file (gTRCrash: 0 idle, 1 writing); another one records its
 //   crash op and waits for that write (bounded, nanosleep), so two crashes at once never share the buffer (L70). After the
-//   write the flag goes back to 0 (W4 e57, review), so the write isn't used up for good. A later crash writes again
+//   write the flag goes back to 0, so the write isn't used up for good. A later crash writes again
 //   only if it reaches this handler: SCChain (core/safety.inc) puts back the previous handler (or SIG_DFL) for the signal it
 //   chains, so that is a crash on another signal, or on the same one after our handler is installed again; the same signal
 //   right after goes to the previous handler or the default action. M54_OLD_CRASH=1 (L70's mutant): no CAS, every thread formats
-//   into the one buffer and writes the one temp file, 20 ms apart (the window widened), as before e54;
+//   into the one buffer and writes the one temp file, 20 ms apart (the window widened), as an unguarded handler would;
 // - a write that fails because the directory is gone, replaced or unwritable (ENOENT, ENOTDIR, EACCES, EPERM, EROFS) re-picks;
-//   any other error (ENOSPC, EIO, ...) is logged once and doesn't spend the re-pick (W4 e57; ENOTDIR, EPERM W4 e59).
+//   any other error (ENOSPC, EIO, ...) is logged once and doesn't spend the re-pick.
 // Format (text, one record a line):
 //   stuntcam-trace 1
 //   pid <pid>
@@ -235,7 +235,7 @@ static uint64_t TRWallAt(uint64_t mach) {
     return mach <= now ? wall - (now - mach) * tb.numer / tb.denom : wall + (mach - now) * tb.numer / tb.denom;
 }
 // an op at an earlier mach instant whose realtime the caller computed (TRWallAt), so it can use the same value elsewhere
-// (the photo's EXIF time, W4 e57)
+// (the photo's EXIF time)
 static void TRRecordAtWall(int op, int64_t sid, int64_t arg, uint64_t mach, uint64_t wall) {
     if (!atomic_load_explicit(&gTROn, memory_order_acquire)) return;
     TRPut(op, sid, arg, mach, wall);
@@ -262,7 +262,7 @@ static void TRArm(void) {
     TRRecord(TR_ACTIVATE, -1, 0);
     atexit_b(^{ dispatch_sync_f(TRQ(), NULL, TRFlushF); });
 }
-// ActRun, after it released its waiters (W4 e54): the trace file's directory, so the crash handler can write from the first
+// ActRun, after it released its waiters: the trace file's directory, so the crash handler can write from the first
 // op on. On the activation queue (nobody waits for it; inline in the test modes), synchronously on the trace queue, where
 // every pick happens. M54_LATE_TRACE_DIR=1 leaves it to the first flush, as before (ledger L69's mutant).
 static void TRArmFile(void) {
@@ -293,7 +293,7 @@ static void TRCrash(int sig) {
     }
     int cur = atomic_load_explicit(&gTRCur, memory_order_acquire);
     if (cur >= 0) (void)TRWriteTo(gTRSigBuf, sizeof gTRSigBuf, gTRP[cur].sigTmp, gTRP[cur].path);
-    atomic_store(&gTRCrash, 0);   // not a final 2 (W4 e57): a later crash that reaches this handler writes again (see above)
+    atomic_store(&gTRCrash, 0);   // not a final 2: a later crash that reaches this handler writes again (see above)
     errno = saved;
 }
 static void TRLatch(int fi) { TRRecord(TR_LATCH, -1, fi); }

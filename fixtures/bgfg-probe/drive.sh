@@ -1,6 +1,6 @@
 #!/bin/zsh
 # SPDX-License-Identifier: Apache-2.0
-# drive.sh <rt: 263|27> <mode> <tag> <inj: boot|none> — one bgfg-probe run (w3 e20)
+# drive.sh <rt: 263|27> <mode> <tag> <inj: boot|none> — one bgfg-probe run
 #   mode: stopInBackground | keepRunning | stopWhileInterrupted (the probe's -mode argument; README.md)
 #   inj=boot: the sim was booted by scripts/boot.sh <rt> stub (engine log copied from the boot log dir); none: booted plainly
 #   XENV="VAR=val ..." adds SIMCTL_CHILD_VAR=val to the launch (e.g. XENV=M12_NO_INTERRUPT=1); BGS = seconds in the background (3)

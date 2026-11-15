@@ -37,7 +37,7 @@ func TestClassify(t *testing.T) {
 	}
 }
 
-// w4 e37: the canary's retried:[…] field sits before core:[, so verdicts and fail texts are what they were
+// the canary's retried:[…] field sits before core:[, so verdicts and fail texts are what they were
 func TestClassifyRetried(t *testing.T) {
 	r := "RESULT core=PASS ext=PASS t=16.7s retried:[photo-4x3: longest frame gap during the photo 215 ms (<= 100 ms, 4 frames) -> retry ok]"
 	if st, v := Classify(r); st != Pass || v != "pass" {

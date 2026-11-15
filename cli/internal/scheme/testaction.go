@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package scheme
 
-// What an `xcodebuild test` runs its test runners with (w4 e43, review r1 B1/M2/L3): per test configuration, the
+// What an `xcodebuild test` runs its test runners with: per test configuration, the
 // sanitizers, whether the Main Thread Checker is off, and what the scheme or test plan inserts into the runner itself
 // (Guard Malloc, a DYLD_INSERT_LIBRARIES variable). `stuntcam exec`'s runner hook replaces the runner's insert list
 // (TEST_RUNNER_DYLD_INSERT_LIBRARIES), so it has to put a sanitizer runtime back in front, and can only do that when every

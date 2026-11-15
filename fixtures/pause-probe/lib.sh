@@ -20,7 +20,7 @@ pp_launch() {
   DATA=$(xcrun simctl get_app_container $UDID $B data); mkdir -p $DATA/Documents; CMD=$DATA/Documents/cmd.txt
   rm -f $CMD; local k; for k in {1..20}; do rm -f $DATA/Documents/mov-$k.mov; done
   # the console gets its own process group: Ctrl-C on drive.sh must not reach it (simctl would take the app down while
-  # lldb still holds it, which wedged the sim's app services once in e27); the EXIT trap ends it after the app is resumed
+  # lldb still holds it, which once wedged the sim's app services); the EXIT trap ends it after the app is resumed
   perl -e 'setpgrp(0, 0); exec @ARGV' xcrun simctl launch --console-pty $UDID $B > $OUT/app.log 2>&1 &
   LP=$!
   PP_NAME=$name; pp_waitn 'READY pid=' 1 30

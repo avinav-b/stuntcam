@@ -18,7 +18,7 @@
 # keeps the Xcode of an existing config.json (and writes this arm's rules dir and signals). DEVELOPER_DIR=…/Xcode.app
 # counts as …/Xcode.app/Contents/Developer. simcam_set_rules_dir <sim dir>: point an existing config.json at
 # $SIMCAM_RULES_DIR, keeping the rest (swap.sh).
-simcam_jstr() {   # a JSON string; other control characters as \u00XX, so Go's ReadConfig accepts it too (review r2 nit)
+simcam_jstr() {   # a JSON string; other control characters as \u00XX, so Go's ReadConfig accepts it too
   local s=$1 c o=; s=${s//\\/\\\\}; s=${s//\"/\\\"}; s=${s//$'\n'/\\n}; s=${s//$'\t'/\\t}; s=${s//$'\r'/\\r}
   if [[ $s == *[[:cntrl:]]* ]]; then for c in ${(s::)s}; do
       if [[ $c == [[:cntrl:]] ]]; then o+=$(printf '\\u%04x' "'$c"); else o+=$c; fi; done; s=$o; fi
@@ -32,7 +32,7 @@ simcam_record_xcode() {
   [[ -z $xb && -f $1/config.json ]] && ob=$(simcam_cfgline $1/config.json xcode_build) && [[ $ob != '""' ]] || ob=
   xd=${DEVELOPER_DIR:-$(env -u DEVELOPER_DIR xcode-select -p 2>/dev/null)}
   while [[ $xd == ?*/ ]]; do xd=${xd%/}; done; [[ $xd == *.app ]] && xd=$xd/Contents/Developer
-  if [[ -n $ob ]]; then   # keep only the Xcode recorded earlier; the rules dir and boot signals are this arm's (review r2 L-c)
+  if [[ -n $ob ]]; then   # keep only the Xcode recorded earlier; the rules dir and boot signals are this arm's
     echo "arm-env.sh: could not identify Xcode (xcodebuild -version); keeping the Xcode recorded in $1/config.json" >&2
     jv=$(simcam_cfgline $1/config.json xcode_version) || jv='""'; jb=$ob; jd=$(simcam_cfgline $1/config.json developer_dir) || jd='""'
   else
@@ -62,7 +62,7 @@ simcam_set_rules_dir() {
 simcam_arm_vars() {
   local rt=$1 udid=$2 kv LDR PL IMG STATE
   BL=$SIMCAM_LOGS/bootlogs-$rt-$(date +%H%M%S); mkdir -p $BL; mkdir -p $ROOT/build; echo $BL > $ROOT/build/bootlogdir-$rt.txt
-  # chain file (m11 1e): libraries listed here load in every app launch, no reboot needed; one path per line
+  # chain file: libraries listed here load in every app launch, no reboot needed; one path per line
   CHAIN=${SIMCAM_CHAIN_FILE:-$SIMCAM_HOME/sims/$udid/chain.txt}; mkdir -p "${CHAIN:h}"; touch "$CHAIN"
   # swappable loader (design §4.1, U14): the boot env names only the stub and the sim dir; the stub reads SIMDIR/current
   # ("<proto> <loader path>") at every launch, so scripts/swap.sh can change the build without a reboot
@@ -78,7 +78,7 @@ simcam_arm_vars() {
   [[ -n ${DYLIB:-} ]] && ARMV+=("SIMCAM_DYLIB=$DYLIB")
   for kv in ${(f)"$(env | grep '^SIMCTL_CHILD_')"}; do
     [[ -z $kv ]] && continue
-    case ${kv#SIMCTL_CHILD_} in   # these would replace the stub or its sim dir (review r1): ignore with a warning
+    case ${kv#SIMCTL_CHILD_} in   # these would replace the stub or its sim dir: ignore with a warning
       DYLD_INSERT_LIBRARIES=*|SIMCAM_SIM_DIR=*) echo "arm-env.sh: ignoring ${kv%%=*} (stuntcam sets it)" >&2;;
       *) ARMV+=("${kv#SIMCTL_CHILD_}");;
     esac

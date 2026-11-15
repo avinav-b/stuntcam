@@ -4,7 +4,7 @@
 //
 // Everything a simulator process reads or writes lives here, never in a project checkout: simulator processes cannot see
 // macOS privacy-protected folders (~/Documents, ~/Desktop, ~/Downloads, iCloud Drive) and get "no such file" without any
-// log line (measured internally, W1 e1).
+// log line.
 package home
 
 import (

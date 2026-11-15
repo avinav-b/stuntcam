@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-// testdata/canary-263.txt: a real trace (the canary on iOS 26.3, W4 e48): activate, session-start, three photos (3, 4, 5:
+// testdata/canary-263.txt: a real trace (the canary on iOS 26.3): activate, session-start, three photos (3, 4, 5:
 // JPEG, 4:3 JPEG, HEVC) and 6 (photo-jpeg's gap-only retry, in a session of its own), the canary's later sessions
 func load(t *testing.T) File {
 	t.Helper()

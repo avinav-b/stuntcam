@@ -1,4 +1,4 @@
-# calls.py <condense.py output> (w3 e20) SPDX-License-Identifier: Apache-2.0
+# calls.py <condense.py output> SPDX-License-Identifier: Apache-2.0
 # per run: each app call after BG-REQUEST, whether an engine Start/StopRunning line followed within 50 ms,
 # and the AVF notifications that followed within 100 ms; engine lifecycle lines; after-END pump state
 import re, sys

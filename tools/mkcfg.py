@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # mkcfg.py out.plist [base.plist] — iPhone-like profile: 420v+420f pairs, 4:3 photo format with 12MP stills
 #   Keeps everything in base.plist except the formats list (and formatTemplate.PixelFormatType). base defaults to
-#   engine/profiles/cfg-iphone.plist, which this script reproduces unchanged; the spikes used m5's build/cfg-m5.plist.
+#   engine/profiles/cfg-iphone.plist, which this script reproduces unchanged.
 import os, plistlib, sys
 root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 base = plistlib.load(open(sys.argv[2] if len(sys.argv) > 2 else os.path.join(root, 'engine/profiles/cfg-iphone.plist'), 'rb'))

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Part of simcam.m (single translation unit; included in order): CoreMotion accelerometer stand-in.
 // ============================================================================
-// m5: CoreMotion — CMMotionManager reports an accelerometer + device motion and
+// CoreMotion — CMMotionManager reports an accelerometer + device motion and
 // delivers gravity matching the current UI orientation (portrait by default).
 // Hooked: -isAccelerometerAvailable -isDeviceMotionAvailable -isAccelerometerActive -isDeviceMotionActive
 //         -startAccelerometerUpdates -startAccelerometerUpdatesToQueue:withHandler: -stopAccelerometerUpdates -accelerometerData
@@ -15,7 +15,7 @@
 #import <UIKit/UIKit.h>
 @interface M5Accel : CMAccelerometerData @property CMAcceleration a; @property NSTimeInterval ts; @end
 @implementation M5Accel - (CMAcceleration)acceleration { return _a; } - (NSTimeInterval)timestamp { return _ts; } @end
-// ---- the attitude stand-in (W4 e29) ----
+// ---- the attitude stand-in ----
 // The device is held still, upright in the current orientation, yaw 0, in CMAttitudeReferenceFrameXArbitraryZVertical.
 // Apple's conventions, measured against real CMAttitude/CMDeviceMotion objects built through CoreMotion's own (private)
 // initializers (macOS 26.6; fixtures/motion-probe -attitude 1 compares every sample with them in the simulator):
@@ -68,11 +68,11 @@ static CMRotationMatrix M5QMatrix(CMQuaternion q) {   // reference -> device: th
     return (NSUInteger)h;
 }
 - (NSString *)description { return [NSString stringWithFormat:@"CMAttitude Pitch: %f, Roll: %f, Yaw: %f", _pitch * 180 / M_PI, _roll * 180 / M_PI, _yaw * 180 / M_PI]; }
-// Coding (review, L5): archived as a plain CMAttitude under CoreMotion's own keys, so an app that saves a reference
+// Coding: archived as a plain CMAttitude under CoreMotion's own keys, so an app that saves a reference
 // attitude decodes it later without the engine (a real CMAttitude, from CMAttitude's own -initWithCoder:). Measured on macOS
 // 26.6: CMAttitude encodes four doubles under kCMAttitudeCodingKeyQX/QY/QZ/QW, and this archive is byte-identical to Apple's
 // for the same quaternion (the probe asserts it in the simulator: coding.apple). With the stand-in active, M5MotionHooks maps
-// the name CMAttitude to this class for every decode in the process (review round 2 M1), so a decoded attitude is an
+// the name CMAttitude to this class for every decode in the process, so a decoded attitude is an
 // M5Attitude, never a real CMAttitude next to stand-ins (probe: coding.decode, m1.*).
 - (Class)classForCoder { return [CMAttitude class]; }
 - (Class)classForKeyedArchiver { return [CMAttitude class]; }
@@ -114,7 +114,7 @@ static void M5CoordOrientationChanged(void);
 static CMAcceleration M5Gravity(void) {
     const char *o = getenv("M5_GRAVITY"); // "x,y,z" override
     if (o) { CMAcceleration a; sscanf(o, "%lf,%lf,%lf", &a.x, &a.y, &a.z); return a; }
-    switch (M12OrientOn() ? M12DevOrient() : M5UIOrientAny()) {   // m12: gravity follows the (virtual) device, not the UI (timer threads)
+    switch (M12OrientOn() ? M12DevOrient() : M5UIOrientAny()) {   // gravity follows the (virtual) device, not the UI (timer threads)
         case 2: return (CMAcceleration){0, 1, 0};   // portraitUpsideDown
         case 3: return (CMAcceleration){-1, 0, 0};  // interface landscapeRight == device landscapeLeft
         case 4: return (CMAcceleration){1, 0, 0};   // interface landscapeLeft == device landscapeRight
@@ -123,7 +123,7 @@ static CMAcceleration M5Gravity(void) {
 }
 static const void *kTimerKey = &kTimerKey, *kMTimerKey = &kMTimerKey;
 static void M5OrientTrackStart(const char *by);
-// M16_MOTION_FAULT=1 (W4 PR B, motion-crash): a fault in our image inside a motion timer tick, 1 s after the first tick
+// M16_MOTION_FAULT=1 (activation.sh motion-crash): a fault in our image inside a motion timer tick, 1 s after the first tick
 static _Atomic uint64_t gM5FirstTick;
 __attribute__((noinline)) static void M5MotionFaultCheck(void) {
     if (!gM16MotionFault) return;
@@ -144,7 +144,7 @@ static dispatch_source_t M5MotionTimer(id mgr, double interval, void (^tick)(voi
 #define M5_CALL_APP(call) do { SC_MOTION_SCOPE; void *_app = SCFeatEnter(NULL); call; SCFeatLeave(_app); } while (0)
 // a message inside a motion scope that app code can answer (a CMMotionManager subclass's interval getter, an NSOperationQueue
 // subclass's addOperationWithBlock:, an app block's copy): the key is cleared around it, like around the app's handler
-// (review round 2, low 3), so a crash in our image reached from that app code is never `motion`. Guard: activation.sh
+// too, so a crash in our image reached from that app code is never `motion`. Guard: activation.sh
 // app-send-crash (an interval getter that makes the first camera call; M16_TRAP_FAULT); M17_APP_SEND_KEEP_KEY=1 (ledger L65)
 // keeps the key in all three (M5_APP_SEND, M5_APP_DO, M5Enqueue)
 #define M5_APP_SEND(expr) ({ void *_appS = gM17AppSendKeepKey ? NULL : SCFeatEnter(NULL); __auto_type _r = (expr); if (!gM17AppSendKeepKey) SCFeatLeave(_appS); _r; })
@@ -156,7 +156,7 @@ static const void *kFrameKey = &kFrameKey;   // the reference frame of the last 
 static void M5SetFrame(id s, CMAttitudeReferenceFrame f) { objc_setAssociatedObject(s, kFrameKey, @(f), OBJC_ASSOCIATION_RETAIN); }
 static void M5Enqueue(NSOperationQueue *q, void (^op)(void)) { M5_APP_DO([q addOperationWithBlock:op]); }
 
-// availability queries never start orientation tracking; starts and data calls do (W4, plan §3)
+// availability queries never start orientation tracking; starts and data calls do
 // Every hooked selector is a motion entry point (SC_MOTION_SCOPE: the feature key says `motion` on this thread until it returns).
 static BOOL m5_yes(id s, SEL c) { SC_MOTION_SCOPE; return YES; }
 static BOOL m5_accActive(id s, SEL c) { SC_MOTION_SCOPE; return objc_getAssociatedObject(s, kTimerKey) != nil; }
@@ -204,9 +204,9 @@ static NSUInteger m5_availFrames(id cls, SEL c) { SC_MOTION_SCOPE; return CMAtti
 static NSUInteger m5_attFrame(id s, SEL c) { SC_MOTION_SCOPE; NSNumber *f = objc_getAssociatedObject(s, kFrameKey); return f ? f.unsignedIntegerValue : CMAttitudeReferenceFrameXArbitraryZVertical; }
 static void m5_dmStop(id s, SEL c) { SC_MOTION_SCOPE; M5StopTimer(s, kMTimerKey); }
 
-// W4: M5MotionInstall is split in two independent parts (plan §3):
+// Two independent parts:
 //   M5MotionHooks   the stand-in's 16 selector hooks, at load (M5_NO_MOTION=1 keeps CoreMotion stock). A failed or latched
-//                   camera activation never removes them mid-run (D2; M5MotionUninstall is gone). PR B: decided once at load
+//                   camera activation never removes them mid-run (there is no uninstall). Decided once at load
 //                   from markers only (core/safety.inc SCMotionStockAtLoad): a camera latch, a motion latch or a real
 //                   preflight failure of this build makes CoreMotion stock from the next launch, with one-shot forwarding
 //                   traps (M5MotionStockTraps) that say so once.
@@ -216,7 +216,7 @@ static void m5_dmStop(id s, SEL c) { SC_MOTION_SCOPE; M5StopTimer(s, kMTimerKey)
 static int gMotionN;
 static double gMotionAt;   // when the hooks went in at load (0 = not installed)
 // the 16 CMMotionManager selectors: the stand-in hooks them (M5MotionHooks), a motion-stock launch traps them (M5MotionStockTraps).
-// A leading '+' is a class method. e29 added the last three (the attitude stand-in).
+// A leading '+' is a class method. The last three are the attitude stand-in's.
 static const char *const kM5Sels[] = {
     "isAccelerometerAvailable", "isDeviceMotionAvailable", "isAccelerometerActive", "isDeviceMotionActive", "accelerometerData", "deviceMotion",
     "startAccelerometerUpdates", "startAccelerometerUpdatesToQueue:withHandler:", "stopAccelerometerUpdates",
@@ -245,7 +245,7 @@ static void M5MotionHooks(void) {
         if (m) { method_setImplementation(m, imps[i]); n++; } else LOG(@"motion: missing %s", kM5Sels[i]);
     }
     gMotionN = n; gMotionAt = CFAbsoluteTimeGetCurrent();
-    // review round 2 M1: while the stand-in is active, every attitude decoded in the process is an M5Attitude. An
+    // While the stand-in is active, every attitude decoded in the process is an M5Attitude. An
     // archive of the stand-in is Apple's format (class name CMAttitude), so without this it decodes to a real CMAttitude,
     // and Apple's methods read the ARGUMENT's private storage. Measured in the 27.0 and 26.3 sims (motion-probe -m1):
     // [decoded multiplyByInverseOfAttitude:dm.attitude] segfaults in CoreMotion (address 0x8), and [decoded isEqual:
@@ -254,7 +254,7 @@ static void M5MotionHooks(void) {
     if (n) [NSKeyedUnarchiver setClass:[M5Attitude class] forClassName:@"CMAttitude"];
     LOG(@"motion: hooked %d CMMotionManager selectors; archived CMAttitudes decode as the stand-in", n);
 }
-// ---- CoreMotion stock from a marker (PR B, plan §2.6 B1: no silent stock) ----
+// ---- CoreMotion stock from a marker (no silent stock, design §5.1) ----
 // The same 16 selectors get one-shot forwarding traps instead of the stand-in: each call does one atomic load; the first one
 // in the process queues the stock line on the record queue (core/lazy.inc ActMotionStockNote), then every call forwards to
 // the saved original IMP. All 16 take <= 3 integer/pointer arguments and return an integer, a BOOL, an object or nothing, so
@@ -279,10 +279,10 @@ static void M5MotionStockTraps(void) {
     LOG(@"motion: CoreMotion stock this launch (%s); %d one-shot forwarding traps", gSCMotionStockAt, gMotionStockN);
 }
 // ---- the orientation tracker (main queue only) ----
-// The tracker is camera code (a camera dependency since PR A: rotation coordinators, scene orientation), not a motion entry
+// The tracker is camera code (a camera dependency: rotation coordinators, scene orientation), not a motion entry
 // point: upd fires KVO on the coordinators, and their observers call our camera getters (m5_coordAngle, m12_coordCapAngle)
 // on this thread. So upd runs with the feature key CLEARED (saved and restored, like the app's handler): a fault in it is
-// `provider` (or an inflight op's feature) and closes the camera, never `motion` (review, the blocker: as `motion` it
+// `provider` (or an inflight op's feature) and closes the camera, never `motion` (as `motion` it
 // only stocked CoreMotion, and the camera kept crashing every launch). M17_TRACKER_MOTION_SCOPE=1 (ledger L61) brings back
 // the motion key here.
 static NSHashTable *M5Coords(void);
@@ -308,7 +308,7 @@ static void M5OrientUpd(void) {
     void *_scSaved __attribute__((cleanup(SCFeatLeaveP), unused)) = SCFeatEnter(gM17TrackerMotionScope ? kSCMotion : NULL);
     for (UIScene *sc in UIApplication.sharedApplication.connectedScenes)
         if ([sc isKindOfClass:[UIWindowScene class]]) { long o = ((UIWindowScene *)sc).effectiveGeometry.interfaceOrientation; if (o != gUIOrient) { gUIOrient = o; atomic_store(&gUIOrientA, o); M5CoordOrientationChanged(); } break; }
-    // m12: device orientation (simulator rotation, or UIDevice set by our control file); falls back to the UI orientation
+    // device orientation (simulator rotation, or UIDevice set by our control file); falls back to the UI orientation
     long d = UIDevice.currentDevice.orientation; if (d < 1 || d > 4) d = gUIOrient;
     if (d != atomic_load(&gDevOrientSeen)) { atomic_store(&gDevOrientSeen, d); LOG(@"m12 device orientation -> %ld (ui %ld, forced %ld)", d, gUIOrient, atomic_load(&gDevOrientForced)); M5CoordOrientationChanged(); }
     M5OrientFaultCheck();
@@ -341,7 +341,7 @@ static void M5OrientTrackStart(const char *by) {
     else dispatch_async_f(dispatch_get_main_queue(), NULL, M5OrientTrackRunMainF);
     if (!gM17TrackStartKeepKey) SCFeatLeave(sv);
 }
-// ---- the UI orientation snapshot at load (W4 option (b), plan §8; ledger L57) ----
+// ---- the UI orientation snapshot at load (ledger L57) ----
 // One main-queue block enqueued at load records the interface orientation where the coordinator getters read it
 // (gUIOrient/gUIOrientA), so a RotationCoordinator built on a camera queue while main is busy reads the right preview angle at
 // once. No timer, no device-orientation notifications, no camera call: the full tracker still starts at the first motion or

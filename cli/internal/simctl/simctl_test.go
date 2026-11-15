@@ -12,7 +12,7 @@ func TestParseDevicesAndRuntimes(t *testing.T) {
 	if err != nil || len(ds) != 2 || ds[0].Name != "iPhone 17" || ds[1].State != "Booted" || ds[1].LastBooted.IsZero() || !ds[0].LastBooted.IsZero() {
 		t.Fatalf("%+v %v", ds, err)
 	}
-	// Xcode 27's simctl has no lastBootedAt, only lastUsedAt (the boot time); status's reboot check needs it (w3 e12)
+	// Xcode 27's simctl has no lastBootedAt, only lastUsedAt (the boot time); status's reboot check needs it
 	ds, err = ParseDevices([]byte(`{"devices":{"com.apple.CoreSimulator.SimRuntime.iOS-26-3":[{"udid":"C","name":"x","state":"Booted","isAvailable":true,"lastUsedAt":"2026-11-12T12:51:12Z"}]}}`))
 	if err != nil || len(ds) != 1 || ds[0].LastBooted.Unix() != 1794487872 {
 		t.Fatalf("lastUsedAt fallback: %+v %v", ds, err)
@@ -32,7 +32,7 @@ func TestParseDevicesAndRuntimes(t *testing.T) {
 		t.Errorf("26.3 prefix: %+v", r)
 	}
 	if _, ok := NewestIOS(rs, "99"); ok {
-		t.Error("99 matched") // w2 e9: verify.sh --runtime 99 used to fall through to 27.0
+		t.Error("99 matched") // verify.sh --runtime 99 must not fall through to 27.0
 	}
 	if !versionLess("26.3.1", "27.0") || versionLess("27.0", "26.3.1") {
 		t.Error("versionLess")
@@ -42,7 +42,7 @@ func TestParseDevicesAndRuntimes(t *testing.T) {
 	}
 }
 
-// get_app_container through a fake xcrun with the texts simctl 27.0 prints (w4 e33): data path, not installed, not booted.
+// get_app_container through a fake xcrun with the texts simctl 27.0 prints: data path, not installed, not booted.
 func TestAppContainer(t *testing.T) {
 	dir := t.TempDir()
 	script := "#!/bin/sh\ncase \"$*\" in\n" +

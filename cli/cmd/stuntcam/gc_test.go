@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-func TestAlwaysKeptBuild(t *testing.T) { // M3: gc keeps the runner hook's dir like a stub's
+func TestAlwaysKeptBuild(t *testing.T) { // gc keeps the runner hook's dir like a stub's
 	d := t.TempDir()
 	for _, n := range []string{"stub", "hook", "engine"} {
 		os.MkdirAll(filepath.Join(d, n), 0o755)
@@ -23,7 +23,7 @@ func TestAlwaysKeptBuild(t *testing.T) { // M3: gc keeps the runner hook's dir l
 	}
 }
 
-// review (6): gc keeps the current unpacked canary and the newest 2 others, and removes .stage-*/.old-* dirs
+// gc keeps the current unpacked canary and the newest 2 others, and removes .stage-*/.old-* dirs
 // older than an hour (only those), never the lock file.
 func TestGCCanaries(t *testing.T) {
 	d := t.TempDir()
@@ -36,7 +36,7 @@ func TestGCCanaries(t *testing.T) {
 	mk("aaaaaaaaaaaa", 10*time.Hour) // current, oldest
 	mk("bbbbbbbbbbbb", 1*time.Hour)
 	mk("cccccccccccc", 2*time.Hour)
-	mk("dddddddddddd", 30*time.Hour) // old enough (untouched > 24 h, review L4)
+	mk("dddddddddddd", 30*time.Hour) // old enough (untouched > 24 h)
 	mk("eeeeeeeeeeee", 40*time.Hour)
 	mk("ffffffffffff", 5*time.Hour) // beyond the newest 2 but touched today: kept
 	mk(".stage-1", 2*time.Hour)

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package main
 
-// exec's runner-hook wiring (review r1: B1, B2, M1, M2, L3, L6, NITs)
+// exec's runner-hook wiring
 
 import (
 	"os"
@@ -171,13 +171,13 @@ func TestTestConfigs(t *testing.T) {
 		{append([]string{"test", "-scheme", "ASan", "-enableAddressSanitizer", "NO"}, P...), [][]string{nil}},
 		{append([]string{"test", "-scheme", "Plain"}, P...), [][]string{nil}},
 		{[]string{"test", "-scheme", "Plain", "-enableThreadSanitizer", "YES"}, [][]string{{"thread"}}},
-		// B1: test plans win over the scheme's own (here TSan) attribute; the default plan, or -testPlan
+		// test plans win over the scheme's own (here TSan) attribute; the default plan, or -testPlan
 		{append([]string{"test", "-scheme", "Plans"}, P...), [][]string{{"address"}}},
 		{append([]string{"test", "-scheme", "Plans", "-testPlan", "Plain"}, P...), [][]string{nil}},
 		{append([]string{"test", "-scheme", "Plans", "-testPlan", "Mixed"}, P...), [][]string{{"address"}, nil}},
 		{append([]string{"test", "-scheme", "Plans", "-testPlan", "Mixed", "-only-test-configuration", "Off"}, P...), [][]string{nil}},
 		{append([]string{"test", "-scheme", "Plans", "-testPlan", "Two", "-skip-test-configuration", "TSan"}, P...), [][]string{{"address"}}},
-		// M2
+		// an .xctestrun with two sanitizers
 		{[]string{"test-without-building", "-xctestrun", "two.xctestrun"}, [][]string{{"address"}, {"thread"}}},
 		{[]string{"test-without-building", "-xctestrun", "two.xctestrun", "-only-test-configuration", "TSan"}, [][]string{{"thread"}}},
 		{[]string{"test-without-building", "-xctestrun", "asan.xctestrun"}, [][]string{{"address"}, {"address"}}},
@@ -212,7 +212,7 @@ func TestTestConfigs(t *testing.T) {
 	}
 }
 
-// the exec wiring (L6): what planRunnerHook exports, and when it declines
+// the exec wiring: what planRunnerHook exports, and when it declines
 func TestPlanRunnerHook(t *testing.T) {
 	d := testProject(t)
 	dev := filepath.Join(d, "Xcode.app", "Contents", "Developer")
@@ -268,7 +268,7 @@ func TestPlanRunnerHook(t *testing.T) {
 	if p := planRunnerHook(inL1); strings.HasSuffix(dev, "/Contents/Developer") && !p.Export {
 		t.Fatalf("same Xcode as .app: %+v", p)
 	}
-	// ASan through a test plan (B1): the toolchain runtime first
+	// ASan through a test plan: the toolchain runtime first
 	p = planRunnerHook(base("-scheme", "Plans"))
 	if !p.Export || get(p, "TEST_RUNNER_DYLD_INSERT_LIBRARIES") != asan+":/t/libmine.dylib:/h/libsimcamrunnerhook.dylib" || !noted(p, "the runner keeps") {
 		t.Fatalf("plan asan: %+v", p)
@@ -310,7 +310,7 @@ func TestPlanRunnerHook(t *testing.T) {
 	if p = planRunnerHook(in); !p.Export || get(p, "TEST_RUNNER_SIMCAM_HOOK_RULES") != "<unset>" || !noted(p, "STUNTCAM_HOOK_FORCE") {
 		t.Fatalf("forced: %+v", p)
 	}
-	// a scheme with the Main Thread Checker off and Guard Malloc (L3)
+	// a scheme with the Main Thread Checker off and Guard Malloc
 	if p = planRunnerHook(base("-scheme", "NoMTC")); !p.Export || get(p, "TEST_RUNNER_SIMCAM_MTC") != "0" || !noted(p, "Guard Malloc") {
 		t.Fatalf("nomtc: %+v", p)
 	}
@@ -331,7 +331,7 @@ func TestPlanRunnerHook(t *testing.T) {
 	}
 }
 
-// w4 e45: Xcode 27's .xctestproducts keeps the .xctestrun at Tests/<n>/<scheme>.xctestrun
+// Xcode 27's .xctestproducts keeps the .xctestrun at Tests/<n>/<scheme>.xctestrun
 func TestTestProductsPath(t *testing.T) {
 	d := t.TempDir()
 	xr := filepath.Join(d, "P.xctestproducts", "Tests", "0", "M11UI.xctestrun")

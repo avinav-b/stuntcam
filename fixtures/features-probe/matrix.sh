@@ -1,6 +1,6 @@
 #!/bin/zsh
 # SPDX-License-Identifier: Apache-2.0
-# matrix.sh <rt: 263|27> <tag> — e22's armed runs on one runtime: the read-out ×2, then every feature launch ×2 (drive.sh).
+# matrix.sh <rt: 263|27> <tag> — the armed runs on one runtime: the read-out ×2, then every feature launch ×2 (drive.sh).
 #   The sim must be booted by scripts/boot.sh <rt> stub and have the probe installed (build.sh). One launch per feature.
 #   Features: those that read YES on stuntcam (shuttersound, bracket, flash, maxres, multicam, fps), Live Photo and depth on
 #   the cameras a real iPhone has them on (they read NO), AVCam's own configuration (avcam; avcam with NOCATCH=1 lets its

@@ -2,11 +2,11 @@
 
 package main
 
-// exec's runner hook (design §4.2, §4.4, §4.5; w4 e42): on a destination that is launchd-armed or booted unarmed, Xcode's
-// per-launch insert list replaces the stub's for a UI test's app under test (w4 e32, e41), so `exec -- xcodebuild test`
+// exec's runner hook (design §4.2, §4.4, §4.5): on a destination that is launchd-armed or booted unarmed, Xcode's
+// per-launch insert list replaces the stub's for a UI test's app under test, so `exec -- xcodebuild test`
 // inserts libsimcamrunnerhook.dylib into the XCTest runner (TEST_RUNNER_DYLD_INSERT_LIBRARIES). The hook adds the stub and
 // stuntcam's variables to every app the runner launches, and puts back what that variable displaced from the runner's own
-// insert list (libXCTestBundleInject for hosted tests, which otherwise hang: w4 e26). What it adds per simulator comes from
+// insert list (libXCTestBundleInject for hosted tests, which otherwise hang). What it adds per simulator comes from
 // <run dir>/hook/<udid>.env, written here.
 
 import (
@@ -178,7 +178,7 @@ func isIOSRuntime(id string) bool {
 	return strings.HasPrefix(id, "com.apple.CoreSimulator.SimRuntime.iOS-")
 }
 
-// destinations sorts the command's -destination arguments (design §4.5, review r1 B2): IOS, iOS simulators named by
+// destinations sorts the command's -destination arguments (design §4.5): IOS, iOS simulators named by
 // id= that simctl lists (UDIDs upper case); Named, `platform=iOS Simulator` destinations with no id (exec can't tell their
 // arming in advance; the hook still covers a launchd-armed one from the runner's own environment); Foreign, everything else
 // (another platform's simulator, a physical device, macOS / Mac Catalyst, an id simctl doesn't list): the runner hook is an
@@ -365,7 +365,7 @@ func sortedHookUDIDs(m map[string]hookCount) []string {
 	return out
 }
 
-// testConfigs is how the command's test runners run (B1, M2): from an -xctestrun file (each target of the selected test
+// testConfigs is how the command's test runners run: from an -xctestrun file (each target of the selected test
 // configurations), else the test action of the -scheme's .xcscheme under the -project/-workspace dir (or wd): its test plan
 // (-testPlan, else the default; one entry per selected configuration) or, without plans, its own settings.
 // -enableAddressSanitizer / -enableThreadSanitizer YES|NO override every entry. nil, "" with no error: nothing known (no
@@ -382,7 +382,7 @@ func testConfigs(args []string, wd string) ([]scheme.TestConfig, string, error) 
 	src := ""
 	xr := abs(lastOpt(args, "-xctestrun"))
 	if tp := abs(lastOpt(args, "-testProductsPath")); xr == "" && tp != "" { // test-without-building from an .xctestproducts
-		var m []string // Xcode 27 keeps it at <tp>/Tests/<n>/<scheme>.xctestrun (w4 e45); look a few levels down
+		var m []string // Xcode 27 keeps it at <tp>/Tests/<n>/<scheme>.xctestrun; look a few levels down
 		base := strings.Count(filepath.Clean(tp), string(filepath.Separator))
 		filepath.WalkDir(tp, func(p string, d fs.DirEntry, err error) error {
 			if err != nil {
@@ -477,11 +477,11 @@ type hookPlan struct {
 	Notes  []string // stderr lines before the run
 }
 
-// planRunnerHook decides whether exec inserts its runner hook into the command's test runners and with what (design §4.5;
-// w4 e42, e43). Not when: no destination needs it; any destination isn't an iOS simulator (B2); the Xcode in use has no
-// verified test-runner restore rule (M1; STUNTCAM_HOOK_FORCE=1 overrides); the command's own wrapper sets
+// planRunnerHook decides whether exec inserts its runner hook into the command's test runners and with what (design §4.5).
+// Not when: no destination needs it; any destination isn't an iOS simulator; the Xcode in use has no
+// verified test-runner restore rule (STUNTCAM_HOOK_FORCE=1 overrides); the command's own wrapper sets
 // TEST_RUNNER_DYLD_INSERT_LIBRARIES; a test plan or .xctestrun can't be read; the runners would need different sanitizer
-// runtimes (two sanitizers, or one only in some configurations: one variable can't give each runner its own; M2); or the
+// runtimes (two sanitizers, or one only in some configurations: one variable can't give each runner its own); or the
 // sanitizer runtime isn't in the Xcode in use. Each "not" is one warning naming what UI tests then miss.
 func planRunnerHook(in hookInputs) hookPlan {
 	var p hookPlan
@@ -573,7 +573,7 @@ func planRunnerHook(in hookInputs) hookPlan {
 	if len(first) > 0 {
 		p.Notes = append(p.Notes, "stuntcam: sanitizer tests: the runner keeps "+strings.Join(first, ", "))
 	}
-	// what the scheme or plan inserts into the runner itself is replaced by the variable (L3)
+	// what the scheme or plan inserts into the runner itself is replaced by the variable
 	var dropped []string
 	noMTC := false
 	for _, c := range cs {
@@ -624,7 +624,7 @@ func planRunnerHook(in hookInputs) hookPlan {
 	return p
 }
 
-// testRunnerRule reports whether rules file f is usable and has a "test-runner" rule (the list the hook restores; M1).
+// testRunnerRule reports whether rules file f is usable and has a "test-runner" rule (the list the hook restores).
 func testRunnerRule(f string) bool {
 	if f == "" || !xcode.Usable(f) {
 		return false
@@ -651,7 +651,7 @@ func testRunnerRule(f string) bool {
 }
 
 // sanitizerRuntime is the Xcode toolchain's simulator runtime for a sanitizer ("" if absent): the file Xcode copies into the
-// test bundle. Inserted into the runner it does what Xcode's own insert of that copy did (w4 e42: ASan UI test, 27.0).
+// test bundle. Inserted into the runner it does what Xcode's own insert of that copy did (checked with an ASan UI test on iOS 27.0).
 func sanitizerRuntime(developerDir, s string) string {
 	name := map[string]string{"address": "libclang_rt.asan_iossim_dynamic.dylib", "thread": "libclang_rt.tsan_iossim_dynamic.dylib"}[s]
 	if name == "" || developerDir == "" {

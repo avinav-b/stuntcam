@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// Tests for w4 e40: a content fail is confirmed by one more launch before it is cached.
+// Tests for confirming a fail: a content fail is confirmed by one more launch before it is cached.
 
 const (
 	e40Pass  = "RESULT core=PASS ext=PASS t=13.4s"
@@ -83,7 +83,7 @@ func TestFailedFirstCache(t *testing.T) {
 	}
 }
 
-// w4 e44 (review L9): decide, Run's launch-to-cache tail, with a fake canary: which launches run, what is cached,
+// decide, Run's launch-to-cache tail, with a fake canary: which launches run, what is cached,
 // and FailedFirst's wiring into the Result and its cache file.
 func TestDecideConfirmFail(t *testing.T) {
 	for _, c := range []struct {

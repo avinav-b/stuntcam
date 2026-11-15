@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
-// Part of simcam.m (single translation unit; included in order): host control file, per-launch env, interruptions (was m12_ctl.inc).
+// Part of simcam.m (single translation unit; included in order): host control file, per-launch env, interruptions.
 // ============================================================================
-// m12: host control file + per-launch env, virtual device orientation, session interruptions.
+// Host control file + per-launch env, virtual device orientation, session interruptions.
 //   SIMCAM_SOURCE=scene|image:<path>|video:<path>      per-launch source (default scene)
 //   SIMCAM_ORIENT=portrait|upsideDown|landscapeLeft|landscapeRight|auto   per-launch virtual device orientation (UIDevice names)
 //   SIMCAM_CONTROL=<host file>   polled every 250 ms; lines key=value:
 //       source=...   orientation=...   event=<name>[@<seq>]  (interrupt[:reason] | end | runtime-error[:status] | server-died)
-// Off switches: M12_NO_CONTROL (no polling), M12_NO_INTERRUPT (no lifecycle/audio interruptions; m10 behaviour), M12_NO_ORIENT.
+// Off switches: M12_NO_CONTROL (no polling), M12_NO_INTERRUPT (no lifecycle/audio interruptions), M12_NO_ORIENT.
 // ============================================================================
 #include <sys/stat.h>
 static long M12ParseOrient(NSString *v) {
@@ -26,7 +26,7 @@ static void M12ApplyOrient(long o, const char *why) {
         long ap = o;
         if (o && !prev) { long cur = UIDevice.currentDevice.orientation; gOrientBeforeForce = cur >= 1 && cur <= 4 ? cur : 1; }
         // auto after a forced orientation: rotate back to the device's own one (it only cleared the override, so a running
-        // app stayed in the forced orientation until relaunched; w3 e19)
+        // app stayed in the forced orientation until relaunched)
         if (!o && prev) {
             long cur = UIDevice.currentDevice.orientation;   // the Simulator rotated meanwhile (Hardware > Rotate): follow that
             ap = cur >= 1 && cur <= 4 && cur != prev ? cur : gOrientBeforeForce ? gOrientBeforeForce : 1;
@@ -92,7 +92,7 @@ static void M12EndInterrupt(int reason, const char *why) {
         }
     });
 }
-// w2: stop every active recording with status (sentinel movie latch, movie-error control event); the session keeps running.
+// Stop every active recording with status (sentinel movie latch, movie-error control event); the session keeps running.
 // The session walk runs on the pump queue (as M12Interrupt's and M12RuntimeError's do): that is where finalize clears S.obj
 // (M10ForgetSession), so a session can't be freed between reading S.obj and stopping its recording. (The app's own
 // FileSinkStop calls M12StopRec on AVFoundation's thread with a session it holds.)
@@ -125,7 +125,7 @@ static void M12Event(NSString *ev) {
     else if ([name isEqualToString:@"end"]) M12EndInterrupt(0, "control file");
     else if ([name isEqualToString:@"runtime-error"]) M12RuntimeError(arg ?: -11819, NO);
     else if ([name isEqualToString:@"server-died"]) M12RuntimeError(0, YES);
-    // w2 probes for mid-session error completion (design §5.4): the next photo / every active recording ends with this status
+    // test probes for mid-session error completion (design §5.4): the next photo / every active recording ends with this status
     else if ([name isEqualToString:@"photo-error"]) { atomic_store(&gPhotoErrNext, arg ?: -16800); LOG(@"m12 control: next photo fails with %d", arg ?: -16800); }
     else if ([name isEqualToString:@"movie-error"]) {
         int st = arg ?: -16800;
@@ -155,9 +155,9 @@ static void M12PollControl(const char *path) {
 }
 
 static void m12_bg(CFNotificationCenterRef c, void *o, CFNotificationName n, const void *obj, CFDictionaryRef ui) {}
-// ---- W4: m12init split into PREPARE 2 (control file read), PREPARE 4 (env/control-derived state), SWAP 1 (stores), SWAP 7
+// ---- the control setup, split into PREPARE 2 (control file read), PREPARE 4 (env/control-derived state), SWAP 1 (stores), SWAP 7
 // (enqueues) and START 4 (control timer, observers). The first frame after ARMED already uses SIMCAM_SOURCE / SIMCAM_ORIENT and
-// the control file's source= / orientation= (which override the env, as at today's first poll), even if START is late.
+// the control file's source= / orientation= (which override the env, as at the first poll), even if START is late.
 static struct { BOOL read; struct timespec mtime; void *source, *event; long orient; BOOL hasOrient; } gCtlRead;   // PREPARE 2
 static void *gSrcSpecNext; static long gOrientNext; static const char *gOrientWhy; static int gPhotoErrInit; static BOOL gPhotoErrSet;
 static void M12CtlRead(void) {   // PREPARE 2: one stat and parse, as M12PollControl does, applying nothing
@@ -182,7 +182,7 @@ static void M12CtlRead(void) {   // PREPARE 2: one stat and parse, as M12PollCon
 }
 static void M12Resolve(void) {   // PREPARE 4: allocate, parse; objects SWAP stores are retained here and kept as void *
     gSrcSpecLock = [NSObject new];
-    if (getenv("SIMCAM_TEST_PHOTO_ERR")) { gPhotoErrInit = atoi(getenv("SIMCAM_TEST_PHOTO_ERR")); gPhotoErrSet = YES; }   // w2 probe: first photo fails
+    if (getenv("SIMCAM_TEST_PHOTO_ERR")) { gPhotoErrInit = atoi(getenv("SIMCAM_TEST_PHOTO_ERR")); gPhotoErrSet = YES; }   // test probe: first photo fails
     const char *src = getenv("SIMCAM_SOURCE");
     if (gCtlRead.source) { gSrcSpecNext = gCtlRead.source; gCtlRead.source = NULL; }
     else if (src) gSrcSpecNext = (void *)CFBridgingRetain(@(src));
@@ -201,7 +201,7 @@ static void M12ApplyOrientF(void *ctx) { M12ApplyOrient(gOrientNext, gOrientWhy)
 static void M12QRWarmF(void *ctx) { @autoreleasepool { M12QRWarm(); } }
 static void M12Enqueue(void) {   // SWAP 7: nothing waits on these
     if (gOrientNext) dispatch_async_f(dispatch_get_main_queue(), NULL, M12ApplyOrientF);
-    if (M12Scene2On()) dispatch_async_f(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), NULL, M12QRWarmF);   // w2 e10b: build the scene QR off the first pump tick
+    if (M12Scene2On()) dispatch_async_f(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), NULL, M12QRWarmF);   // build the scene QR off the first pump tick
 }
 static void M12Start(void) {   // START 4
     const char *ctl = getenv("SIMCAM_CONTROL");

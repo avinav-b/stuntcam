@@ -75,7 +75,7 @@ func TestStageHashesNonHashDirs(t *testing.T) {
 
 func TestFindFromDirNeedsAllThree(t *testing.T) {
 	d := t.TempDir()
-	// isolated from the host: fromDir falls back to $SIMCAM_HOME/dev's profile, which any Mac that ran ./build.sh has (w3 e18)
+	// isolated from the host: fromDir falls back to $SIMCAM_HOME/dev's profile, which any Mac that ran ./build.sh has
 	t.Setenv("SIMCAM_HOME", filepath.Join(d, "home"))
 	t.Setenv("STUNTCAM_PROFILE", "")
 	t.Setenv("STUNTCAM_IMAGE", "")
@@ -97,7 +97,7 @@ func TestFindFromDirNeedsAllThree(t *testing.T) {
 }
 
 func TestStageDataIsContentAddressed(t *testing.T) {
-	// w3 e13: a refused `up` with another profile overwrote dev/profiles/cfg-m10.plist, which an armed sim's M2_PLIST named
+	// staging another profile must not overwrite dev/profiles/cfg-m10.plist, which an armed sim's M2_PLIST may name
 	src := t.TempDir()
 	t.Setenv("SIMCAM_HOME", filepath.Join(t.TempDir(), "home"))
 	write(t, filepath.Join(src, "a", "cfg-m10.plist"), "good")
@@ -135,7 +135,7 @@ func TestBrokenCheckoutIsAnError(t *testing.T) {
 }
 
 func TestStageRulesPerContent(t *testing.T) {
-	// w4 e30 (M2): rules were staged into one shared restore-rules/ and overwritten by the next clone or edit, under armed sims
+	// rules staged into one shared restore-rules/ would be overwritten by the next clone or edit, under armed sims
 	src := t.TempDir()
 	t.Setenv("SIMCAM_HOME", filepath.Join(t.TempDir(), "home"))
 	a, b := filepath.Join(src, "a"), filepath.Join(src, "b")
@@ -213,7 +213,7 @@ func TestRulesHashMatchesEnvSh(t *testing.T) {
 	}
 }
 
-// the runner hook (w4 e42) is staged into its own content-hash dir like the stub, and is optional: a build without one stages
+// the runner hook is staged into its own content-hash dir like the stub, and is optional: a build without one stages
 // with Hook "" (exec then warns instead of hooking)
 func TestStageHook(t *testing.T) {
 	src := t.TempDir()
@@ -356,7 +356,7 @@ func TestInstalledLayout(t *testing.T) {
 	if b, _ := os.ReadFile(filepath.Join(s.Canary, "m10canary")); string(b) != "c" {
 		t.Fatalf("canary not restored: %q", b)
 	}
-	// review (4): a canary executable that lost its exec bit (same bytes) is unpacked again
+	// a canary executable that lost its exec bit (same bytes) is unpacked again
 	os.Chmod(filepath.Join(s.Canary, "m10canary"), 0o644)
 	if again, err := Installed(prefix); err != nil || again != s {
 		t.Fatalf("%+v %v", again, err)
@@ -389,7 +389,7 @@ func TestInstalledWithoutVerdictsOrHook(t *testing.T) {
 	if err != nil || s.Verdicts != "" || s.Hook != "" {
 		t.Fatalf("%+v %v", s, err)
 	}
-	// w4 e51: doctor counted the working directory's *.json (package.json) as shipped verdicts when there were none
+	// doctor must not count the working directory's *.json (package.json) as shipped verdicts when there are none
 	wd, _ := os.Getwd()
 	defer os.Chdir(wd)
 	d := t.TempDir()
@@ -403,7 +403,7 @@ func TestInstalledWithoutVerdictsOrHook(t *testing.T) {
 	}
 }
 
-// Every file in the manifest is checked at use (review): restore rules, media, profile, verdicts and the payload,
+// Every file in the manifest is checked at use: restore rules, media, profile, verdicts and the payload,
 // not only the dylibs; an added or missing file too.
 func TestInstalledRejectsChangedFiles(t *testing.T) {
 	for _, c := range []struct {
@@ -537,7 +537,7 @@ func fakeCheckout(t *testing.T, d string, real bool) string {
 	return pair
 }
 
-// review: an installed stuntcam takes a working-directory checkout only with STUNTCAM_USE_CHECKOUT=1, and then
+// an installed stuntcam takes a working-directory checkout only with STUNTCAM_USE_CHECKOUT=1, and then
 // only when it is a real stuntcam root whose pointers resolve under home.Builds() to content-hash dirs; anything else is
 // ignored (with a one-line note for a stuntcam checkout or an opt-in).
 func TestInstalledCheckoutTrust(t *testing.T) {
@@ -646,7 +646,7 @@ func TestInstalledCheckoutTrust(t *testing.T) {
 	t.Setenv(UseCheckoutEnv, "")
 
 	// --build / STUNTCAM_BUILD from an installed binary: said too. A staged $SIMCAM_HOME/builds/<hash> has no canary,
-	// profile or rules of its own: the installed package's are used (review NIT), and named
+	// profile or rules of its own: the installed package's are used, and named
 	notes = nil
 	noteSeen = map[string]bool{}
 	s, err = find(filepath.Join(home.Builds(), pair), prefix, t.TempDir())
@@ -658,7 +658,7 @@ func TestInstalledCheckoutTrust(t *testing.T) {
 		t.Fatalf("--build from an installed binary: %+v %q", s, notes)
 	}
 	// after a first up/verify/exec, $SIMCAM_HOME/restore-rules (the staging cache) and $SIMCAM_HOME/canary exist: still
-	// the package's (review M1)
+	// the package's
 	if _, err := StageRules(pkg.Rules); err != nil {
 		t.Fatal(err)
 	}
@@ -684,7 +684,7 @@ func TestInstalledCheckoutTrust(t *testing.T) {
 	}
 }
 
-// review (1): several stuntcams unpacking the same package at once (two commands right after an install) all
+// several stuntcams unpacking the same package at once (two commands right after an install) all
 // succeed, and each one finds the canary complete and executable the moment Installed returns: from a fresh home, over
 // a canary that lost its exec bit, and over one with changed bytes.
 func TestInstalledConcurrentUnpack(t *testing.T) {
@@ -767,7 +767,7 @@ func TestInstalledConcurrentProcesses(t *testing.T) {
 	}
 }
 
-// review (2): a packaged binary carries the sha256 of manifest.txt and payload.tar; an installed share/ that was
+// a packaged binary carries the sha256 of manifest.txt and payload.tar; an installed share/ that was
 // replaced consistently (new payload, manifest re-written to match) is refused. A dev build (no values) accepts it.
 func TestInstalledAnchoredToBinary(t *testing.T) {
 	defer func(m, p string) { packagedManifest, packagedPayload = m, p }(packagedManifest, packagedPayload)
@@ -818,7 +818,7 @@ func TestInstalledAnchoredToBinary(t *testing.T) {
 	}
 }
 
-// review (5): Finder's .DS_Store anywhere under share/stuntcam is ignored, and only that name.
+// Finder's .DS_Store anywhere under share/stuntcam is ignored, and only that name.
 func TestInstalledIgnoresDSStore(t *testing.T) {
 	prefix := t.TempDir()
 	installedTree(t, prefix, true)
@@ -844,7 +844,7 @@ func TestInstalledIgnoresDSStore(t *testing.T) {
 	}
 }
 
-// review (7): InstalledHere checks the binary's own package wherever it runs, even inside a stuntcam checkout.
+// InstalledHere checks the binary's own package wherever it runs, even inside a stuntcam checkout.
 func TestInstalledHereIgnoresWorkingDirectory(t *testing.T) {
 	prefix := t.TempDir()
 	pair, _, _ := installedTree(t, prefix, false)

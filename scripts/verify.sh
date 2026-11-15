@@ -10,7 +10,7 @@
 #   inconclusive(...) (design §5.2: "couldn't run", never cached). A canary that exits without a verdict (a crash) is run
 #   once more; two in a row are fail(crash). A content fail (core=FAIL, not a crash) is confirmed by one more launch: a
 #   second content fail is the verdict; a pass after it is the verdict, cached for an hour only (failed_first, as the Go CLI's
-#   Result.FailedFirst); a confirming launch without a verdict leaves the fail uncached (w4 e40).
+#   Result.FailedFirst); a confirming launch without a verdict leaves the fail uncached.
 #   pass and fail are cached in $SIMCAM_HOME/verdicts/<key>.json (written
 #   atomically; an unreadable file is a miss); inconclusive never is, and neither is a run with DYLIB=<engine> or extra
 #   SIMCTL_CHILD_* settings (they change the result but not the key; SIMCAM_CHAIN_FILE and SIMCAM_STATE_DIR are ignored).
@@ -61,7 +61,7 @@ XC=$(env | grep '^SIMCTL_CHILD_' | cut -d= -f1 | tr '\n' ' '); [[ -n $XC ]] && N
 [[ -n $NOCACHE ]] && echo "not using the verdict cache: $NOCACHE" >&2
 if (( ! FRESH )) && [[ -z $NOCACHE && -f $VF ]]; then
   # an unreadable file or an unknown verdict is a cache miss
-  # a retried pass (the canary's frame-gap retry, w4 e38) is used for an hour only, as the Go CLI's RetriedPassTTL
+  # a retried pass (the canary's frame-gap retry) is used for an hour only, as the Go CLI's RetriedPassTTL
   CV=$(python3 -I -c 'import json,sys,time; d=json.load(open(sys.argv[1])); v=d["verdict"]; rt=d.get("retried") or d.get("relaunched") or d.get("failed_first") or (" retried:[" in d.get("result", ""))
 print("expired" if v == "pass" and rt and time.time() - d.get("at", 0) > 3600 else v if v == "pass" or v.startswith("fail(") else "")' $VF 2>/dev/null)
   if [[ $CV == expired ]]; then echo "the cached pass needed a canary retry and is over an hour old: running the canary again" >&2
@@ -72,13 +72,13 @@ fi
 # one verify per device (one device per runtime build): a second would share it and shut it down under the first
 LOCK=$SIMCAM_HOME/verify-$RTBUILD.lock
 # a lock held by the Go CLI's detached shutdown child (a "shutdown" marker: udid, unix time) is waited for, up to 80 s (its
-# ShutdownWait); a marker over 80 s old is a dead child's even if its pid was reused (cli/internal/verify/shutdown.go, w4 e38)
+# ShutdownWait); a marker over 80 s old is a dead child's even if its pid was reused (cli/internal/verify/shutdown.go)
 mk_age() { local t; t=$(awk '{print $2}' "$LOCK/shutdown" 2>/dev/null); [[ -n $t ]] && print $(( EPOCHSECONDS - t )); }
 zmodload zsh/datetime
 TW=$EPOCHSECONDS; SAID=0
 while ! mkdir "$LOCK" 2>/dev/null; do
   OP=$(cat "$LOCK/pid" 2>/dev/null); [[ -z $OP ]] && { sleep 1; OP=$(cat "$LOCK/pid" 2>/dev/null); }   # its owner may not have written it yet
-  [[ -d $LOCK ]] || continue   # released meanwhile (the Go shutdown child's handoff): try mkdir again (review r2)
+  [[ -d $LOCK ]] || continue   # released meanwhile (the Go shutdown child's handoff): try mkdir again
   MA=$(mk_age)
   if [[ -n $OP && -n $MA ]] && (( MA <= 80 )) && kill -0 $OP 2>/dev/null && (( EPOCHSECONDS - TW < 80 )); then
     (( SAID )) || { SAID=1; echo "waiting for the previous verify's device $(awk '{print $1}' "$LOCK/shutdown" 2>/dev/null) to finish shutting down" >&2; }
@@ -116,9 +116,9 @@ boot_install() {   # -> 0, or prints an inconclusive verdict and exits
   if kill -0 $BP 2>/dev/null; then kill $BP 2>/dev/null; BP=; echo "verdict inconclusive(boot did not finish in 120 s) key=$KEY"; exit 2; fi
   wait $BP || { BP=; echo "verdict inconclusive(bootstatus failed) key=$KEY"; exit 2; }
   BP=
-  # w2 e9: on a loaded Mac backboardd can start after SpringBoard and restart it ~5 s after bootstatus returns; an app installed
+  # on a loaded Mac backboardd can start after SpringBoard and restart it ~5 s after bootstatus returns; an app installed
   # in that gap is refused ("Busy", "failed preflight checks") for the rest of the boot. Install only once SpringBoard has kept
-  # the same pid for 2 s of wall time (each poll can itself take ~1 s on a loaded Mac, w2 e10a), at most 30 s.
+  # the same pid for 2 s of wall time (each poll can itself take ~1 s on a loaded Mac), at most 30 s.
   zmodload zsh/datetime
   local pid last= since=0 stable=0 seq= tg=$SECONDS
   while (( SECONDS - tg < 30 )); do
@@ -177,7 +177,7 @@ if [[ $R == *core=INCONCLUSIVE* || $R == *"canary exited without a verdict"* ]];
     R="RESULT core=INCONCLUSIVE (the canary crashed once, after an inconclusive first run; not cached)"
   fi
 fi
-# a content fail is cached for good, so it is confirmed by one more launch first (w4 e40; the Go CLI's confirmFail)
+# a content fail is cached for good, so it is confirmed by one more launch first (the Go CLI's confirmFail)
 FF=; NOSTORE=0; CONF=
 if [[ $R == *core=FAIL* && $R != *"canary exited without a verdict"* ]]; then
   RF=$R; run_canary c
@@ -185,7 +185,7 @@ if [[ $R == *core=FAIL* && $R != *"canary exited without a verdict"* ]]; then
   elif [[ $R == *core=PASS* ]]; then FF=$RF; CONF=" (the first launch FAILED: $(print -r -- $RF | cut -c1-160); $([[ -n $NOCACHE ]] && echo "not cached: $NOCACHE" || echo "cached for an hour only"))"
   else NOSTORE=1; CONF=" (not cached: the launch run to confirm this fail gave no verdict: $(print -r -- $R | cut -c1-120))"; R=$RF; fi
 fi
-TR=$SECONDS   # canary= covers every launch: the first, a relaunch and a confirming one (w4 e44, review)
+TR=$SECONDS   # canary= covers every launch: the first, a relaunch and a confirming one
 (( KEEP )) || sc shutdown $U >/dev/null 2>&1
 TD=$SECONDS
 

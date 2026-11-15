@@ -85,7 +85,7 @@ simcam_arm_vars $RT $UDID
 NEW=$(without_ours "$OLD"); NEW=${NEW:+$NEW:}$STUB
 # remember every variable we ever set (re-arming must not forget earlier ones for --off)
 touch $STATE/launchd-vars.txt
-# DYLD_INSERT_LIBRARIES last: apps launched meanwhile must not get the stub without its settings (review r1)
+# DYLD_INSERT_LIBRARIES last: apps launched meanwhile must not get the stub without its settings
 typeset -a ORDERED; ORDERED=(); for kv in $ARMV; do [[ ${kv%%=*} == DYLD_INSERT_LIBRARIES ]] || ORDERED+=($kv); done; ORDERED+=("DYLD_INSERT_LIBRARIES=$NEW")
 typeset -a SETNOW; SETNOW=()
 for kv in $ORDERED; do

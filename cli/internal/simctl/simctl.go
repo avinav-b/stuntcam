@@ -32,7 +32,7 @@ type Runtime struct {
 	Platform   string       `json:"platform"`
 	Available  bool         `json:"isAvailable"`
 	Name       string       `json:"name"`
-	Supported  []DeviceType `json:"supportedDeviceTypes"` // what this runtime can create (newer phones are refused, w2 e9)
+	Supported  []DeviceType `json:"supportedDeviceTypes"` // what this runtime can create (newer phones are refused)
 }
 
 type DeviceType struct {
@@ -66,7 +66,7 @@ var live struct {
 // interrupted `simctl boot` stops booting) and waits up to d for them to exit. After it, only `shutdown` and `list` calls
 // run; any other call fails at once, so nothing new (a boot, a launch) starts behind a cleanup. A SIGTERM sent to stuntcam alone
 // reaches no child: without this, a `simctl boot` that had just started went on to boot the device after the handler had
-// already shut it down (w3 e17).
+// already shut it down.
 func Interrupt(d time.Duration) {
 	live.Lock()
 	live.stopping = true
@@ -155,7 +155,7 @@ func ParseDevices(b []byte) ([]Device, error) {
 			State     string `json:"state"`
 			Available bool   `json:"isAvailable"`
 			LastBoot  string `json:"lastBootedAt"`
-			LastUsed  string `json:"lastUsedAt"` // Xcode 27 reports only this; it is set when the device boots (w3 e12)
+			LastUsed  string `json:"lastUsedAt"` // Xcode 27 reports only this; it is set when the device boots
 		} `json:"devices"`
 	}
 	if err := json.Unmarshal(b, &v); err != nil {
@@ -303,7 +303,7 @@ func NotInstalled(err error) bool {
 		return false
 	}
 	s := err.Error()
-	// only simctl's own "no such app" error (w4 e33); any other ENOENT text is not proof the app is gone (review 7)
+	// only simctl's own "no such app" error; any other ENOENT text is not proof the app is gone
 	return strings.Contains(s, "domain=NSPOSIXErrorDomain, code=2")
 }
 

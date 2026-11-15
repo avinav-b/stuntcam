@@ -6,8 +6,8 @@
 #   cases (default: all):
 #     kill-switch    SIMCAM=0 per launch: stub logs it, no camera, no crash
 #     motion-gate    preflight broken with CoreMotion queried first: the camera is stock, the CoreMotion stand-in stays for the
-#                    launch and its stream keeps running, no marker [L40; W4 changed it: a failed activation no longer removes
-#                    the stand-in mid-run (D2)]
+#                    launch and its stream keeps running, no marker [L40: a failed activation doesn't remove
+#                    the stand-in mid-run]
 #     current-bad    `current` = garbage / proto 0 / relative path / missing: one refusal line each, no camera [L50]
 #     proto-skew     `current` with a newer proto: "needs a newer stub", no camera
 #     latch-photo    two hung photo ops latch photo in-process; the next real photo error-completes (-11800/-16800) [L15]

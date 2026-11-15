@@ -73,15 +73,15 @@ func TestGuardSpringBoard(t *testing.T) {
 	springboardSpawn = func(simctl.Ctl, string) string { mu.Lock(); spawns++; mu.Unlock(); return "" }
 	guardSpringBoard(simctl.Ctl{}, dev, "U", 50*time.Millisecond)
 	e := time.Since(t0)
-	// lower bound exact (the rule); upper bound loose: -race on a loaded Mac (e.g. during the e36-e38 xcodebuild loops) can
-	// delay a 50 ms poll by a second or more (w4 e38, review L4)
+	// lower bound exact (the rule); upper bound loose: -race on a loaded Mac (e.g. under an xcodebuild loop) can
+	// delay a 50 ms poll by a second or more
 	if e < 3*time.Second || e > 6*time.Second {
 		t.Fatalf("guard returned after %s, want ~3 s (2 s after the last pid change at 1 s)", e)
 	}
 	if spawns != 0 {
 		t.Fatalf("%d spawn polls while the host saw the device's launchd_sim (w4 e38: one took ~10 s under load)", spawns)
 	}
-	// ps fails (times out): no answer, and no spawn until the third failure in a row (w4 e38)
+	// ps fails (times out): no answer, and no spawn until the third failure in a row
 	spawns = 0
 	fails := 0
 	hostProcs = func(string, string) (string, error) {
@@ -108,7 +108,7 @@ func TestGuardSpringBoard(t *testing.T) {
 			t.Fatalf("poll %d: %q %s", i, p, how)
 		}
 	}
-	// the ucomm form (hostProcs since w4 e38): a SpringBoard child by name; a zsh child is not it
+	// the ucomm form (what hostProcs reads): a SpringBoard child by name; a zsh child is not it
 	ucomm := "91194     1 S    launchd_sim " + set + "/5EED0001-0000-4000-8000-00000000B001/data/var/run/launchd_bootstrap.plist\n91300 91194 Ss   zsh\n91197 91194 Ss   SpringBoard\n"
 	if p, ld := springboardFromPS(ucomm, dev); p != "91197" || !ld {
 		t.Fatalf("ucomm form: %q %v", p, ld)

@@ -1,7 +1,7 @@
 #!/bin/zsh
 # SPDX-License-Identifier: Apache-2.0
 # wd-traced.sh <rt> [reps] — the watchdog's debugger rule (safety.inc SCWatchdog: "while P_TRACED, an expired op is recorded as
-#   unknown-hang and never counted"), on a sim armed by scripts/boot.sh <rt> stub, with fixtures/plain (w4 e27, TODO U5 item 2).
+#   unknown-hang and never counted"), on a sim armed by scripts/boot.sh <rt> stub, with fixtures/plain (TODO U5 item 2).
 #   traced   x reps: plain with SIMCAM_WD_TEST=hang, launched with simctl --wait-for-debugger; scripts/lldb-attach.py attaches
 #            by pid, continues, stays attached and running (no breakpoints, the watchdog keeps ticking) until the engine log has
 #            both 'over its deadline while a debugger is attached' lines, then detaches and quits; the app runs on to DONE

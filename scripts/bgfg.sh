@@ -1,11 +1,11 @@
 #!/bin/zsh
 # SPDX-License-Identifier: Apache-2.0
 # bgfg.sh <rt> [behaviour ...] [-n N] — does the engine stay in step with the app's own startRunning/stopRunning across
-#   background and foreground? [L52] (w3 e20 measured the bug, e21 added this guard)
+#   background and foreground? [L52]
 #   On a sim armed by scripts/boot.sh <rt> stub, the bg/fg probe (fixtures/bgfg-probe, `-mode <behaviour>`) runs N times
 #   (default 1) per behaviour (default all: stopInBackground keepRunning stopWhileInterrupted appNotif; see its README).
 #   Each run launches the probe, takes it to the background at its BG-REQUEST (`simctl launch com.apple.Preferences`) and
-#   back after BGS s (default 6: on 27.0 didEnterBackground came 2.2–4.8 s after Preferences launched, e20) with
+#   back after BGS s (default 6: on 27.0 didEnterBackground came 2.2–4.8 s after Preferences launched) with
 #   `simctl launch <probe>`, waits for its END, and checks the probe log against the engine log (dylib-<pid>.log):
 #     (a) every startRunning/stopRunning the probe makes reaches the engine: matched in order, each CALL to an engine
 #         "session … StartRunning" / "StopRunning" line logged between that CALL and its RET (or the next CALL);
@@ -16,7 +16,7 @@
 #   Also required: the probe reached END, was backgrounded and foregrounded (didEnterBackground, willEnterForeground), and
 #   left an engine log; for stopWhileInterrupted and appNotif, that an app stop reached the engine while it had the session
 #   interrupted (else the run didn't exercise L52: "not exercised"); no more redundant calls than the behaviour makes; and
-#   the probe's CPU over 2 s after END under 0.1 s (an engine still pumping uses 0.28-0.36 s; stopped: <= 0.01 s, e21).
+#   the probe's CPU over 2 s after END under 0.1 s (an engine still pumping uses 0.28-0.36 s; stopped: <= 0.01 s).
 #   The foreground comes BGS s after the background, and for those two behaviours not before the probe's background stop
 #   has returned (up to 15 s more), so a slow didEnterBackground can't put the stop after the interruption's end.
 #   Prints one PASS/FAIL line per behaviour and repetition with the reason; exits 1 if any failed (2 on a usage error).
@@ -85,7 +85,7 @@ fails = []
 # (a) in order: each call takes the first unconsumed engine Start/Stop line at or after it; it must be of its kind and come
 # before the call returned (or before the next call, if it never returned)
 # A call of the same kind as the app's previous one is redundant (the probe's launch-time start in the first
-# willEnterForeground, while already running): AVF drops a start on a running session itself (e20 §5), so it need not
+# willEnterForeground, while already running): AVF drops a start on a running session itself, so it need not
 # reach the engine. A call that changes what the app asked for must, whatever isRunning reads (after an unasked restart,
 # AVF reads isRunning=1 and drops the app's start: that is the bug).
 runs = [e for e in ev if e[1] in ('start', 'stop')]; j = 0; sess = None; redundant = 0
@@ -101,7 +101,7 @@ for k, (t, kind, why, tr, before) in enumerate(calls):
         fails.append(f'(a) {kind}Running ({why}) at {t - app[0][0]:.3f} s [before: {before}] did not reach the engine ({nxt})')
 sess = sess or (runs[0][2] if runs else None)
 # (b) an interruption end for a session whose last app call before it was a stop. "Before" is the engine log's line order
-# (one file, written in order), not the clock: the probe's CALL and the engine's line often share a millisecond (e21: on
+# (one file, written in order), not the clock: the probe's CALL and the engine's line often share a millisecond (seen: on
 # 27.0 the app's foreground start reached the engine 1 ms after the restart, on 26.3 never)
 for i, (t, kind, s) in enumerate(ev):
     if kind != 'ended' or (sess and s != sess): continue
@@ -121,7 +121,7 @@ else:
     if late: fails.append(f'(c) "interruption ended" after the final stopRunning at {late[0][0] - app[0][0]:.3f} s')
 # L52 exercised: an engine StopRunning (from the app) while the session was interrupted, i.e. after an interrupt line with no
 # "interruption ended" in between (engine log order). Or just before the interrupt line: the engine logs StopRunning on entry,
-# then waits for the pump queue, where the interrupt may already be queued (appNotif's stop in didEnterBackground, e21b); a
+# then waits for the pump queue, where the interrupt may already be queued (appNotif's stop in didEnterBackground); a
 # session whose stop had already run isn't running, so it isn't interrupted: the interrupt line proves the stop ran during it
 if mode in ('stopWhileInterrupted', 'appNotif'):
     state, hit = None, False

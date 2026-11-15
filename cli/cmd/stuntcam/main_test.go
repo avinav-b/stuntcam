@@ -113,7 +113,7 @@ func TestDestinationIDs(t *testing.T) {
 	}
 }
 
-// boot mode is read from launchd_sim's environment (w4 e26 residue): status says boot-armed even with no arm record, and
+// boot mode is read from launchd_sim's environment: status says boot-armed even with no arm record, and
 // booted-unarmed after a plain reboot of a sim whose record says boot mode
 func TestStatusFromBootEnv(t *testing.T) {
 	t.Setenv("SIMCAM_HOME", t.TempDir())
@@ -168,7 +168,7 @@ func TestStatusFromBootEnv(t *testing.T) {
 	if dir := foreignBootArm(d); dir != "/other/home/sims/U1" || !strings.Contains(foreignBootArmMsg(d, dir), "--reboot") || !strings.Contains(foreignBootArmMsg(d, dir), "another stuntcam home") {
 		t.Fatalf("up must refuse a sim armed under another home (w4 e30, L8): %q", dir)
 	}
-	// the stub without SIMCAM_SIM_DIR is not "another directory" (w4 e30, L6)
+	// the stub without SIMCAM_SIM_DIR is not "another directory"
 	bootEnv = func(string) (map[string]string, error) { return map[string]string{"DYLD_INSERT_LIBRARIES": stub}, nil }
 	if s := statusOf(d); strings.Contains(s.Note, "another") || foreignBootArm(d) != "" {
 		t.Fatalf("no sim dir: %+v", s)
@@ -199,7 +199,7 @@ func TestXcodeWarnings(t *testing.T) {
 	if w := xcodeWarnings(act, nil, one, "", []string{"/Applications/Xcode.app"}); len(w) != 0 {
 		t.Fatalf("one Xcode, running, no DEVELOPER_DIR: %+v", w)
 	}
-	// L3 (w4 e30): DEVELOPER_DIR naming the .app is the same Xcode as xcode-select's Contents/Developer
+	// DEVELOPER_DIR naming the .app is the same Xcode as xcode-select's Contents/Developer
 	for _, dd := range []string{"/Applications/Xcode.app", "/Applications/Xcode.app/", "/Applications/Xcode.app/Contents/Developer/"} {
 		if w := xcodeWarnings(act, nil, one, dd, nil); len(w) != 0 {
 			t.Fatalf("DEVELOPER_DIR=%s: %+v", dd, w)
@@ -227,7 +227,7 @@ func TestXcodeWarnings(t *testing.T) {
 	}
 }
 
-// L2 (w4 e30): an Xcode that can't be identified keeps the existing record instead of writing an empty build
+// an Xcode that can't be identified keeps the existing record instead of writing an empty build
 func TestRecordXcodeKeepsRecordOnFailure(t *testing.T) {
 	t.Setenv("SIMCAM_HOME", t.TempDir())
 	oa, ob := xcodeActive, bootEnv
@@ -243,7 +243,7 @@ func TestRecordXcodeKeepsRecordOnFailure(t *testing.T) {
 	}
 	xcodeActive = func() (xcode.Info, error) { return xcode.Info{}, errors.New("xcodebuild timed out after 20s") }
 	recordXcode("U3", "/h/rr/ffffffffffff", "swap", false, false)
-	// the Xcode is kept; the rules dir, boot signals and source are this arm's (review r2 L-c)
+	// the Xcode is kept; the rules dir, boot signals and source are this arm's
 	if c2, _ := arm.ReadConfig("U3"); c2.Build != "27A266a" || c2.RulesDir != "/h/rr/ffffffffffff" || c2.Source != "swap" || len(c2.BootSignals) != 0 {
 		t.Fatalf("record not kept/updated: %+v", c2)
 	}
@@ -264,7 +264,7 @@ func TestRecordXcodeKeepsRecordOnFailure(t *testing.T) {
 
 func TestRecordWarning(t *testing.T) {
 	t.Setenv("SIMCAM_HOME", t.TempDir())
-	old := sourceRulesDir // never the checkout's own build (w4 e32: a built checkout made the stale-rules warning fire)
+	old := sourceRulesDir // never the checkout's own build (a built checkout would make the stale-rules warning fire)
 	defer func() { sourceRulesDir = old }()
 	sourceRulesDir = func() string { return filepath.Join(t.TempDir(), "no-rules") }
 	d := simctl.Device{UDID: "U2", Name: "iPhone"}
@@ -276,7 +276,7 @@ func TestRecordWarning(t *testing.T) {
 		t.Fatal(w)
 	}
 	dotApp := xcodeInfo("27A266a")
-	dotApp.DeveloperDir = "/Applications/Xcode.app" // L3: the same Xcode
+	dotApp.DeveloperDir = "/Applications/Xcode.app" // the same Xcode
 	if w := recordWarning(d, simStatus{}, dotApp, nil); w != "" {
 		t.Fatal(w)
 	}
@@ -300,7 +300,7 @@ func TestRecordWarning(t *testing.T) {
 	}
 }
 
-// review r2 M1: the sim's own staged rules lack the recorded build, but this build's rules have it
+// the sim's own staged rules lack the recorded build, but this build's rules have it
 func TestRecordWarningStaleSimRules(t *testing.T) {
 	h := t.TempDir()
 	t.Setenv("SIMCAM_HOME", h)
@@ -334,7 +334,7 @@ func TestRecordWarningStaleSimRules(t *testing.T) {
 	}
 }
 
-func TestWillRebootBoot(t *testing.T) { // review r2 L-b
+func TestWillRebootBoot(t *testing.T) {
 	for _, c := range []struct {
 		m      arm.Mode
 		reboot bool
@@ -373,7 +373,7 @@ func captureStdout(t *testing.T, f func() error) (string, error) {
 	return <-ch, ferr
 }
 
-// The container-tmp fallback (review item 1): status, sentinel ls and clear reach <data>/tmp/simcam-state/ through a fake
+// The container-tmp fallback: status, sentinel ls and clear reach <data>/tmp/simcam-state/ through a fake
 // simctl (U booted: dev.x installed, dev.gone not; S shut down).
 func TestSentinelFallback(t *testing.T) {
 	t.Setenv("SIMCAM_HOME", t.TempDir())
@@ -481,7 +481,6 @@ func TestUncheckedText(t *testing.T) {
 }
 
 // a wedged "Booted" sim: get_app_container times out once, the sim's other bundles are skipped, and a clear exits 1
-// (review 1, r2 LOW 5)
 func TestFallbackTimeoutSkipsSim(t *testing.T) {
 	t.Setenv("SIMCAM_HOME", t.TempDir())
 	oldT := fallbackTimeout
@@ -511,7 +510,7 @@ func TestFallbackTimeoutSkipsSim(t *testing.T) {
 	}
 }
 
-// w4 e40: a pass after a fail its confirming launch didn't repeat says so, naming the fail
+// a pass after a fail its confirming launch didn't repeat says so, naming the fail
 func TestRetriedLine(t *testing.T) {
 	ff := verify.Result{State: verify.Pass, Verdict: "pass", FailedFirst: "RESULT core=FAIL core:[photo-then-stop: x]", Relaunched: "RESULT core=INCONCLUSIVE (y)"}
 	if l := retriedLine(ff); !strings.Contains(l, "FAILED (RESULT core=FAIL core:[photo-then-stop: x])") || !strings.Contains(l, "cached for 1 h only") {
@@ -521,7 +520,7 @@ func TestRetriedLine(t *testing.T) {
 	if l := retriedLine(rl); !strings.Contains(l, "a second canary launch (the first: RESULT core=INCONCLUSIVE (y))") {
 		t.Fatalf("relaunched pass: %q", l)
 	}
-	ff.NoCache = "SIMCTL_CHILD_M40_OLD_STOP" // w4 e44: with the cache bypassed, the line doesn't claim an hour
+	ff.NoCache = "SIMCTL_CHILD_M40_OLD_STOP" // with the cache bypassed, the line doesn't claim an hour
 	if l := retriedLine(ff); strings.Contains(l, "cached for") || !strings.Contains(l, "not cached (SIMCTL_CHILD_M40_OLD_STOP)") {
 		t.Fatalf("pass after a fail, cache bypassed: %q", l)
 	}
@@ -531,7 +530,7 @@ func TestRetriedLine(t *testing.T) {
 	}
 }
 
-// W4 e48: trace's arguments are checked before any simctl call
+// trace's arguments are checked before any simctl call
 func TestTraceUsage(t *testing.T) {
 	for _, a := range [][]string{{}, {"a", "b"}, {"../x"}, {"a/b"}, {".."}, {"b", "--json"}, {"--pid", "x", "b"}} {
 		err := cmdTrace(a)

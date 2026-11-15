@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Part of simcam.m (single translation unit; included in order): Vision barcode revision pin.
 // ============================================================================
-// m7: Vision barcode detection in the simulator. VNDetectBarcodesRequest revisions 3/4 (the defaults on iOS 16+/17+) are
+// Vision barcode detection in the simulator. VNDetectBarcodesRequest revisions 3/4 (the defaults on iOS 16+/17+) are
 // ML-model based and fail in the sim with "Could not create inference context". Revisions 1/2 are the classic detector.
 // Pin new requests to revision 1 (M7_VISION_REV=<n> overrides, M7_NO_VISIONFIX=1 disables). Not camera-specific.
 // ============================================================================
@@ -22,9 +22,9 @@ static void M7PinRev(id req) {
 }
 static id m7_vnbInit(id self, SEL c) { id r = ((id (*)(id, SEL))gOrigVNBInit)(self, c); if (r) M7PinRev(r); return r; }
 static id m7_vnbInitCH(id self, SEL c, id h) { id r = ((id (*)(id, SEL, id))gOrigVNBInitCH)(self, c, h); if (r) M7PinRev(r); return r; }
-// W4: installed exactly once, by whichever comes first: SWAP (when Vision was already loaded at PREPARE 4), the dyld add-image
+// Installed exactly once, by whichever comes first: SWAP (when Vision was already loaded at PREPARE 4), the dyld add-image
 // callback (registered in START 5 otherwise), or the pump queue (scene.inc). gVisionState is the once: a second install
-// would record our own hook as the "original" and recurse (review r1).
+// would record our own hook as the "original" and recurse.
 static _Atomic int gVisionState;   // 0 not installed, 1 installed (or being installed)
 static BOOL gVisionInSwap, gVisionNeedsStart;
 static void M7VisionInstallOnce(void);
@@ -36,7 +36,7 @@ static void M7VisionInstall(void) {
 static void M7VisionInstallOnce(void) {
     Class C = objc_getClass("VNDetectBarcodesRequest"); if (!C) return;
     // Hook on VNDetectBarcodesRequest itself: if it only inherits an initializer from VNRequest, add an override on this class
-    // instead of swizzling VNRequest's, which would pin the revision of every Vision request the app makes (review r2).
+    // instead of swizzling VNRequest's, which would pin the revision of every Vision request the app makes.
     Method m;
     SEL sch = sel_registerName("initWithCompletionHandler:"), si = sel_registerName("init");
     if ((m = class_getInstanceMethod(C, sch))) {
@@ -52,11 +52,11 @@ static void M7VisionInstallOnce(void) {
 }
 static void M7ImageAdded(const struct mach_header *mh, intptr_t slide) { if (!objc_getClass("VNDetectBarcodesRequest")) return; M7VisionInstall(); }
 static void m7visionfix(void) {   // PREPARE 4: Vision already loaded -> its hooks go in at SWAP; otherwise START registers the add-image hook
-    if (getenv("M7_NO_VISIONFIX")) return;   // m10: was ungated
+    if (getenv("M7_NO_VISIONFIX")) return;   // no barcode revision pin
     Class C = objc_getClass("VNDetectBarcodesRequest");
     if (!C) { gVisionNeedsStart = YES; return; }
     // optional hooks: SWAP installs (and START reports) only what resolved; with none resolved gVisionState stays 0, so the
-    // pump queue's M7VisionInstall can still try later (review item 5)
+    // pump queue's M7VisionInstall can still try later
     int n0 = gActNHooks;
     ActHookResolve(HG_CLIENT, "vision fix", C, "initWithCompletionHandler:", NO, YES, (IMP)m7_vnbInitCH, &gOrigVNBInitCH, NO);
     ActHookResolve(HG_CLIENT, "vision fix", C, "init", NO, YES, (IMP)m7_vnbInit, &gOrigVNBInit, NO);

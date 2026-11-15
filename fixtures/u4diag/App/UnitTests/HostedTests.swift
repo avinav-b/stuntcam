@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// U4 (w4 e26) hosted test: runs inside the host app (M11App) and records what the scheme's diagnostics put in this process,
+// U4 hosted test: runs inside the host app (M11App) and records what the scheme's diagnostics put in this process,
 // whether stuntcam's restore kept it, and whether the host app's camera ran. Writes $M11_OUT/unittest.<pid>.txt.
 import XCTest
 import MachO

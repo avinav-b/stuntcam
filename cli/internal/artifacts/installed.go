@@ -485,7 +485,7 @@ func LockDir(dir string) (func(), error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
 	}
-	f, err := os.OpenFile(filepath.Join(dir, ".lock"), os.O_CREATE|os.O_RDONLY, 0o644) // flock works read-only; another user's .lock stays usable (review L3)
+	f, err := os.OpenFile(filepath.Join(dir, ".lock"), os.O_CREATE|os.O_RDONLY, 0o644) // flock works read-only; another user's .lock stays usable
 	if err != nil {
 		return nil, err
 	}
@@ -496,7 +496,7 @@ func LockDir(dir string) (func(), error) {
 		}
 	}
 	if err == syscall.ENOTSUP || err == syscall.EOPNOTSUPP || err == syscall.ENOLCK { // a filesystem without locks: go on
-		f.Close() // unlocked, as before the lock existed (review L2)
+		f.Close() // go on unlocked
 		return func() {}, nil
 	}
 	if err != nil {

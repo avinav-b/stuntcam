@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // Part of simcam.m (single translation unit; included in order): runtime detection, session vtable layout check, preflight gate.
-// ---- m9: runtime detection — FigCaptureSourceCopySources (<= 26.x) vs -[FigCaptureSourceManager copySourcesWithType:] (27.x)
+// ---- runtime detection — FigCaptureSourceCopySources (<= 26.x) vs -[FigCaptureSourceManager copySourcesWithType:] (27.x)
 static CFArrayRef M9CopyStockSources(void) {
     CFArrayRef (*f)(int) = dlsym(RTLD_DEFAULT, "FigCaptureSourceCopySources");
     if (f) return f(1);
@@ -11,7 +11,7 @@ static CFArrayRef M9CopyStockSources(void) {
     return mgr ? (__bridge_retained CFArrayRef)((id (*)(id, SEL, int))objc_msgSend)(mgr, cp, 1) : NULL; // "copy" -> +1
 }
 
-// ---- m10: session vtable layout, checked by name BEFORE any session exists (m8 lesson 5, m9: slot count grew 19 -> 24 without a version bump).
+// ---- session vtable layout, checked by name BEFORE any session exists (the slot count grew 19 -> 24 in 27.0 without a version bump).
 // The simulator session class is the local symbol _kFigCaptureSessionSimulatorVTable in CMCapture; find it in the loaded image's symbol table.
 #import <mach-o/loader.h>
 #import <mach-o/nlist.h>
@@ -63,7 +63,7 @@ static NSString *M10CheckSessionDerived(const void *const *der, int *slotsOut) {
     return nil;
 }
 
-// ---- preflight: returns YES only if every dependency of every hook looks as expected (m2 + m6 + m9 + m10). ----
+// ---- preflight: returns YES only if every dependency of every hook looks as expected. ----
 static BOOL M2Preflight(void) {
     __block BOOL ok = YES;
     void (^check)(BOOL, NSString *) = ^(BOOL c, NSString *what) { if (!c) { ok = NO; LOG(@"PREFLIGHT FAIL: %@", what); } };
@@ -85,12 +85,12 @@ static BOOL M2Preflight(void) {
                            @"kFigCaptureSessionNotification_DidStartRunning": @"DidStartRunning", @"kFigCaptureSessionNotification_ConfigurationCommitted": @"ConfigurationCommitted",
                            @"kFigCaptureSessionSinkNotification_LocalQueueUpdated": @"LocalQueueUpdated", @"kFigCaptureSessionLocalQueueUpdatedNotificationPayloadKey_LocalQueue": @"LocalQueue",
                            @"kFigCaptureSessionNotificationPayloadKey_SectionID": @"SectionID",
-                           // m10: the notification that makes AVF fire didFinishCaptureForResolvedSettings
+                           // the notification that makes AVF fire didFinishCaptureForResolvedSettings
                            @"kFigCaptureSessionIrisStillImageSinkNotification_ReadyForResponsiveRequest": @"ReadyForResponsiveRequest"};
     BOOL fsaModel = class_getInstanceMethod(objc_getClass("FigCaptureSourceAttributes"), sel_registerName("initWithAttributesDictionary:")) != NULL;
     for (NSString *k in keys) {
         CFStringRef *p = dlsym(cmc, k.UTF8String);
-        // m9: 27.x no longer exports kFigCaptureSourceAttributeKey_* (attributes are parsed by FigCaptureSourceAttributes)
+        // 27.x no longer exports kFigCaptureSourceAttributeKey_* (attributes are parsed by FigCaptureSourceAttributes)
         if (!p && [k hasPrefix:@"kFigCaptureSourceAttributeKey_"] && fsaModel) continue;
         check(p && [(__bridge NSString *)*p isEqualToString:keys[k]], [NSString stringWithFormat:@"key %@ (=%@)", k, p ? (__bridge NSString *)*p : @"nosym"]);
     }
@@ -98,14 +98,14 @@ static BOOL M2Preflight(void) {
     check(dev && class_getClassMethod(dev, sel_registerName("_newFigCaptureSources")), @"+[AVCaptureFigVideoDevice _newFigCaptureSources]");
     Class vf = objc_getClass("FigCaptureSourceVideoFormat");
     check(vf && class_getInstanceMethod(vf, sel_registerName("initWithFigCaptureStreamFormatDictionary:")), @"-[FigCaptureSourceVideoFormat initWithFigCaptureStreamFormatDictionary:]");
-    // m10: the session hook (m6 objc route) — selector + ivar by name
+    // the session hook (objc route) — selector + ivar by name
     Class avs = objc_getClass("AVCaptureSession");
     check(avs && class_getInstanceMethod(avs, sel_registerName("_createFigCaptureSession")), @"-[AVCaptureSession _createFigCaptureSession]");
     check(avs && class_getInstanceVariable(avs, "_internal"), @"AVCaptureSession._internal ivar");
     Class avsi = objc_getClass("AVCaptureSessionInternal"); Ivar fiv = avsi ? class_getInstanceVariable(avsi, "figCaptureSession") : NULL;
     const char *fty = fiv ? ivar_getTypeEncoding(fiv) : NULL;
     check(fiv && fty && (fty[0] == '^' || fty[0] == '@'), [NSString stringWithFormat:@"AVCaptureSessionInternal.figCaptureSession ivar (type %s)", fty ?: "-"]);
-    // m10: session vtable slot names + count (before any session exists)
+    // session vtable slot names + count (before any session exists)
     const M2VTable *svt = M10FindLocalSymbol("/CMCapture", "_kFigCaptureSessionSimulatorVTable");
     if (svt && svt->derivedClass) {
         NSString *why = M10CheckSessionDerived(svt->derivedClass, &gSessSlots);
@@ -134,13 +134,13 @@ static BOOL M2Preflight(void) {
         float mx = ((float (*)(id, SEL))objc_msgSend)(f, sel_registerName("maxSupportedFrameRate"));
         check(mx == 30.0f, [NSString stringWithFormat:@"format round-trip maxSupportedFrameRate=%g", mx]);
     } @catch (NSException *e) { check(NO, [NSString stringWithFormat:@"format round-trip threw %@", e.reason]); }
-    // ABI canary 3 (m10, 27.x model): an attributes dictionary round-trips through FigCaptureSourceAttributes
+    // ABI canary 3 (27.x model): an attributes dictionary round-trips through FigCaptureSourceAttributes
     if (fsaModel) @try {
         id at = ((id (*)(id, SEL, id))objc_msgSend)([objc_getClass("FigCaptureSourceAttributes") alloc], sel_registerName("initWithAttributesDictionary:"), @{@"UniqueID": @"pf", @"DeviceType": @2, @"Position": @1});
         id uid = [at respondsToSelector:sel_registerName("uniqueID")] ? ((id (*)(id, SEL))objc_msgSend)(at, sel_registerName("uniqueID")) : nil;
         check(at && [uid isEqual:@"pf"], [NSString stringWithFormat:@"FigCaptureSourceAttributes round-trip uniqueID=%@", uid]);
     } @catch (NSException *e) { check(NO, [NSString stringWithFormat:@"attributes round-trip threw %@", e.reason]); }
-    // client-side hooks: every selector we replace must exist with the encoding we assume (m6 Q3 / m9 table)
+    // client-side hooks: every selector we replace must exist with the encoding we assume
     struct { const char *cls, *sel; BOOL meta; const char *enc; } sels[] = {
         {"AVCapturePhoto", "fileDataRepresentation", NO, NULL}, {"AVCapturePhoto", "fileDataRepresentationWithCustomizer:", NO, NULL}, {"AVCapturePhoto", "CGImageRepresentation", NO, NULL},
         {"AVCaptureVideoPreviewLayer", "didUpdatePreviewImageQueueSlot:imageQueue:rotationDegrees:size:", NO, NULL},
@@ -151,15 +151,15 @@ static BOOL M2Preflight(void) {
         Class c = objc_getClass(sels[i].cls);
         check(c && class_getInstanceMethod(c, sel_registerName(sels[i].sel)), [NSString stringWithFormat:@"-[%s %s]", sels[i].cls, sels[i].sel]);
     }
-    Class afd = objc_getClass("AVCaptureFigAudioDevice");   // m10 microphone path (fake source + isConnected) — needed on 17.5, checked everywhere
+    Class afd = objc_getClass("AVCaptureFigAudioDevice");   // microphone path (fake source + isConnected) — needed on 17.5, checked everywhere
     check(afd && class_getClassMethod(afd, sel_registerName("_newFigCaptureSources")) && class_getInstanceMethod(afd, sel_registerName("isConnected")) && class_getInstanceMethod(afd, sel_registerName("figCaptureSource")),
           @"AVCaptureFigAudioDevice +_newFigCaptureSources / -isConnected / -figCaptureSource");
-    Class aco = objc_getClass("AVCaptureOutput");   // m7 recfix: 7-arg form (26/27) or 6-arg form (17.5)
+    Class aco = objc_getClass("AVCaptureOutput");   // recommended-settings fix: 7-arg form (26/27) or 6-arg form (17.5)
     check(class_getInstanceMethod(aco, sel_registerName("recommendedOutputSettingsForConnection:sourceSettings:videoCodecType:fileType:isIris:outputFileURL:spatialAudioChannelLayoutTag:")) ||
           class_getInstanceMethod(aco, sel_registerName("recommendedOutputSettingsForConnection:sourceSettings:videoCodecType:fileType:isIris:outputFileURL:")), @"-[AVCaptureOutput recommendedOutputSettingsForConnection:...] (6 or 7 args)");
     Method pm = class_getInstanceMethod(objc_getClass("AVCaptureVideoPreviewLayer"), sel_registerName("didUpdatePreviewImageQueueSlot:imageQueue:rotationDegrees:size:"));
     if (pm) { char t[8] = {0}; method_getArgumentType(pm, 4, t, sizeof t); check(t[0] == 'd' || t[0] == 'f', [NSString stringWithFormat:@"preview hook rotation arg type %s", t]); }
-    // photo surface: AVCapturePhoto._internal @8 and AVCapturePhotoInternal.photoSurface @0x20 (m5 photo fix reads them by offset)
+    // photo surface: AVCapturePhoto._internal @8 and AVCapturePhotoInternal.photoSurface @0x20 (the photo fix reads them by offset)
     Ivar pi = class_getInstanceVariable(objc_getClass("AVCapturePhoto"), "_internal"); Ivar ps = class_getInstanceVariable(objc_getClass("AVCapturePhotoInternal"), "photoSurface");
     check(pi && ivar_getOffset(pi) == 8 && ps && ivar_getOffset(ps) == 0x20, [NSString stringWithFormat:@"AVCapturePhoto._internal@%td photoSurface@%td (expected 8, 32)", pi ? ivar_getOffset(pi) : -1, ps ? ivar_getOffset(ps) : -1]);
     // settings objects: rotation keys (degrees on 26/27, enum on 17.5) + the KVC keys the session layer reads

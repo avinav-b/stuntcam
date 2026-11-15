@@ -73,7 +73,7 @@ static OSStatus src_CopyProperty(CMBaseObjectRef o, CFStringRef key, CFAllocator
 }
 
 static void *(*pFigCaptureDeviceGetNotificationCenter)(void);
-static _Atomic BOOL gQuietPost;   // w2 e9: written on the pump queue, read in AVF's setFocusMode: path (TSan); log-only
+static _Atomic BOOL gQuietPost;   // written on the pump queue, read in AVF's setFocusMode: path (TSan); log-only
 static OSStatus (*pCMNotificationCenterPostNotification)(void *, CFTypeRef, CFTypeRef, CFTypeRef, uint32_t);
 static void M2Post(CMBaseObjectRef src, NSString *name, id value) {
     NSDictionary *payload = value ? @{@"NewPropertyValue": value} : nil;
@@ -93,7 +93,7 @@ static OSStatus src_SetProperty(CMBaseObjectRef o, CFStringRef key, CFTypeRef va
     if (value) gProps[s->index][(__bridge NSString *)key] = (__bridge id)value;
     NSString *k = (__bridge NSString *)key;
     if (getenv("M5_NO_METERING")) return 0;
-    // m8: manual-control completions (setExposureTargetBias:/setFocusModeLocked:/custom exposure/WB gains completion handlers)
+    // manual-control completions (setExposureTargetBias:/setFocusModeLocked:/custom exposure/WB gains completion handlers)
     if ([k hasSuffix:@"Operation"] && [(__bridge id)value isKindOfClass:[NSDictionary class]] && ((__bridge NSDictionary *)value)[@"RequestID"]) {
         NSDictionary *op = (__bridge NSDictionary *)value; NSString *done = nil;
         if ([k isEqualToString:@"ExposureTargetBiasOperation"]) { done = @"BiasedExposureComplete"; if (op[@"Bias"]) { gProps[s->index][@"ExposureTargetBias"] = op[@"Bias"]; if (!getenv("M8_NO_BIASNOTE")) M2Post(o, @"ExposureTargetBias", op[@"Bias"]); } }
@@ -111,7 +111,7 @@ static OSStatus src_SetProperty(CMBaseObjectRef o, CFStringRef key, CFTypeRef va
     if ([k isEqualToString:@"FocusOperation"]) M5Adjust(o, @"AdjustingFocus", 300);
     else if ([k isEqualToString:@"ExposureOperation"]) M5Adjust(o, @"AdjustingExposure", 250);
     else if ([k isEqualToString:@"WhiteBalanceOperation"]) M5Adjust(o, @"AdjustingWhiteBalance", 200);
-    else if ([k containsString:@"Torch"] && ![k isEqualToString:@"TorchActive"] && (getenv("M8_OLD_TORCH") || [k isEqualToString:@"TorchLevel"])) {   // m8: AutoTorchEnabled=0 used to post TorchActive=NO
+    else if ([k containsString:@"Torch"] && ![k isEqualToString:@"TorchActive"] && (getenv("M8_OLD_TORCH") || [k isEqualToString:@"TorchLevel"])) {   // AutoTorchEnabled=0 must not post TorchActive=NO (M8_OLD_TORCH=1 does)
         // TorchLevel (float) / TorchMode-like keys: report TorchActive = level > 0
         BOOL on = [(__bridge id)value respondsToSelector:@selector(floatValue)] ? [(__bridge id)value floatValue] > 0 : NO;
         CFRetain(o);
@@ -169,7 +169,7 @@ static const M2VTable kM2VTable = { NULL, &kM2BaseClass, kM2DerivedClass };
 @end
 
 static id M2Wrap(NSDictionary *d, NSString *tag) { return (getenv("M2_NOLOGDICT") && strcmp(getenv("M2_NOLOGDICT"), "0")) ? d : [M2LogDict with:d tag:tag]; }
-// m9: 27.x reads property "Attributes" = FigCaptureSourceAttributes (typed object), built by Apple's own initializer from the same dictionary
+// 27.x reads property "Attributes" = FigCaptureSourceAttributes (typed object), built by Apple's own initializer from the same dictionary
 static void M9AddAttributesObject(int i, NSDictionary *attrs) {
     Class FSA = objc_getClass("FigCaptureSourceAttributes");
     if (!FSA || !class_getInstanceMethod(FSA, sel_registerName("initWithAttributesDictionary:"))) return;
@@ -215,7 +215,7 @@ static CFArrayRef M2CopySources(void) {
             gProps[i] = [NSMutableDictionary dictionary];
             gProps[i][@"AttributesDictionary"] = M2Wrap(M2Attributes(i), [NSString stringWithFormat:@"attr%d", i]);
             M9AddAttributesObject(i, gProps[i][@"AttributesDictionary"]);
-            // m10: 17.5 reads barcode availability from the *source property* AvailableMetadataKeyGroups (26.3 from the attribute)
+            // 17.5 reads barcode availability from the *source property* AvailableMetadataKeyGroups (26.3 from the attribute)
             id kg = M2Attributes(i)[@"AvailableMetadataKeyGroups"]; if (kg) gProps[i][@"AvailableMetadataKeyGroups"] = kg;
             gProps[i][@"Formats"] = M2Formats(i);
             [gProps[i] addEntriesFromDictionary:gOverride[@"props"]];
@@ -231,7 +231,7 @@ static CFArrayRef M2CopySources(void) {
     return CFRetain(gSources);
 }
 
-// m6 (Q3): iOS 17.5's AVF drops the stock simulator audio source (it has no attributes), so there is no microphone device.
+// iOS 17.5's AVF drops the stock simulator audio source (it has no attributes), so there is no microphone device.
 // Provide one fake audio FigCaptureSource with microphone attributes (index M5_MAXSRC-1). Audio samples come from M5Mic.
 static CFTypeRef gFakeMicSrc;
 __attribute__((ns_returns_retained)) static id m6_newAudioFigCaptureSources(id self, SEL _cmd) {   // "new" family: caller expects +1
@@ -249,8 +249,8 @@ __attribute__((ns_returns_retained)) static id m6_newAudioFigCaptureSources(id s
     LOG(@"+[AVCaptureFigAudioDevice _newFigCaptureSources] -> fake microphone source %p", gFakeMicSrc);
     return gFakeMicSrc ? @[(__bridge id)gFakeMicSrc] : @[];
 }
-// W4: the audio factory is hooked in SWAP 4 whenever M2_FAKE is set; its first armed call decides fake mic vs stock once, in
-// the caller's own context (this replaces m10's probe at activation, which called AVF from the activating thread). The stock
+// The audio factory is hooked in SWAP 4 whenever M2_FAKE is set; its first armed call decides fake mic vs stock once, in
+// the caller's own context (not a probe at activation, which would call AVF from the activating thread). The stock
 // sources from that first call are the answer when stock wins, so the original runs exactly once for the decision.
 static IMP gOrigAudioSources;
 static _Atomic int gMicMode;   // 0 undecided, 1 fake microphone, 2 stock
@@ -289,7 +289,7 @@ static BOOL m10_micIsConnected(id self, SEL c) {
     if (gFakeMicSrc && (__bridge CFTypeRef)src == gFakeMicSrc) return YES;
     return ((BOOL (*)(id, SEL))gOrigIsConnected)(self, c);
 }
-__attribute__((ns_returns_retained)) static id m2_newFigCaptureSources(id self, SEL _cmd) {   // m6: was +0 (autoreleased) under ARC -> over-release of gSources
+__attribute__((ns_returns_retained)) static id m2_newFigCaptureSources(id self, SEL _cmd) {   // +1: a +0 (autoreleased) return under ARC over-released gSources
     LOG(@"+[%@ _newFigCaptureSources] -> fake", self);
     return (__bridge_transfer id)M2CopySources(); // "new" -> +1
 }

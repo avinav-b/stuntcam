@@ -48,7 +48,7 @@ __attribute__((constructor)) static void simcam_stub(void) {
     if (_NSGetExecutablePath(exe, &sz) != 0) return;   // (_dyld_get_image_name(0) is the stub itself at this point)
     // an app = an executable inside a .app bundle, in the device's data dir or an Xcode build-products dir, and not under the
     // runtime root (system apps live there). Not tied to /Containers/Bundle/Application/: a hosted-test host was once
-    // launched through a containermanagerd/Dead/ hard-link alias of its binary, failed that check and hung xcodebuild (w1 e6).
+    // launched through a containermanagerd/Dead/ hard-link alias of its binary, failed that check and hung xcodebuild.
     const char *root = getenv("SIMULATOR_ROOT"); if (!root) root = getenv("DYLD_ROOT_PATH");
     if (!strstr(exe, ".app/") || (!strstr(exe, "/data/") && !strstr(exe, "/Build/Products/")) || (root && *root && !strncmp(exe, root, strlen(root)))) return;
     const char *lg = getenv("SIMCAM_STUB_LOG");

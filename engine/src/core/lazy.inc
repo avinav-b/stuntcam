@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-// Part of simcam.m (single translation unit; included in order): lazy arming (m11 Q3c, variant c) with bounded activation
-// (W4 PR A, the lazy-activation plan). Must stay last.
+// Part of simcam.m (single translation unit; included in order): lazy arming with bounded activation
+// (design §4.1 "Activation"). Must stay last.
 // At load: traps on the public capture entry points and the CoreMotion stand-in's hooks; no preflight, no private call. The
 // first trapped call starts activation once on the private serial queue simcam.activate; every caller waits at most
 // SIMCAM_ACTIVATE_TIMEOUT_MS (default 1000; x10 under a debugger or sanitizers) from that first call, against one shared
@@ -12,7 +12,7 @@
 // Apps that never touch the camera are never armed. SIMCAM_LAZY=0 runs the same phases inline at load (no traps, no timeout;
 // a test mode: it runs inside dlopen with the dyld lock held, where a private queue would always time out).
 // Trampolines take void * arguments: strong id parameters made ARC retain argument registers the real method never set
-// (m11: 30/50 launches crashed).
+// (30 of 50 test launches crashed).
 #import <objc/runtime.h>
 static long gActBudgetMs = 1000; static BOOL gActBudgetExplicit;
 static _Atomic uint64_t gActDeadline;       // CLOCK_MONOTONIC ns
@@ -55,7 +55,7 @@ static void ActRecordExceptionF(void *ctx) {
 }
 
 // ---- the marker-STOCK line (no silent stock, design §5.1) ----
-// The features and the until come from one open file (fstat on the read's fd, review nit): a stat by path could see
+// The features and the until come from one open file (fstat on the read's fd): a stat by path could see
 // a marker another process renamed in after the read.
 static void ActMarkerNoteF(void *ctx) {
     char feats[200] = "?", when[64] = "?"; int fd = open(gSCMarkerAtLoad, O_RDONLY | O_CLOEXEC);
@@ -69,10 +69,10 @@ static void ActMarkerNoteF(void *ctx) {
     if (s) ActRecStderrF(s);
 }
 
-// ---- the motion-stock line (PR B, plan §2.6 B1): queued by the first call into a CoreMotion forwarding trap ----
+// ---- the motion-stock line (no silent stock, design §5.1): queued by the first call into a CoreMotion forwarding trap ----
 // The until comes from the load-time stat (SCMotionStockAtLoad), and so does the kind: by this first motion call a passing
 // preflight or PREPARE 1's marker update may have unlinked the marker. Its feature list is read only from the version that
-// load-time stat saw (same inode and mtime, e29: review round 2, low 4); a re-written marker (another until) gives the
+// load-time stat saw (same inode and mtime); a re-written marker (another until) gives the
 // kind instead, so the features and the until always come from one snapshot.
 static void ActMotionStockNoteF(void *ctx) {
     const char *mk = gSCMotionStockAt; char feats[200]; snprintf(feats, sizeof feats, "%s", gSCMotionStockKind ?: "?");
@@ -93,7 +93,7 @@ static void ActMotionStockNote(void) { dispatch_async_f(gActRecQ, NULL, ActMotio
 // ---- PREPARE (on simcam.activate) ----
 enum { AP_OK = 0, AP_LATCHED, AP_PREFLIGHT, AP_MISSING, AP_THROW, AP_FORCED };
 static void ActPhase(int ph) { gActTPrep[ph] = ActNow(); atomic_store(&gActPhase, ph); }
-// W4 e54 test faults, in START (armed, the full crash handler installed, the trace ring on, its directory picked, no flush
+// Test faults in START (armed, the full crash handler installed, the trace ring on, its directory picked, no flush
 // yet): M16_ACTIVATE_FAIL=crashstart faults here, on the activation queue; =crash2 faults on two threads at once (both
 // released by one store, both PCs in our image), so two threads run the crash handler together. The trace must still be
 // written, once and whole (ledger L69, L70).
@@ -121,7 +121,7 @@ static void ActFigFaultF(void *ctx) {   // M16_FIG_FAULT_AT_MS (act-fake-sdk): a
     ActCrashFigF(NULL);
 }
 static int ActPrepare(void) {
-    // the log first (plan: PREPARE 2), so PREPARE 1's lines (trim, stale markers, latch) reach it too
+    // the log first (it belongs to PREPARE 2), so PREPARE 1's lines (trim, stale markers, latch) reach it too
     ActOpenLog();
     // 1. sentinel: read the past, decide latches (a latched launch never reaches the preflight)
     ActPhase(PH_SENTINEL);
@@ -139,7 +139,7 @@ static int ActPrepare(void) {
     BOOL ok = M16Fail("preflight") ? NO : M2Preflight();
     LOG(@"preflight took %.1f ms", (ActNow() - tp) / 1e6);
     if (!ok) {
-        if (!forced || gM16PfReal) SCPreflightMarker(NO, "preflight failed");   // a forced preflight failure never writes preflight-fail (plan §2.6)
+        if (!forced || gM16PfReal) SCPreflightMarker(NO, "preflight failed");   // a forced preflight failure never writes preflight-fail
         return forced && !gM16PfReal ? AP_FORCED : AP_PREFLIGHT;
     }
     SCPreflightMarker(YES, NULL);
@@ -169,7 +169,7 @@ static int ActPrepare(void) {
 
 // ---- SWAP (waiters block on it): method_setImplementation / class_replaceMethod, plain/atomic stores, sigaction,
 // vm_protect, dispatch_async_f. No ObjC messages, no LOG or file I/O, no dlopen/dlsym/image walk, no Fig/AVF calls, none of our
-// locks. Order: a non-trap caller reaching AVF mid-SWAP never sees fake sources without our session (plan §2.7).
+// locks. Order: a non-trap caller reaching AVF mid-SWAP never sees fake sources without our session.
 static void ActSwap(void) {
     atomic_store(&gActPhase, PH_SWAP); gActTSwap0 = ActNow();
     M12Swap();                                                     // 1. the state the first frame needs
@@ -191,7 +191,7 @@ static void ActStart(void *ctx) {
         @try {
             SCStart();                                             // 1-3. activate line, gSCOn, watchdog, atexit
             if (gM16SlowStartMs > 0) { LOG(@"M16_SLOW_START_MS: START sleeps %ld ms (the sentinel is live)", gM16SlowStartMs); M16Sleep(gM16SlowStartMs); }
-            if (M16Fail("crashstart") || M16Fail("crash2")) M54CrashStart(M16Fail("crash2") ? 2 : 1);   // W4 e54 test faults (trace)
+            if (M16Fail("crashstart") || M16Fail("crash2")) M54CrashStart(M16Fail("crash2") ? 2 : 1);   // test faults (trace)
             M12Start();                                            // 4. control-file timer, observers
             M7VisionStart();                                       // 5. Vision's add-image hook, if it wasn't loaded at prepare
             // 6. SWAP's results, then the armed line, last
@@ -262,15 +262,15 @@ static void ActRun(void *ctx) {
         gActThread = 0; return;
     }
     @try { ActSwap(); }
-    @catch (NSException *e) { snprintf(gActSwapExc, sizeof gActSwapExc, "%s", e.name.UTF8String ?: "?"); }   // ARMED-degraded (D5)
+    @catch (NSException *e) { snprintf(gActSwapExc, sizeof gActSwapExc, "%s", e.name.UTF8String ?: "?"); }   // ARMED-degraded
     gActTArmed = ActNow();
     atomic_store_explicit(&gAct, ACT_ARMED, memory_order_release);
     atomic_store(&gActRunning, 0);
     atomic_store(&gActPhase, PH_DONE);
-    TRArm();   // W4 e48: the op ring records from here (the activate op)
+    TRArm();   // the op ring records from here (the activate op)
     if (gActInline) { gActThread = 0; TRArmFile(); ActStart(NULL); return; }
     dispatch_group_leave(gActGroup);
-    TRArmFile();   // W4 e54: the trace's directory, after the waiters are released (file I/O; nobody waits for it)
+    TRArmFile();   // the trace's directory, after the waiters are released (file I/O; nobody waits for it)
     gActThread = 0;
     dispatch_async_f(gActQ, NULL, ActStart);
 }
@@ -304,7 +304,7 @@ static int ActWait(void) {
         }
         if (ActNow() >= atomic_load(&gActDeadline)) {
             // re-measure right before the CAS: a waiter stopped after its gap check (SIGSTOP, lldb) must not go STOCK before
-            // the waiter that saw the stop extends the deadline (review item 3); it treats the stop as its own and loops
+            // the waiter that saw the stop extends the deadline; it treats the stop as its own and loops
             uint64_t gap2 = ActNow() - a;
             if (gap2 > (uint64_t)slice + 500 * NSEC_PER_MSEC) {
                 if (atomic_compare_exchange_strong(&gActDeadline, &D, D + gap2)) ActRecLog(NO, "activation: process was stopped for %.1f s; deadline +%.1f s", gap2 / 1e9, gap2 / 1e9);
@@ -320,14 +320,14 @@ static void ActBegin(void *ctx) {   // the dispatch_once body: microseconds, nev
     ActCaller *c = ctx;
     gActT0 = ActNow(); gActTPrep[PH_START] = gActT0;
     atomic_store(&gSCTraced, SCIsTraced());   // one sysctl, no lock
-    if (!gActBudgetExplicit && (atomic_load(&gSCTraced) || gSCScale > 1)) gActBudgetMs *= 10;   // D4: only the default is x10
+    if (!gActBudgetExplicit && (atomic_load(&gSCTraced) || gSCScale > 1)) gActBudgetMs *= 10;   // only the default is x10
     atomic_store(&gActDeadline, gActT0 + (uint64_t)gActBudgetMs * NSEC_PER_MSEC);
     snprintf(gActWhy, sizeof gActWhy, "%s", c->why); gActWhyMain = pthread_main_np(); gActCallerRA = c->ra;
     const char *ql = dispatch_queue_get_label(DISPATCH_CURRENT_QUEUE_LABEL); snprintf(gActQueueLabel, sizeof gActQueueLabel, "%s", ql ? ql : "");
-    M5OrientTrackStartForCamera();   // enqueued, so the tracker runs while prepare does (plan §2.2, A2)
+    M5OrientTrackStartForCamera();   // enqueued, so the tracker runs while prepare does
     if (gM16FigFaultMs > 0) dispatch_after_f(dispatch_time(DISPATCH_TIME_NOW, gM16FigFaultMs * (int64_t)NSEC_PER_MSEC), dispatch_get_global_queue(0, 0), NULL, ActFigFaultF);
     atomic_store(&gAct, ACT_RUNNING);
-    if (gM16NoTimeout) { gActInline = YES; ActRun(NULL); return; }   // L56 negative control: today's inline path, no bound
+    if (gM16NoTimeout) { gActInline = YES; ActRun(NULL); return; }   // L56 negative control: the inline path, no bound
     dispatch_group_enter(gActGroup);
     dispatch_async_f(gActQ, NULL, ActRun);
 }
@@ -380,7 +380,7 @@ static void m11_trap(Class c, SEL s, BOOL meta) {
         return ((void *(*)(void *, SEL, void *, void *, void *))orig)(self_, s, a, b, c2);
     });
     // the class's own method only: if it inherits this selector (e.g. -[AVCaptureSession init] coming from NSObject), add an
-    // override on the class instead of swizzling the superclass's method for every object in the process (review r1)
+    // override on the class instead of swizzling the superclass's method for every object in the process
     if (!class_addMethod(target, s, rep, method_getTypeEncoding(m))) method_setImplementation(m, rep);
 }
 __attribute__((constructor)) static void m11_lazy_install(void) {
@@ -405,7 +405,7 @@ __attribute__((constructor)) static void m11_lazy_install(void) {
     gActGroup = dispatch_group_create();
     // CoreMotion is a public class, so its stand-in's hooks go in at load (design A-MF2): an app that asks for the accelerometer
     // before touching the camera must get the same answer as one that asks after. M5_NO_MOTION=1 keeps CoreMotion stock.
-    // PR B (plan §3): decided once, here, from markers only: this build's camera latch, motion latch or real preflight failure
+    // Decided once, here, from markers only: this build's camera latch, motion latch or real preflight failure
     // (sentinel on, no clear) makes CoreMotion stock for the process, with one-shot forwarding traps that say so once.
     SCFeatKeyInit();   // the feature key that attributes stand-in crashes to `motion` (core/safety.inc)
     if (!getenv("M5_NO_MOTION")) { if (SCMotionStockAtLoad()) M5MotionStockTraps(); else M5MotionHooks(); }
@@ -425,7 +425,7 @@ __attribute__((constructor)) static void m11_lazy_install(void) {
     for (unsigned i = 0; i < sizeof cs / sizeof *cs; i++) m11_trap(d, cs[i], YES);
     m11_trap(ds, @selector(discoverySessionWithDeviceTypes:mediaType:position:), YES);
     m11_trap(ss, @selector(init), NO);
-    // W4 option (b), plan §8: one main-queue block that records the UI orientation once (no timer, no notifications), so a
+    // One main-queue block that records the UI orientation once (no timer, no notifications), so a
     // coordinator built off main while main is busy reads the right preview angle at once. Not in a marker-STOCK launch.
     if (atomic_load(&gAct) != ACT_STOCK) M5UIOrientSnapAtLoad();
 }

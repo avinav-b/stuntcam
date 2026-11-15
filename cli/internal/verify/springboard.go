@@ -10,7 +10,7 @@ import (
 	"github.com/avinav-b/stuntcam/cli/internal/simctl"
 )
 
-// The SpringBoard guard's poll (w4 e36 proposal 3). A simulator's processes are host processes: the device's launchd_sim
+// The SpringBoard guard's poll. A simulator's processes are host processes: the device's launchd_sim
 // runs as `launchd_sim <set>/<udid>/data/var/run/launchd_bootstrap.plist`, and its SpringBoard is a direct child whose
 // executable is …/CoreServices/SpringBoard.app/SpringBoard, with the same pid `launchctl list` shows inside the device
 // (checked on iOS 26.3, 27.0 and 17.5). One `ps` takes ~40 ms where `simctl spawn … launchctl list` took 0.3–1.0 s under
@@ -20,7 +20,7 @@ import (
 // (whose directory is deviceDir): every process by its accounting name (`ps … ucomm=`, from the kernel's process table, no
 // argv), plus one synthesized line for the device's launchd_sim, whose pid launchd itself names (`launchctl list`: the job
 // com.apple.CoreSimulator.SimDevice.<udid>). Only if launchd doesn't know that job does it read the launchd_sim processes'
-// argv (ps -p). w4 e38: a full `ps -axww … command=` reads every process's argv, and right after a boot under an
+// argv (ps -p): a full `ps -axww … command=` reads every process's argv, and right after a boot under an
 // xcodebuild loop that blocked in the kernel for up to 10.6 s (a kill can't end it sooner), the launchd_sim argv read too.
 // A var for tests.
 var hostProcs = func(udid, deviceDir string) (string, error) {
@@ -110,9 +110,9 @@ func springboardFromPS(ps, deviceDir string) (pid string, launchd bool) {
 
 // springboardPID is the guard's poll: host side first. Only if the host can't see the device's launchd_sim at all (ps
 // failed, or a runtime laid out differently) does it ask inside the device as before. A launchd_sim without a SpringBoard
-// child is an answer ("not running yet"), not a reason to spawn (w4 e37 proposal 2, done in e38): right after bootstatus
-// the spawn poll found nothing the next host poll didn't (e37: 29 of 31 found nothing), and under the AVCam xcodebuild loop
-// that one `simctl spawn` took 9.7-11.3 s on 27.0 (e38), pushing the guard to 10-14 s. how says which answered.
+// child is an answer ("not running yet"), not a reason to spawn: right after bootstatus
+// the spawn poll found nothing the next host poll didn't (29 of 31 found nothing), and under the AVCam xcodebuild loop
+// that one `simctl spawn` took 9.7-11.3 s on 27.0, pushing the guard to 10-14 s. how says which answered.
 // A host poll that fails (ps timed out) is no answer ("host-error"); only the third in a row falls back to spawn.
 func springboardPID(ctl simctl.Ctl, deviceDir, udid string, hostErrs *int) (pid, how string) {
 	ps, err := hostProcs(udid, deviceDir)
@@ -127,7 +127,7 @@ func springboardPID(ctl simctl.Ctl, deviceDir, udid string, hostErrs *int) (pid,
 	return springboardSpawn(ctl, udid), "spawn"
 }
 
-// springboardSpawn asks inside the device (the guard's poll before w4 e37); a var so tests can stand in for it.
+// springboardSpawn asks inside the device (the slow fallback poll); a var so tests can stand in for it.
 var springboardSpawn = func(ctl simctl.Ctl, udid string) string {
 	out, err := ctl.Spawn(udid, "launchctl", "list")
 	if err != nil {
@@ -142,7 +142,7 @@ var springboardSpawn = func(ctl simctl.Ctl, udid string) string {
 	return ""
 }
 
-// guardSpringBoard waits until SpringBoard has kept one pid for 2 s of wall time, at most 30 s (w2 e9, e10a): on a loaded
+// guardSpringBoard waits until SpringBoard has kept one pid for 2 s of wall time, at most 30 s: on a loaded
 // Mac backboardd can restart SpringBoard a few seconds after bootstatus returns, and an app installed or launched in that
 // gap is refused for the rest of the boot. poll is the interval between host-side polls; a spawn poll is slow by itself.
 func guardSpringBoard(ctl simctl.Ctl, deviceDir, udid string, poll time.Duration) {
@@ -160,7 +160,7 @@ func guardSpringBoard(ctl simctl.Ctl, deviceDir, udid string, poll time.Duration
 		} else {
 			pid, how = springboardPID(ctl, deviceDir, udid, &hostErrs)
 			// a runtime that renames SpringBoard or moves it under another parent: after 6 s without one on the host, ask
-			// inside once; if the device has one, poll that way from now on (review r2)
+			// inside once; if the device has one, poll that way from now on
 			if how == "host" && pid == "" && time.Since(since) >= 6*time.Second && last == "" {
 				if sp := springboardSpawn(ctl, udid); sp != "" {
 					pid, how, spawnOnly = sp, "spawn", true

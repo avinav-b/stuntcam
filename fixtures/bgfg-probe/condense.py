@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-# condense.py <results dir> — one row per run: the facts the report's five questions need (w3 e20)
+# condense.py <results dir> — one row per run: the facts needed to compare the runs
 import os, re, sys, glob
 R = sys.argv[1]
 def L(d): return open(os.path.join(d, 'timeline.txt'), errors='replace').read().splitlines()[1:]

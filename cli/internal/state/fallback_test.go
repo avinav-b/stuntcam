@@ -203,7 +203,7 @@ func containsS(xs []string, x string) bool {
 	return false
 }
 
-// <container>/tmp itself a symlink: reported (Check), never read or cleared through (review 6)
+// <container>/tmp itself a symlink: reported (Check), never read or cleared through
 func TestFallbackLinkedTmp(t *testing.T) {
 	c := fakeContainer(t)
 	out := t.TempDir()
@@ -227,7 +227,7 @@ func TestFallbackLinkedTmp(t *testing.T) {
 }
 
 // features counted only in the fallback events.log apply if the app falls back again: described, not returned as an
-// effect (review 4)
+// effect
 func TestFallbackEventsOnlyLatch(t *testing.T) {
 	c := fakeContainer(t)
 	f, _ := FallbackFor("U", "dev.x", c)
@@ -263,7 +263,7 @@ func TestAppendClear(t *testing.T) {
 }
 
 // a trim renaming a shorter copy over events.log while the CLI waits for the lock: the line lands in the new file; a lock
-// held past LockWait fails instead of hanging (review r2 LOW 1, LOW 5)
+// held past LockWait fails instead of hanging
 func TestAppendClearLockAndTrim(t *testing.T) {
 	d := t.TempDir()
 	p := filepath.Join(d, "events.log")

@@ -2,7 +2,7 @@
 
 // Package xcode identifies the Xcode that `stuntcam up` arms for (design §4.1 "Which Xcode's libs", §4.5 step 1, B-MF5).
 //
-// Under ⌘R nothing in the launched app names the Xcode that launched it (w4 e26: only DerivedData paths and IDE_*
+// Under ⌘R nothing in the launched app names the Xcode that launched it (only DerivedData paths and IDE_*
 // variables), so the loader can't learn it in-process. The CLI records the build at arm time (`xcodebuild -version`, which
 // follows DEVELOPER_DIR, else `xcode-select -p`) in sims/<udid>/config.json, and the loader reads the restore rules for that
 // build. An Xcode switched after arming is noticed by `doctor`, not by the app.
@@ -48,7 +48,7 @@ func ParseVersion(out string) (version, build string, err error) {
 }
 
 // Timeout bounds each tool this package runs (xcodebuild -version can hang on a first launch, a license prompt or a
-// broken install; w4 e30, L2).
+// broken install).
 var Timeout = 20 * time.Second
 
 // run is replaced in tests.
@@ -56,7 +56,7 @@ var run = func(env []string, name string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
 	defer cancel()
 	c := exec.CommandContext(ctx, name, args...)
-	c.WaitDelay = 2 * time.Second // the kill reaches only the direct child: don't wait for a grandchild holding stdout (r2 L-a)
+	c.WaitDelay = 2 * time.Second // the kill reaches only the direct child: don't wait for a grandchild holding stdout
 	if env != nil {
 		c.Env = env
 	}
@@ -68,7 +68,7 @@ var run = func(env []string, name string, args ...string) (string, error) {
 }
 
 // NormalizeDeveloperDir turns a DEVELOPER_DIR naming the Xcode.app itself (which xcrun accepts) into its
-// Contents/Developer, so the same Xcode always compares equal (w4 e30, L3). Other paths are only cleaned.
+// Contents/Developer, so the same Xcode always compares equal. Other paths are only cleaned.
 func NormalizeDeveloperDir(d string) string {
 	if d == "" {
 		return ""

@@ -9,7 +9,7 @@
 #   between cycles 10 and 50).
 #   Variants: plain (open/close only; the torture's), photo (+ one photo per cycle), movie (+ a 1 s movie), both. The
 #   photo/movie variants idle 1.5 s after each cycle (encodes finish asynchronously; 26.3 is slow) to keep the samples clean.
-#   Ledger L75 (w4 e58): before the fix every session leaked its video data output's conversion pool + VT transfer session,
+#   Ledger L75: without the fix every session leaks its video data output's conversion pool + VT transfer session,
 #   +3.1–3.2 MB per cycle (26 → 189 MB over 50 on 26.3). UDID: $SIMCAM_UDID_<rt>. One line on stdout:
 #     memcycle <rt> <variant> PASS|FAIL ok=<ok>/<n> fp1=<KB> fp10=<KB> fpN=<KB> growth=<KB, medians> slope=<KB/cycle>
 #   (exit 1 on FAIL). The app's output: results/memcycle-<rt>-<variant>.txt.

@@ -1,6 +1,6 @@
 #!/bin/zsh
 # SPDX-License-Identifier: Apache-2.0
-# matrix.sh <rt> <tag> [N=20] [UNARMED=5] — e24's motion-probe runs on one runtime; the sim must be booted by scripts/boot.sh <rt> stub
+# matrix.sh <rt> <tag> [N=20] [UNARMED=5] — the motion-probe runs on one runtime; the sim must be booted by scripts/boot.sh <rt> stub
 #   N launches of each of lazy|eager x camera 0|1 x motionFirst|cameraFirst, interleaved (rep outer, variant inner), then
 #   UNARMED launches with SIMCAM=0 (-camera 1 -order motionFirst). Result dirs: $SIMCAM_RESULTS/motion-<rt>-<tag>-<variant>-<rep>/
 set -u; D=${0:a:h}; RT=$1; TAG=$2; N=${3:-20}; NU=${4:-5}

@@ -2,7 +2,7 @@
 
 // Package procenv reads a booted simulator's boot environment from the host: the environment of its launchd_sim process
 // (KERN_PROCARGS2). Boot-mode arming lives only there: `launchctl getenv` inside the sim reads every arming variable as empty,
-// and a reboot without stuntcam clears it (w4 e26 residue). Reading it adds no process to the simulator.
+// and a reboot without stuntcam clears it. Reading it adds no process to the simulator.
 package procenv
 
 import (

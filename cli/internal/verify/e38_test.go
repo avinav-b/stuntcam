@@ -16,7 +16,7 @@ import (
 	"github.com/avinav-b/stuntcam/cli/internal/simctl"
 )
 
-// Tests for the review round 1 fixes (w4 e38).
+// Tests for the device shutdown handoff, the install skip, the retried-pass cache and the post-boot settle floor.
 
 // fakeXcrun puts an xcrun on PATH that logs its arguments to <dir>/calls, answers `list devices -j` with device U in the
 // state <dir>/state holds, and on `shutdown` writes <dir>/after-shutdown (if present) into <dir>/state.
@@ -83,7 +83,7 @@ func TestFinishShutdownLockOwnership(t *testing.T) {
 		})
 	}
 
-	// L1: a device that keeps coming back Booted is shut down again only while the lock is ours; once another verify takes
+	// a device that keeps coming back Booted is shut down again only while the lock is ours; once another verify takes
 	// the lock (here: right after our first shutdown), the child stops touching the device
 	t.Setenv("SIMCAM_HOME", t.TempDir())
 	os.MkdirAll(home.Root(), 0o755)
@@ -111,7 +111,7 @@ func TestFinishShutdownLockOwnership(t *testing.T) {
 	}
 }
 
-// L1: the child's pid can't be written into the lock: the child is killed (so it can't shut a later verify's device
+// the child's pid can't be written into the lock: the child is killed (so it can't shut a later verify's device
 // down), the marker removed, and the caller keeps the lock for its own synchronous shutdown.
 func TestHandoffKillsChildOnPidWriteFailure(t *testing.T) {
 	t.Setenv("SIMCAM_HOME", t.TempDir())
@@ -156,7 +156,7 @@ func TestHandoffKillsChildOnPidWriteFailure(t *testing.T) {
 	release(d)
 }
 
-// L2: a shutdown marker older than the child can live is a dead owner's lock, even when its pid is alive (reused).
+// a shutdown marker older than the child can live is a dead owner's lock, even when its pid is alive (reused).
 func TestStaleShutdownMarker(t *testing.T) {
 	t.Setenv("SIMCAM_HOME", t.TempDir())
 	os.MkdirAll(home.Root(), 0o755)
@@ -183,7 +183,7 @@ func TestStaleShutdownMarker(t *testing.T) {
 	}
 }
 
-// L4: a first run that never started on a verify that skipped the install or the grant reinstalls and re-grants.
+// a first run that never started on a verify that skipped the install or the grant reinstalls and re-grants.
 func TestRedoSkippedInstall(t *testing.T) {
 	t.Setenv("SIMCAM_HOME", t.TempDir())
 	var got []installPlan
@@ -226,8 +226,8 @@ func TestRedoSkippedInstall(t *testing.T) {
 	}
 }
 
-// M2: a retried pass is kept in the cache with its retried list, used for RetriedPassTTL only; a plain pass and a fail
-// are not affected; a file without the field (scripts/verify.sh before e38) is read from its RESULT line.
+// a retried pass is kept in the cache with its retried list, used for RetriedPassTTL only; a plain pass and a fail
+// are not affected; a file without the field (as an older scripts/verify.sh wrote) is read from its RESULT line.
 func TestRetriedPassCache(t *testing.T) {
 	t.Setenv("SIMCAM_HOME", t.TempDir())
 	now := time.Now()
@@ -267,7 +267,7 @@ func TestRetriedPassCache(t *testing.T) {
 	}
 }
 
-// B1: the post-boot settle floor.
+// the post-boot settle floor.
 func TestSettleFloor(t *testing.T) {
 	t.Setenv("SIMCAM_VERIFY_SETTLE_S", "")
 	for v, want := range map[string]time.Duration{"27.0": PostBootSettle, "27.1": PostBootSettle, "28.0": PostBootSettle, "": PostBootSettle,
@@ -294,7 +294,7 @@ func TestSettleFloor(t *testing.T) {
 	}
 }
 
-// a pass decided by a whole relaunch is short-lived like a retried pass (review r2)
+// a pass decided by a whole relaunch is short-lived like a retried pass
 func TestRelaunchedPassCache(t *testing.T) {
 	t.Setenv("SIMCAM_HOME", t.TempDir())
 	now := time.Now()
@@ -312,7 +312,7 @@ func TestRelaunchedPassCache(t *testing.T) {
 	}
 }
 
-// a lock that can't be made at all (no $SIMCAM_HOME) fails at once instead of spinning to the limit (review r2)
+// a lock that can't be made at all (no $SIMCAM_HOME) fails at once instead of spinning to the limit
 func TestAcquireWaitNoHome(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "missing", "verify-X.lock")
 	start := time.Now()

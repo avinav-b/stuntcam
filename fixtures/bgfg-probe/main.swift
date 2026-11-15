@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// bgfg-probe (w3 e20): one AVCaptureSession (back wide camera + video data output) across background and foreground.
+// bgfg-probe: one AVCaptureSession (back wide camera + video data output) across background and foreground.
 // Measurement only: it logs, it doesn't check. Every line is
 //   PROBE| <CFAbsoluteTime, 3 dp> <s since launch, monotonic> <text>
 // CFAbsoluteTime is the engine log's clock (engine/src/simcam.m LOG), so the two logs merge by time.

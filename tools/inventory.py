@@ -10,8 +10,8 @@ Scans engine/src (the single translation unit and its fragments) and lists:
   vtable-slots Fig object vtable slots the engine fills or replaces (source class, session class)
   classes      Objective-C classes looked up by name
   hooks        methods whose implementation the engine replaces (class, selector, site); also the ones installed through
-               ActHookResolve (W4 lazy arming), with its label
-  kvc-keys     keys read with key-value coding (M5KVC(o, @"key"), valueForKey:@"key"); heuristic (W4 e54)
+               ActHookResolve (lazy arming), with its label
+  kvc-keys     keys read with key-value coding (M5KVC(o, @"key"), valueForKey:@"key"); heuristic
   ivars        instance variables read by name
   selectors    other selectors the engine names (called, checked or trapped)
   strings      contract strings in fig/ and providers/ (heuristic: identifier-like @"…"/CFSTR literals)
@@ -124,7 +124,7 @@ def scan(files):
                     if gm:
                         kind, cexpr, s1, s2, svar = gm.groups()
                         sel = s1 or s2
-                        if not sel and svar:   # selector held in a variable/table (motion table, m11 traps): reported below
+                        if not sel and svar:   # selector held in a variable/table (motion table, lazy-arming traps): reported below
                             break
                         add('hooks', f'{"+" if kind == "Class" else "-"}[{resolve_class(cexpr, lines, j)} {sel}]', site)
                         break

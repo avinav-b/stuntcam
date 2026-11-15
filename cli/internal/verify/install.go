@@ -16,8 +16,8 @@ import (
 	"github.com/avinav-b/stuntcam/cli/internal/home"
 )
 
-// The private device keeps the canary between boots, so a verify reinstalls and re-grants it only when needed (w4 e36
-// proposal 1: install + grant were 5–6.6 s of a warm 27.0 verify under load). The decision is made before the boot, from
+// The private device keeps the canary between boots, so a verify reinstalls and re-grants it only when needed
+// (install + grant were 5–6.6 s of a warm 27.0 verify under load). The decision is made before the boot, from
 // the host side, while the device is shut down:
 //   - install unless the device's installed m10canary.app has the same content hash (every file's path and bytes) as the
 //     build's canary and the install record (CanaryRecordFile) names that hash and that container. The installed copy itself
@@ -132,7 +132,7 @@ func runBounded(cmd *exec.Cmd, d time.Duration) (string, error) {
 		return out.String(), err
 	case <-time.After(d):
 		_ = cmd.Process.Kill()
-		go func() { <-done }() // reaped later: a child stuck in the kernel must not hold the guard past d (review r2)
+		go func() { <-done }() // reaped later: a child stuck in the kernel must not hold the guard past d
 		return "", os.ErrDeadlineExceeded
 	}
 }

@@ -19,7 +19,7 @@ func writeVerdict(t *testing.T, dir string, r Result) {
 	}
 }
 
-// w4 e51: the package ships the release gate's canary passes (design §2 C-MF1); only a plain pass counts.
+// the package ships the release gate's canary passes (design §2 C-MF1); only a plain pass counts.
 func TestShippedVerdicts(t *testing.T) {
 	d := t.TempDir()
 	now := time.Now().Unix()
@@ -49,7 +49,7 @@ func TestShippedVerdicts(t *testing.T) {
 
 // This Mac's cache comes first: a fail it cached wins over a shipped pass for the same key; with nothing cached, the
 // shipped pass is used. Any local entry for the key (an expired retried, relaunched or failed-first pass, an unreadable
-// file) means this Mac measured the build itself: the shipped verdict is skipped and the canary runs (review), and
+// file) means this Mac measured the build itself: the shipped verdict is skipped and the canary runs, and
 // the message says so truthfully.
 func TestLocalCacheBeatsShipped(t *testing.T) {
 	t.Setenv("SIMCAM_HOME", t.TempDir())

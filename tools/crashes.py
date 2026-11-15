@@ -3,7 +3,7 @@
 #   our sims = the UDIDs in every $SIMCAM_UDID_<label> variable (e.g. SIMCAM_UDID_263, SIMCAM_UDID_ci).
 #   A report is ours if one of those UDIDs appears anywhere in it (image paths, process path, environment): apps and their
 #   frameworks carry the device's data path. Simulator daemons (notifyd, syslogd, …) run from the runtime root and often carry
-#   no UDID (w1 e3b: 35 such reports were missed); those that are clearly from a simulator (parent launchd_sim, or a path in a
+#   no UDID (matching on UDIDs alone misses them); those that are clearly from a simulator (parent launchd_sim, or a path in a
 #   simulator runtime) are listed as label "sim?" so they are never silently dropped. "sim?" can be any simulator on the Mac.
 #   Each row says whether our loader or engine was loaded in the process (engine=yes|no): a report labelled with our UDID is
 #   any process on our sims, including system daemons; engine=yes narrows it to apps stuntcam was in. The boot stub

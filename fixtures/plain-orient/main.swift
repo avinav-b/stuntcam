@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// m12 plain AVFoundation test app. Mode via env P12_MODE = orient | lifecycle | stress ; P12_CAM = back | front ; P12_N = cycles
+// plain12: a plain AVFoundation test app. Mode via env P12_MODE = orient | lifecycle | stress ; P12_CAM = back | front ; P12_N = cycles
 import UIKit
 import AVFoundation
 import CoreMotion
@@ -14,15 +14,15 @@ let env = ProcessInfo.processInfo.environment
 let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
 
 final class VC: UIViewController, AVCapturePhotoCaptureDelegate, AVCaptureFileOutputRecordingDelegate, AVCaptureVideoDataOutputSampleBufferDelegate {
-  lazy var session = AVCaptureSession()   // W4: lazy, so the coord-* modes make the first capture call themselves
-  lazy var photo = AVCapturePhotoOutput()        // W4: lazy too: creating either output makes AVFCapture itself call
+  lazy var session = AVCaptureSession()   // lazy, so the coord-* modes make the first capture call themselves
+  lazy var photo = AVCapturePhotoOutput()        // lazy too: creating either output makes AVFCapture itself call
   lazy var movie = AVCaptureMovieFileOutput()    // +[AVCaptureDeviceDiscoverySession …] (a trapped entry point) on main
   var layer: AVCaptureVideoPreviewLayer!
   var coord: AVCaptureDevice.RotationCoordinator?
   var obs: [NSKeyValueObservation] = []
   var photoDone: ((Data?, Error?) -> Void)?
   var movieDone: ((URL, Error?) -> Void)?
-  // W4: P12_UI=landscape -> a landscape-only UI; P12_UI=turnback -> the same, then portrait-only once the UI is landscape
+  // P12_UI=landscape -> a landscape-only UI; P12_UI=turnback -> the same, then portrait-only once the UI is landscape
   // (coord-bg only: the UI turns twice before the first camera call)
   var uiMask: UIInterfaceOrientationMask = ["landscape", "turnback"].contains(env["P12_UI"] ?? "") ? .landscapeRight : .allButUpsideDown
   override var supportedInterfaceOrientations: UIInterfaceOrientationMask { uiMask }
@@ -31,7 +31,7 @@ final class VC: UIViewController, AVCapturePhotoCaptureDelegate, AVCaptureFileOu
     super.viewDidAppear(animated)
     let mode = env["P12_MODE"] ?? "orient"
     P("BEGIN mode=\(mode) cam=\(env["P12_CAM"] ?? "back") ui=\(view.window!.windowScene!.effectiveGeometry.interfaceOrientation.rawValue) dev=\(UIDevice.current.orientation.rawValue)")
-    // W4 PR B: P12_MOTION_QUERY=1 asks CoreMotion one availability question first (no updates, so no motion tracking), so a
+    // P12_MOTION_QUERY=1 asks CoreMotion one availability question first (no updates, so no motion tracking), so a
     // CoreMotion-stock launch prints the engine's stock line (orient-nomotion-marker)
     if env["P12_MOTION_QUERY"] == "1" { let m = CMMotionManager(); P("INFO motion accel=\(m.isAccelerometerAvailable)") }
     if mode == "coord-first" { DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.coordFirst() }; return }
@@ -39,7 +39,7 @@ final class VC: UIViewController, AVCapturePhotoCaptureDelegate, AVCaptureFileOu
     if mode == "coord-bg" { DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.coordBg() }; return }
     DispatchQueue.global().async { mode == "stress" ? self.stress() : mode == "lifecycle" ? self.lifecycle() : self.orient() }
   }
-  // ---- W4 (the lazy-activation plan): the RotationCoordinator built right at the first capture call
+  // ---- lazy activation (design §4.1): the RotationCoordinator built right at the first capture call
   //   coord-first  on main, in the same run-loop turn as the first capture call (use with P12_UI=landscape)
   //   coord-bg     the first capture call and the coordinator on a serial camera queue, while main is busy for 300 ms
   // Each prints "COORD <when> preview=<a> capture=<a> ui=<o> dev=<o>" right away and again 1.5 s later, and PASS/FAIL coord-<mode>:
@@ -114,7 +114,7 @@ final class VC: UIViewController, AVCapturePhotoCaptureDelegate, AVCaptureFileOu
   }
   func capAngle() -> CGFloat { coord?.videoRotationAngleForHorizonLevelCapture ?? 90 }
 
-  // ---------------------------------------------------------------- Q1
+  // ---------------------------------------------------------------- orient
   func orient() {
     let cam = env["P12_CAM"] ?? "back"
     setup(cam)
@@ -149,7 +149,7 @@ final class VC: UIViewController, AVCapturePhotoCaptureDelegate, AVCaptureFileOu
   func fileOutput(_ output: AVCaptureFileOutput, didStartRecordingTo fileURL: URL, from connections: [AVCaptureConnection]) { P("EVENT movie didStart") }
   func fileOutput(_ output: AVCaptureFileOutput, didFinishRecordingTo outputFileURL: URL, from connections: [AVCaptureConnection], error: Error?) { movieDone?(outputFileURL, error) }
 
-  // ---------------------------------------------------------------- Q2
+  // ---------------------------------------------------------------- lifecycle
   var frames = 0
   func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) { frames += 1 }
   func lifecycle() {
@@ -189,7 +189,7 @@ final class VC: UIViewController, AVCapturePhotoCaptureDelegate, AVCaptureFileOu
     P("DONE"); usleep(300_000); exit(0)
   }
 
-  // ---------------------------------------------------------------- Q3
+  // ---------------------------------------------------------------- stress
   func stress() {
     let n = Int(env["P12_N"] ?? "200") ?? 200
     let presets: [AVCaptureSession.Preset] = [.high, .photo, .hd1280x720, .vga640x480, .hd1920x1080]

@@ -34,7 +34,7 @@ int main(int argc, char **argv) {
     { int k = 0; for (const char *q = skipped; (q = strstr(q, "libclang_rt.asan")); q++) k++; CHECK(k == 1); }
     // a mapped image counts as already loaded (libSystem is mapped in every process)
     CHECK(mapped("libSystem.B.dylib", 1) != NULL && mapped("libSystem", 0) != NULL && mapped("libNoSuch", 0) == NULL);
-    // JSON string escapes: Go's \u0026 for '&' (w4 e30, L5), other \u, \/ and a surrogate pair
+    // JSON string escapes: Go's \u0026 for '&', other \u, \/ and a surrogate pair
     CHECK(jstr("\"/a\\u0026b\\/c\"", s, sizeof s) && !strcmp(s, "/a&b/c"));
     CHECK(jstr("\"\\u003cx\\u003e \\u00e9 \\ud83d\\ude00\"", s, sizeof s) && !strcmp(s, "<x> \xc3\xa9 \xf0\x9f\x98\x80"));
     CHECK(!jstr("\"\\u00zz\"", s, sizeof s));
@@ -44,14 +44,14 @@ int main(int argc, char **argv) {
     // a usable rules file: the whole document and its "rules" value parse
     CHECK(rulesok("{\"proto\": 1, \"rules\": [{\"name\": \"x\"}]}") && !rulesok("{\"proto\": 1}") && !rulesok("{\"rules\": [{\"name\": \"x\"}"));
     CHECK(!rulesok("{\"rules\": [1, 2"));
-    // slurp: a file that fills the buffer counts as unreadable (it may be truncated; w4 e30, L4)
+    // slurp: a file that fills the buffer counts as unreadable (it may be truncated)
     char tmpl[] = "/tmp/loader_test.XXXXXX"; const char *td = mkdtemp(tmpl); CHECK(td != NULL);
     char f[1200], buf8[8];
     snprintf(f, sizeof f, "%s/seven", td); { int fd = open(f, O_WRONLY | O_CREAT, 0644); CHECK(write(fd, "1234567", 7) == 7); close(fd); }
     CHECK(slurp(f, buf8, sizeof buf8) == -1 && buf8[0] == 0);
     snprintf(f, sizeof f, "%s/six", td); { int fd = open(f, O_WRONLY | O_CREAT, 0644); CHECK(write(fd, "123456", 6) == 6); close(fd); }
     CHECK(slurp(f, buf8, sizeof buf8) == 6 && !strcmp(buf8, "123456"));
-    // pickrules: SIMCAM_SIM_DIR with a trailing slash and no rules_dir -> <home>/restore-rules (w4 e30, L6); a rules_dir
+    // pickrules: SIMCAM_SIM_DIR with a trailing slash and no rules_dir -> <home>/restore-rules; a rules_dir
     // with '&' written by Go as \u0026 (L5); config.json's boot_signals (L9)
     char d[1200];
     snprintf(d, sizeof d, "%s/h&x/sims/U", td); CHECK(!system((snprintf(f, sizeof f, "mkdir -p '%s' '%s/../../restore-rules' '%s/../../rr&2'", d, d, d), f)));

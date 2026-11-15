@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // Part of simcam.m (single translation unit; included in order): process start, one engine per process, the log, PREPARE 2
-// (lookups) and the source factories' resolve step. m6 (Q5): one gate for every hook; W4: the gate is the activation state
+// (lookups) and the source factories' resolve step. One gate for every hook: the activation state
 // machine in core/lazy.inc (SIMCAM=0 -> nothing at all; a preflight failure -> nothing is installed).
 #include <sys/sysctl.h>
 static double M6ProcStart(void) {   // CFAbsoluteTime of process start (kinfo_proc.p_starttime)
@@ -9,10 +9,10 @@ static double M6ProcStart(void) {   // CFAbsoluteTime of process start (kinfo_pr
     if (sysctl(mib, 4, &kp, &len, NULL, 0) == 0) t = kp.kp_proc.p_starttime.tv_sec + kp.kp_proc.p_starttime.tv_usec / 1e6 - kCFAbsoluteTimeIntervalSince1970;
     return t;
 }
-// m11 Q3c lazy arming (variant c), default on: nothing is installed at load but the traps (core/lazy.inc) and the CoreMotion
-// stand-in's hooks; the first trapped call runs the bounded activation (W4: core/lazy.inc). SIMCAM_LAZY=0 activates at load.
+// Lazy arming, default on: nothing is installed at load but the traps (core/lazy.inc) and the CoreMotion
+// stand-in's hooks; the first trapped call runs the bounded activation (core/lazy.inc). SIMCAM_LAZY=0 activates at load.
 static int gM11Lazy = -1;
-// w1 (U14, design §4.1 item 5): one engine per process. Every engine exports simcam_engine_v1; dlsym(RTLD_DEFAULT) returns the
+// U14, design §4.1 item 5: one engine per process. Every engine exports simcam_engine_v1; dlsym(RTLD_DEFAULT) returns the
 // first loaded image's copy, so a later engine (another build, a chained or per-launch copy) sees it is not first, says so
 // once on stderr and stays inert, like SIMCAM=0 (no traps, no CoreMotion stand-in, gate closed).
 __attribute__((visibility("default"))) void simcam_engine_v1(void) {}
@@ -34,7 +34,7 @@ static void ActOpenLog(void) {
         const char *e = getenv("M5_LOG"); if (!e) return;
         char p[1024]; size_t n = 0;
         for (const char *c = e; *c && n < sizeof p - 16; c++) { if (c[0] == '%' && c[1] == 'p') { n += snprintf(p + n, sizeof p - n, "%d", getpid()); c++; } else p[n++] = *c; }
-        p[n] = 0; atomic_store_explicit(&gLogF, fopen(p, "a"), memory_order_release);   // published once; LOG loads it atomically (e46)
+        p[n] = 0; atomic_store_explicit(&gLogF, fopen(p, "a"), memory_order_release);   // published once; LOG loads it atomically (TSan)
     });
 }
 // M2_DUMPKEYS=<file>: print "symbol = value" for each CFString symbol name in file (PREPARE 2: reads and prints only)
@@ -67,10 +67,10 @@ static void M2Lookups(void) {
     if (getenv("M2_FAKE")) LOG(@"syms create=%p storage=%p classID=%p plist=%s keys=%@", pCMDerivedObjectCreate, pCMBaseObjectGetDerivedStorage, pFigCaptureSourceGetClassID, plist ?: "-", gOverride.allKeys);
     m2dumpkeys();
 }
-// PREPARE 4: the source factories (installed in SWAP 4-5: audio, then video, last). m10: microphone by feature detection, not
+// PREPARE 4: the source factories (installed in SWAP 4-5: audio, then video, last). Microphone by feature detection, not
 // OS version. AVF (17.5) skips an audio source whose AttributesDictionary is empty (the stock 17.5 sim source is), and lists a
-// device only if -isConnected (NO in the 17.5 sim). W4: the decision moved from activation (a probe of the stock audio sources
-// through AVF, not a C/Fig call) into the audio hook's first armed call (fig/sources.inc, m16_audioSources); isConnected is
+// device only if -isConnected (NO in the 17.5 sim). The decision isn't made at activation (a probe of the stock audio sources
+// through AVF, not a C/Fig call) but in the audio hook's first armed call (fig/sources.inc, m16_audioSources); isConnected is
 // hooked unconditionally and answers YES only for our source. M6_FAKE_MIC=1 forces the fake mic, =0 keeps the stock one.
 static BOOL M2FigResolve(void) {
     if (!getenv("M2_FAKE")) return YES;

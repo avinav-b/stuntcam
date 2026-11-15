@@ -8,15 +8,15 @@
 #   engine/loader/loader.c -> libsimcamloader.dylib (restore rules, chain, engine dlopen; same dir as the engine)
 #   engine/runnerhook/runnerhook.m -> libsimcamrunnerhook.dylib (XCTest runner side of `stuntcam exec`; its own hash dir)
 #
-# Universal arm64 + x86_64, minimum iOS 17.0, ad-hoc signed by the linker. Same compiler flags as the
-# prototype build (m12's build script, removed in W1). Each product goes to build/<12-char sha1 of the binary>/ and is copied, byte-identical
+# Universal arm64 + x86_64, minimum iOS 17.0, ad-hoc signed by the linker.
+# Each product goes to build/<12-char sha1 of the binary>/ and is copied, byte-identical
 # (the linker signature stays valid), to $SIMCAM_HOME/builds/<same hash>/: simulator processes can't read a clone under
 # ~/Documents & co. (TCC; see scripts/env.sh, which also stages engine/profiles/ and fixtures/media/ to $SIMCAM_HOME/dev/).
 # Pointer files (read by scripts/*.sh; they name the $SIMCAM_HOME copies):
 #   build/current_dylib.txt, build/current_loader.txt, build/current_stub.txt, build/current_hook.txt   last build of any variant
 #   build/<variant>_dylib.txt                         last build of that variant (normal | tsan | asan)
-# --tsan / --asan add -fsanitize=thread / -fsanitize=address to the library (not the stub), as the
-# prototype's sanitizer builds did. EXTRA="<flags>" appends further flags to the library compile.
+# --tsan / --asan add -fsanitize=thread / -fsanitize=address to the library (not the stub).
+# EXTRA="<flags>" appends further flags to the library compile.
 set -euo pipefail
 # the physical path (pwd -P): the linker writes the debug map's object paths with symlinks resolved (/tmp is
 # /private/tmp), so -oso_prefix and the prefix maps must use that form or a clone under a symlinked path leaks it (and
@@ -40,9 +40,9 @@ ARCHS=(arm64 x86_64)
 SDK=$(xcrun --sdk iphonesimulator --show-sdk-path)
 TMP=build/tmp-$VARIANT; rm -rf $TMP; mkdir -p $TMP
 
-# Compiler flags copied from the prototype build; -Wl,-adhoc_codesign makes the linker sign every slice
+# Compiler flags: -Wl,-adhoc_codesign makes the linker sign every slice
 # (it already does so by default for arm64, not for x86_64).
-# -ffile-prefix-map + -oso_prefix keep the checkout's path out of the engine's debug info and debug map (w4 e51): the same
+# -ffile-prefix-map + -oso_prefix keep the checkout's path out of the engine's debug info and debug map: the same
 # source gives the same engine hash in any checkout, and the npm/tap package has no build-machine paths. The stub, loader
 # and hook carry no paths, so they don't need it (the stub stays frozen).
 LIB_FLAGS=(-fobjc-arc -O1 -g -Wall -Wno-unused-function -Wno-unused-variable -ffile-prefix-map=$ROOT/= -fdebug-compilation-dir=.)
@@ -59,7 +59,7 @@ build_one() {
   while (( $# )) && [[ $1 != -- ]]; do cflags+=($1); shift; done; (( $# )) && shift; largs=("$@")
   for arch in $ARCHS; do
     # compile to a fixed object path, then link: clang's default temp .o name is random and lands in the debug map, which
-    # changed the content hash on every build of unchanged source (and so reset sentinel latches, w1 e5)
+    # changed the content hash on every build of unchanged source (and so reset sentinel latches)
     xcrun clang -target $arch-apple-ios$MINOS-simulator -isysroot $SDK $cflags -c $src -o $TMP/$name.$arch.o
     xcrun clang -target $arch-apple-ios$MINOS-simulator -isysroot $SDK $cflags -dynamiclib $TMP/$name.$arch.o \
       -install_name @rpath/$name $largs $LINK_FLAGS -o $TMP/$name.$arch

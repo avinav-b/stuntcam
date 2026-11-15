@@ -1,21 +1,21 @@
 // SPDX-License-Identifier: Apache-2.0
-// m8 canary: a throwaway app that drives the whole capture flow through AVFoundation's own consumers
+// The canary: a throwaway app that drives the whole capture flow through AVFoundation's own consumers
 // and exits with a verdict. Exit 0 = PASS, 1 = FAIL (checks), 4 = INCONCLUSIVE, 3 = watchdog. A crash = no RESULT line.
-// w2 (design §5.2): core is PASS, FAIL(any content check) or INCONCLUSIVE (only timing checks failed: frame windows, fps,
+// Verdicts (design §5.2): core is PASS, FAIL(any content check) or INCONCLUSIVE (only timing checks failed: frame windows, fps,
 // first-frame latency, photo/movie completion deadlines, the frame gap during a photo; or the overall budget ran out with no
 // FAIL recorded). Late is timing, never is FAIL: no frame at all, a photo or movie that never completes, a photo completion
 // without a photo. scripts/run.sh retries an INCONCLUSIVE once and counts a second one as FAIL, so a real hang still fails
 // a test run and a starved machine no longer does; scripts/verify.sh (design §5.2) reports a second one as
 // inconclusive(reason) and never caches it. Exit 3 (watchdog, nothing failed) is INCONCLUSIVE too.
-// w4 e37/e38: a photo stage (jpeg, 4x3, hvc1) whose only miss is the frame-gap check is run once more at the end, in a
+// Stage retry: a photo stage (jpeg, 4x3, hvc1) whose only miss is the frame-gap check is run once more at the end, in a
 // session of its own (attempt/runRetries); the RESULT line lists the first attempt in retried:[… -> retry ok|SLOW|FAIL].
 // Nothing else is retried in-process: start time (first frame), frame counts, a late or undelivered photo stay INCONCLUSIVE.
 // Core flow: discovery, frames (VideoDataOutput + preview layer), QR (MetadataOutput), photo (JPEG + HEVC),
 // reconfigure (activeFormat change + output swap while running), movie, capture + immediate stop, background/foreground,
 // teardown + 2nd session.
 // Extended (always run, reported separately): focus/exposure metering, torch, zoom readback, exposure bias completion + readback.
-// m10: didFinishCaptureFor and availableMetadataObjectTypes ⊇ {qr} moved to core (fixed); new core stages: virtual devices (8-camera
-// profile), front camera + mirroring; new ext stage: audio (mic input + AVCaptureAudioDataOutput). UIScene adopted (iOS 27 SDK).
+// Also core: didFinishCaptureFor, availableMetadataObjectTypes ⊇ {qr}, virtual devices (8-camera
+// profile), front camera + mirroring; also ext: audio (mic input + AVCaptureAudioDataOutput). UIScene adopted (iOS 27 SDK).
 import UIKit
 import AVFoundation
 import ImageIO
@@ -26,7 +26,7 @@ let T0 = Date()
 let budget = Double(ProcessInfo.processInfo.environment["CANARY_BUDGET"] ?? "45") ?? 45
 var stage = "init"
 var coreFail: [String] = [], extFail: [String] = [], coreTiming: [String] = []
-// w4 e37/e38: photo stages whose only miss was the frame-gap check, run once more at the end (see attempt()); each entry is
+// Photo stages whose only miss was the frame-gap check, run once more at the end (see attempt()); each entry is
 // "<first attempt's misses> -> retry ok|SLOW|FAIL"
 var retried: [String] = []
 let logLock = NSLock()
@@ -54,7 +54,7 @@ func waitFor(_ secs: Double, _ cond: () -> Bool) -> Bool {
   return cond()
 }
 func onMain<T>(_ f: () -> T) -> T { Thread.isMainThread ? f() : DispatchQueue.main.sync(execute: f) }
-// QR payload of the default source: the m12 scene draws SIMCAM_QR_TEXT (default below); with M12_NO_SCENE2 the m10 fixture image
+// QR payload of the default source: the generated scene draws SIMCAM_QR_TEXT (default below); with M12_NO_SCENE2 the fixture image
 // carries M1B-QR-OK. CANARY_QR pins one value.
 let qrDefaults = [ProcessInfo.processInfo.environment["SIMCAM_QR_TEXT"] ?? "https://simcam.dev/m12-qr", "M1B-QR-OK"]
 let expectedQRs = ProcessInfo.processInfo.environment["CANARY_QR"].map { [$0] } ?? qrDefaults
@@ -72,7 +72,7 @@ final class Canary: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCa
   var photoEvents: [String] = []
   var photos: [(data: Data?, err: Error?, ts: Double, meta: [String: Any])] = []
   var photoDone = false
-  // w4 e48: each capture()'s settings uniqueID and delivered timestamp; w4 e54: only a capture with no FAIL and no timing miss
+  // each capture()'s settings uniqueID and delivered timestamp, kept only for a capture with no FAIL and no timing miss
   // but the frame gap (a failed photo's ops may be missing), and its EXIF capture time (s since 1970; nil without the
   // SubsecTimeOriginal / OffsetTimeOriginal the engine writes)
   var tracePhotos: [(sid: Int64, ts: Double, exif: Double?)] = []
@@ -131,7 +131,7 @@ final class Canary: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCa
   }
 
   // ---- checks
-  // w1 (hosted-runner trial): time-to-first-frame is its own check with an explicit bound, and frame-rate windows start once
+  // Time-to-first-frame is its own check with an explicit bound, and frame-rate windows start once
   // frames flow. Fixed windows right after startRunning failed on a cold first launch (first frame 1.8 s after process start on a
   // virtual runner, ~7 s right after a sim boot on the Mac) and after foregrounding, though frames then arrived normally.
   // CANARY_FIRST_FRAME_S overrides the bound (default 5 s).
@@ -177,9 +177,9 @@ final class Canary: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCa
     }
     let t1 = hostNow()
     if !arrived { check(false, timing: true, "photo delivered within 4 s") }
-    // w2 e8: encoding on the frame pump stalled preview/VDO frames for 125-283 ms per photo (2 s in a burst); on its own queue
-    // the longest gap is ~35 ms. Over 100 ms (3 frame intervals at 30 fps) means the pump is stalled again; e8's base engine
-    // had 125-283 ms.
+    // Encoding on the frame pump stalls preview/VDO frames for 125-283 ms per photo (2 s in a burst); on its own queue
+    // the longest gap is ~35 ms. Over 100 ms (3 frame intervals at 30 fps) means the pump is stalled again (encoding on the
+    // pump gave 125-283 ms).
     let arr = snapshotFrames().map { $0.arrival }.filter { $0 >= t0 && $0 <= t1 }
     var gap = 0.0, prev = t0; for a in arr { gap = max(gap, a - prev); prev = a }; gap = max(gap, t1 - prev)
     check(gap <= 0.1, timing: true, "longest frame gap during the photo \(Int(gap * 1000)) ms (<= 100 ms, \(arr.count) frames)")
@@ -214,7 +214,7 @@ final class Canary: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCa
     return d.timeIntervalSince1970 + frac
   }
 
-  // m10: front camera, portrait VDO connection, mirroring on vs off must flip the picture horizontally
+  // Front camera, portrait VDO connection, mirroring on vs off must flip the picture horizontally
   var gridWant = false; var grid: [Float]? = nil; var gridDims = (0, 0)
   func lumaGrid(_ pb: CVPixelBuffer) -> [Float] {
     CVPixelBufferLockBaseAddress(pb, .readOnly); defer { CVPixelBufferUnlockBaseAddress(pb, .readOnly) }
@@ -252,7 +252,7 @@ final class Canary: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCa
     for y in 0..<32 { for x in 0..<32 { dSame += abs(B[y * 32 + x] - A[y * 32 + x]); dFlip += abs(B[y * 32 + x] - A[y * 32 + 31 - x]) } }
     check(dFlip < dSame * 0.5, "mirrored frame = horizontal flip of unmirrored (diff flip \(Int(dFlip)) vs same \(Int(dSame)))")
   }
-  // m10 ext: microphone input + AVCaptureAudioDataOutput deliver buffers on the host clock
+  // ext: microphone input + AVCaptureAudioDataOutput deliver buffers on the host clock
   var audioBufs = 0; var audioPTS: [Double] = []; var audioRate = 0.0
   func audio() {
     stage = "audio"
@@ -268,7 +268,7 @@ final class Canary: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCa
     check(!pts.isEmpty && pts.allSatisfy { now - $0 < 3 && now - $0 > 0 }, "audio pts on host clock", ext: true)
   }
 
-  // w4 e48 ext (ledger L67): the engine's op ring (`stuntcam trace`, engine/src/core/trace.inc) has each photo taken above,
+  // ext (ledger L67): the engine's op ring (`stuntcam trace`, engine/src/core/trace.inc) has each photo taken above,
   // its stages in order with non-decreasing host times, and the timestamp op equal to the AVCapturePhoto.timestamp delivered.
   // The file is trace-<pid>.txt in $SIMCAM_STATE_DIR/<bundle>/, else <container tmp>/simcam-state/<bundle>/ (written ~150 ms
   // after an op).
@@ -312,10 +312,10 @@ final class Canary: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCa
         if let s12 = mine.first(where: { $0.name == "slot12" }) {
           let d = (Double(t.mach) - Double(s12.mach)) * Double(tb.numer) / Double(tb.denom) / 1e6
           check(d >= 0 && d <= 50, "photo \(w.sid) timestamp - slot12 \(String(format: "%.1f", d)) ms (0..50 ms)", ext: true)
-          // ledger L72 (w4 e54): the EXIF capture time is the timestamp's instant (the frame grab) on the wall clock, which
+          // ledger L72: the EXIF capture time is the timestamp's instant (the frame grab) on the wall clock, which
           // the timestamp op carries: equal to its ms (DateTimeOriginal + SubsecTimeOriginal + OffsetTimeOriginal, rounded to the ms;
-          // e57: one wall value, back-computed from the grab's mach time, feeds both). Not against slot 12 with the 50 ms window: on 27.0
-          // the whole encode takes 10-18 ms, so the old encode-time stamp fit it too (e54)
+          // one wall value, back-computed from the grab's mach time, feeds both). Not against slot 12 with the 50 ms window: on 27.0
+          // the whole encode takes 10-18 ms, so an encode-time stamp would fit it too
           if let x = w.exif {
             let dx = (x - Double(t.wall) / 1e9) * 1000, d12 = (x - Double(s12.wall) / 1e9) * 1000
             check(dx >= -2 && dx <= 2, "photo \(w.sid) EXIF DateTimeOriginal - timestamp \(String(format: "%.1f", dx)) ms (-2..2 ms; - slot12 \(String(format: "%.1f", d12)) ms)", ext: true)
@@ -332,14 +332,14 @@ final class Canary: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCa
     }
   }
 
-  // ---- stage retry (w4 e37, narrowed in e38)
+  // ---- stage retry
   // A photo stage whose only miss is the frame-gap check ("longest frame gap during the photo") is run once more, after
   // every other stage, in a session of its own; the threshold is the same. Right after a boot the frame pump can stall
-  // (w4 e36: 27.0's HEVC photo 129-158 ms on 3/37 first launches; w4 e37: 116-886 ms when the canary starts ~2 s after
+  // (27.0's HEVC photo: 129-158 ms on 3/37 first launches; 116-886 ms when the canary starts ~2 s after
   // bootstatus), which a whole-canary relaunch used to absorb at +15 s. The retry runs later in the same, already warm
   // process, so it can't tell a post-boot stall from a regression that only hits a process's first photo (lazy encoder
   // setup on the pump): that is why it is limited to the gap check, why the CLI reports a retried pass as such and caches
-  // it only briefly (w4 e38), and why the CLI waits out the post-boot window before the launch on 27.x (settle floor).
+  // it only briefly, and why the CLI waits out the post-boot window before the launch on 27.x (settle floor).
   // Never retried here: the cold start time (firstFrame), frame counts, a late or undelivered photo, or a stage with any
   // other miss or a content FAIL. The first attempt's misses stay in the RESULT line (retried:[…]); a retry that misses
   // again leaves the run INCONCLUSIVE as before, and a content FAIL in the retry is a FAIL.
@@ -413,7 +413,7 @@ final class Canary: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCa
     check(AVCaptureDevice(uniqueID: dev.uniqueID) === dev, "device(uniqueID:) identity")
     check(dev.formats.count >= 2, "formats=\(dev.formats.count)")
     check(dev.formats.allSatisfy { !$0.videoSupportedFrameRateRanges.isEmpty }, "every format has fps ranges")
-    // m10: virtual devices of the 8-camera profile (only when the profile has them)
+    // Virtual devices of the 8-camera profile (only when the profile has them)
     stage = "virtual-devices"
     let all = AVCaptureDevice.DiscoverySession(deviceTypes: [.builtInWideAngleCamera, .builtInUltraWideCamera, .builtInTelephotoCamera, .builtInDualWideCamera, .builtInTripleCamera, .builtInTrueDepthCamera, .builtInLiDARDepthCamera], mediaType: .video, position: .unspecified).devices
     log("devices: \(all.map { "\($0.localizedName)" })")
@@ -463,7 +463,7 @@ final class Canary: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCa
     // 3. frames through AVFoundation's own consumer
     stage = "frames"
     let d0 = CMVideoFormatDescriptionGetDimensions(dev.activeFormat.formatDescription)
-    firstFrame("A")   // the cold start time (design §5.3): never retried in-process (w4 e38)
+    firstFrame("A")   // the cold start time (design §5.3): never retried in-process
     resetFrames(); usleep(1_000_000)
     checkFrames("A", expectW: Int(d0.width), expectH: Int(d0.height))
     stage = "preview"
@@ -479,9 +479,9 @@ final class Canary: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCa
     attempt("photo-jpeg", retry: { [self] in retryPhoto(dev, f1080, codec: .jpeg, label: "photo-jpeg", dims: nil) }) { capture(photo, codec: .jpeg, device: dev) }
     if let f43 = dev.formats.first(where: { $0.supportedMaxPhotoDimensions.contains { $0.width * 3 == $0.height * 4 && $0.width >= 4000 } }),
        let md = f43.supportedMaxPhotoDimensions.filter({ $0.width * 3 == $0.height * 4 }).max(by: { $0.width < $1.width }) {
-      // w2 ledger L06: a 4:3 format at its full size; on the 16:9 format the engine's fallback size equals the max, so a
-      // missing photo-dims fix went unnoticed (w2 e11 mutation run)
-      let prevMax = photo.maxPhotoDimensions   // read before the switch: the 4:3 activeFormat resets it (w3 e12: restoring that value threw)
+      // ledger L06: a 4:3 format at its full size; on the 16:9 format the engine's fallback size equals the max, so a
+      // missing photo-dims fix went unnoticed in a mutation run
+      let prevMax = photo.maxPhotoDimensions   // read before the switch: the 4:3 activeFormat resets it (restoring that value throws)
       do { try dev.lockForConfiguration(); dev.activeFormat = f43; dev.unlockForConfiguration() } catch { check(false, "lock \(error)") }
       usleep(300_000); photo.maxPhotoDimensions = md
       attempt("photo-4x3", retry: { [self] in retryPhoto(dev, f43, codec: .jpeg, label: "photo-4x3", dims: md) }) { capture(photo, codec: .jpeg, device: dev, label: "photo-4x3") }
@@ -516,7 +516,7 @@ final class Canary: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCa
       try dev.lockForConfiguration(); dev.videoZoomFactor = min(2, dev.activeFormat.videoMaxZoomFactor); dev.unlockForConfiguration()
       check(abs(dev.videoZoomFactor - min(2, dev.activeFormat.videoMaxZoomFactor)) < 0.01, "zoom readback \(dev.videoZoomFactor)", ext: true)
       try dev.lockForConfiguration(); dev.videoZoomFactor = 1; dev.unlockForConfiguration()
-      // w2 ledger L03: exposure bias must complete and read back (m8: a renamed notification key left the bias promise
+      // ledger L03: exposure bias must complete and read back (a renamed notification key once left the bias promise
       // hanging in a VisionCamera app while every other canary check passed)
       let want = min(max(1.0, dev.minExposureTargetBias), dev.maxExposureTargetBias)
       var biasDone = false
@@ -547,8 +547,8 @@ final class Canary: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCa
 
     // 7. movie
     stage = "movie"
-    // w2 ledger L16: record on a non-1080p format and compare the track with the active format; 1080p is also the engine's
-    // fallback size, so a recording that ignored the active format passed (w2 e11 mutation run)
+    // ledger L16: record on a non-1080p format and compare the track with the active format; 1080p is also the engine's
+    // fallback size, so a recording that ignored the active format passed a mutation run
     let fMovie = dev.formats.filter { let d = CMVideoFormatDescriptionGetDimensions($0.formatDescription); return !(d.width == 1920 && d.height == 1080) && $0.videoSupportedFrameRateRanges.contains { $0.maxFrameRate >= 30 } }
       .min { let a = CMVideoFormatDescriptionGetDimensions($0.formatDescription), b = CMVideoFormatDescriptionGetDimensions($1.formatDescription); return Int(a.width) * Int(a.height) < Int(b.width) * Int(b.height) }
     if let f = fMovie { do { try dev.lockForConfiguration(); dev.activeFormat = f; dev.unlockForConfiguration() } catch {}; usleep(300_000) }
@@ -575,8 +575,8 @@ final class Canary: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCa
 
     // 7b. a capture followed at once by stopRunning (shutter, then leave the screen): the photo and both completions must
     // arrive, and didFinishCaptureFor must come before the session's didStopRunning notification (stopRunning waits
-    // for in-flight photos; without that wait AVFoundation still delivers the photo, but after the stop, w2 e15 §4). Runs
-    // before the background stage: before L52's fix (w3 e20) the engine restarted at foreground the session this canary
+    // for in-flight photos; without that wait AVFoundation still delivers the photo, but after the stop). Runs
+    // before the background stage: without L52's fix the engine restarted at foreground the session this canary
     // stops while interrupted, and AVFoundation dropped its next stop. It can move after the background stage (TODO.md).
     stage = "photo-then-stop"
     let ps0 = evCount("didStop")
@@ -592,11 +592,11 @@ final class Canary: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCa
     check(waitFor(2) { evCount("didStop") > ps0 }, "didStopRunning notification after capture + stopRunning")
     lock.lock(); let saf = stopsAtFinish; lock.unlock()
     check(stopDone && saf == ps0, "didFinishCaptureFor before didStopRunning (stop notifications at completion: \(saf - ps0))")
-    // w4 e44 (review M2): the engine reports the stop once the photo's didFinishCaptureFor has run, bounded at 500 ms
-    // (1 s before w4 e54; a lost done-mark now shows as ~500 ms, so the threshold is half that). A
+    // The engine reports the stop once the photo's didFinishCaptureFor has run, bounded at 500 ms
+    // (a lost done-mark shows as ~500 ms, so the threshold is half that). A
     // stop that returns long after that callback means the wait ran to its bound (the photo's done-mark never came), and
     // the order check above then passed by the bound alone. Timed from the callback, not from the call: the call also
-    // includes the encode (100-350 ms) and any late callback (the positive control's 300 ms; 500-660 ms in all in e44).
+    // includes the encode (100-350 ms) and any late callback (the positive control's 300 ms; 500-660 ms in all).
     lock.lock(); let finAt = finishAt; lock.unlock()
     if stopDone && saf == ps0 { let gap = tRet.timeIntervalSince(finAt); check(gap < 0.25, timing: true, "stopRunning returned \(Int(gap * 1000)) ms after didFinishCaptureFor (< 250 ms; the call took \(Int(tRet.timeIntervalSince(tStop) * 1000)) ms)") }
     let st0 = evCount("didStart")
@@ -635,8 +635,8 @@ final class Canary: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCa
     obs = []
     usleep(300_000)
     stage = "second-session"
-    // w2 ledger L37: three sessions in a row, each released before the next, so one can be allocated at a freed one's address
-    // (the m10 bug: it inherited the dead session's sinks). The first session above is still alive, so S2 alone never did.
+    // ledger L37: three sessions in a row, each released before the next, so one can be allocated at a freed one's address
+    // (an earlier bug: it inherited the dead session's sinks). The first session above is still alive, so S2 alone never did.
     for n in 2...4 {
       autoreleasepool {
         let s2 = AVCaptureSession()

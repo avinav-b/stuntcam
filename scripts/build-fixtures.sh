@@ -3,7 +3,7 @@
 # build-fixtures.sh [--clean] [app ...] — build every test app and install it on the sims named by $SIMCAM_UDID_{263,27,175}
 #   apps (default: all, in this order): canary plain plain-orient expo flutter
 #   --clean   first remove each app's local deps and build outputs (node_modules, ios/Pods, build/, .dart_tool, …)
-#   FLUTTER_SDK = a local Flutter SDK checkout (required for flutter; e.g. ${STUNTCAM_WORK:-~/stuntcam-work}/flutter). Never copied into the repo.
+#   FLUTTER_SDK = a local Flutter SDK checkout (required for flutter; e.g. ~/flutter). Never copied into the repo.
 # Deps install locally only (npm ci, pod install, flutter pub get with PUB_CACHE under build/flutter/). Build logs:
 # build/fixtures/<app>.log; per-app timings in build/fixtures/times.txt. Exit status 1 if any app failed (the others still build).
 # Products:

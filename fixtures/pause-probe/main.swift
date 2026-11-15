@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// pause-probe (w4 e25, U5): one AVCaptureSession driven by host commands, so the host can pause it (lldb breakpoint, background,
+// pause-probe (U5): one AVCaptureSession driven by host commands, so the host can pause it (lldb breakpoint, background,
 // kill -STOP) at a known moment and see whether every operation still completes.
 // Commands: lines "<seq> <cmd> [arg]" appended to Documents/cmd.txt in the app container (polled every 20 ms):
 //   setup [4k60]   session: back wide camera, VDO, photo output (max photo dims), movie file output, preview; startRunning

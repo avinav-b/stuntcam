@@ -298,7 +298,7 @@ func fromDir(dir string, pkg *Set, installed bool) (Set, error) {
 	s.Rules = os.Getenv("STUNTCAM_RULES")
 	if s.Rules == "" {
 		// a staged build ($SIMCAM_HOME/builds/<h>): $SIMCAM_HOME/restore-rules is the staging cache (only <hash>/ dirs), not
-		// a rules dir — take the package's or a checkout's (review M1)
+		// a rules dir — take the package's or a checkout's
 		if r := filepath.Join(filepath.Dir(filepath.Dir(dir)), "restore-rules"); !inHome(dir) && exists(r) {
 			s.Rules = r
 		} else if pkg != nil {
@@ -313,7 +313,7 @@ func fromDir(dir string, pkg *Set, installed bool) (Set, error) {
 	if err := s.check(); err != nil {
 		return s, err
 	}
-	// without M2_PLIST the engine throws in m2_newFigCaptureSources and every app crashes at device discovery (w3 e13)
+	// without M2_PLIST the engine throws in m2_newFigCaptureSources and every app crashes at device discovery
 	if s.Profile == "" || !exists(s.Profile) {
 		return s, fmt.Errorf("no camera profile for the build in %s: expected profiles/cfg-m10.plist two levels up or in $SIMCAM_HOME/dev; set STUNTCAM_PROFILE", dir)
 	}
@@ -481,7 +481,7 @@ func RulesHash(dir string) (string, []string, error) {
 
 // StageRules copies dir's <build>.json files to home.Rules()/<content hash>/ (RulesHash) and returns that dir, which the
 // sim's config.json names as rules_dir: a sim armed with one set of rules never sees another clone's or a later edit's
-// files, and no stale file feeds the loader's "newest" best guess (w4 e30, M2; as scripts/env.sh stages dev/<hash>/).
+// files, and no stale file feeds the loader's "newest" best guess (as scripts/env.sh stages dev/<hash>/).
 // Staged in a temp dir that is renamed once complete (with a .complete marker), so a launch never reads half a copy.
 // No dir, or no rules in it: "".
 func StageRules(dir string) (string, error) {

@@ -14,7 +14,7 @@ func TestParseCurrent(t *testing.T) {
 			t.Errorf("%q: %d %q %v", s, p, l, err)
 		}
 	}
-	bad := []string{"", "abc def", "0 /x", "1 relative/x", "1", "-1 /x"} // the stub refuses the same lines (w1 e7, e8)
+	bad := []string{"", "abc def", "0 /x", "1 relative/x", "1", "-1 /x"} // the stub refuses the same lines
 	for _, s := range bad {
 		if _, _, err := ParseCurrent(s); err == nil {
 			t.Errorf("%q accepted", s)

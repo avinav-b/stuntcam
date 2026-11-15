@@ -6,7 +6,7 @@ static CVPixelBufferPoolRef gSrcPool;
 static CVPixelBufferRef gLatest;          // latest BGRA source frame (retained)
 static const int kSrcW = 1920, kSrcH = 1080;
 static long gFrameNo;
-static double gPumpFps;   // m8
+static double gPumpFps;   // the pump's current frame rate
 static CVPixelBufferRef M5Render(void) {
     if (!gSrcPool) {
         NSDictionary *a = @{(id)kCVPixelBufferPixelFormatTypeKey: @(kCVPixelFormatType_32BGRA), (id)kCVPixelBufferWidthKey: @(kSrcW), (id)kCVPixelBufferHeightKey: @(kSrcH), (id)kCVPixelBufferIOSurfacePropertiesKey: @{}};
@@ -21,8 +21,8 @@ static CVPixelBufferRef M5Render(void) {
     CGContextSetRGBFillColor(ctx, 0.15, 0.3, 0.45, 1); CGContextFillRect(ctx, CGRectMake(0, 0, kSrcW, kSrcH));
     // sensor-like: landscape buffer whose content is upright when rotated 90° clockwise (portrait device)
     CGContextSaveGState(ctx);
-    // m7: m5 rotated by -pi/2, which put the scene's top on the buffer's RIGHT (photos with EXIF 6 and movies with the 90 deg
-    // track transform came out upside down). A device's native back-camera buffer has the scene's top on the LEFT.
+    // Rotating by -pi/2 (M7_SRC_LEGACY) puts the scene's top on the buffer's RIGHT (photos with EXIF 6 and movies with the 90 deg
+    // track transform come out upside down). A device's native back-camera buffer has the scene's top on the LEFT.
     CGContextTranslateCTM(ctx, kSrcW / 2.0, kSrcH / 2.0); CGContextRotateCTM(ctx, getenv("M7_SRC_LEGACY") ? -M_PI_2 : M_PI_2);
     // upright canvas is kSrcH wide x kSrcW tall (portrait); aspect-fit the fixture into it
     if (gSrcImage) { double W = kSrcH * 0.95, H = W * CGImageGetHeight(gSrcImage) / CGImageGetWidth(gSrcImage); CGContextDrawImage(ctx, CGRectMake(-W / 2, -H / 2, W, H), gSrcImage); }
@@ -37,7 +37,7 @@ static CVPixelBufferRef M5Render(void) {
 }
 
 static CVPixelBufferRef M5ConvertScale(M5Sink *k, CVPixelBufferRef src);
-// m7: apply the connection's rotationDegrees (clockwise, like the device's ISP) and mirroring before scaling/format conversion.
+// Apply the connection's rotationDegrees (clockwise, like the device's ISP) and mirroring before scaling/format conversion.
 static CVPixelBufferRef M7Rotate(M5Sink *k, CVPixelBufferRef src) {
     if (getenv("M7_NO_VDOROT") || (k.vdoRot % 360 == 0 && !k.mirrored)) return CVPixelBufferRetain(src);
     int r = ((k.vdoRot % 360) + 360) % 360; BOOL swap = (r == 90 || r == 270);

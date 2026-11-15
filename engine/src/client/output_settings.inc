@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Part of simcam.m (single translation unit; included in order): recommended output settings fix.
 // ============================================================================
-// m7: -[AVCaptureOutput recommendedOutputSettingsForConnection:...] is a stub in the sim AVFCapture:
+// -[AVCaptureOutput recommendedOutputSettingsForConnection:...] is a stub in the sim AVFCapture:
 // video → AVVideoWidthKey/HeightKey 0 (AVAssetWriterInput throws "must specify a positive width"),
 // audio → AVSampleRateKey 0. Fill them from the source settings / the audio source rate.
 // ============================================================================
@@ -10,7 +10,7 @@ static id M7FixRecSettings(NSDictionary *r, NSDictionary *src);
 static id m7_recSettings(id self, SEL c, id conn, NSDictionary *src, id codec, id fileType, BOOL iris, id url, unsigned tag) {
     return M7FixRecSettings(((id (*)(id, SEL, id, id, id, id, BOOL, id, unsigned))gOrigRecSettings)(self, c, conn, src, codec, fileType, iris, url, tag), src);
 }
-// m10: iOS 17.5 has the same method without spatialAudioChannelLayoutTag:
+// iOS 17.5 has the same method without spatialAudioChannelLayoutTag:
 static id m7_recSettings6(id self, SEL c, id conn, NSDictionary *src, id codec, id fileType, BOOL iris, id url) {
     return M7FixRecSettings(((id (*)(id, SEL, id, id, id, id, BOOL, id))gOrigRecSettings6)(self, c, conn, src, codec, fileType, iris, url), src);
 }

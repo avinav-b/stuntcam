@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // Part of simcam.m (single translation unit; included in order): photo data fix and diagnostics.
-// ---- the shutter (W4 e48: the trace's shutter op, core/trace.inc) and, with M5_DIAG, the diagnostics: log (and rethrow)
+// ---- the shutter (the trace's shutter op, core/trace.inc) and, with M5_DIAG, the diagnostics: log (and rethrow)
 // exceptions from capturePhotoWithSettings:delegate: ----
 static IMP gOrigCapPhoto;
 static BOOL gM5DiagCap;
@@ -11,7 +11,7 @@ static void m5_capturePhoto(id self, SEL _cmd, id settings, id delegate) {
     @try { ((void (*)(id, SEL, id, id))gOrigCapPhoto)(self, _cmd, settings, delegate); }
     @catch (NSException *e) { LOG(@"DIAG capturePhoto EXCEPTION %@: %@", e.name, e.reason); @throw; }
 }
-// w4 e40: where AVF handles the session's DidStopRunning and reports the stop (17.5: on the notification thread, then on the
+// Diagnostics: where AVF handles the session's DidStopRunning and reports the stop (17.5: on the notification thread, then on the
 // stopRunning thread; the photo delegate callbacks run on the main queue)
 static IMP gOrigDiagDidStop, gOrigDiagSetRunning;
 static void m5_diagDidStop(id self, SEL _cmd, id payload) {
@@ -29,7 +29,7 @@ static void m5diag(void) {   // PREPARE 4 (M5_DIAG only; optional)
 }
 
 // ============================================================================
-// m5: client-side photo fix. The simulator build of AVFCapture compiles out the compressed path of
+// Client-side photo fix. The simulator build of AVFCapture compiles out the compressed path of
 // -[AVCapturePhoto fileDataRepresentation] (returns nil when _isCompressedPhoto). The encoded bytes are in the
 // photo surface (AVCapturePhotoInternal +0x20, the same ivar fileDataRepresentation null-checks), which our
 // sink filled; return them. Also -fileDataRepresentationWithCustomizer: and -CGImageRepresentation.
@@ -68,7 +68,7 @@ static BOOL m5photofix(void) {   // PREPARE 4; the preflight checks all three se
            ActHookResolve(HG_CLIENT, "photo fix", P, "CGImageRepresentation", NO, NO, (IMP)m5_cgi, &gOrigCGI, YES);
 }
 
-// PREPARE 4 (W4 e48): the shutter hook, for the trace (unless SIMCAM_TRACE=0) or M5_DIAG; optional
+// PREPARE 4: the shutter hook, for the trace (unless SIMCAM_TRACE=0) or M5_DIAG; optional
 static void m48shutter(void) {
     const char *t = getenv("SIMCAM_TRACE"); gM5DiagCap = getenv("M5_DIAG") != NULL;
     if ((t && t[0] == '0') && !gM5DiagCap) return;
@@ -92,14 +92,14 @@ static void m5diag2(void) {   // PREPARE 4 (M5_DIAG only; optional)
 
 
 // ============================================================================
-// w4 e22: features stuntcam can't deliver read as unsupported (design §6.5). Both readings below are derived by AVFCapture
+// Features stuntcam can't deliver read as unsupported (design §6.5). Both readings below are derived by AVFCapture
 // itself, not read from the camera profile, so the profile can't turn them off (flash could: cfg-m10.plist "Flash").
-// - w4 e22 bracket: -[AVCapturePhotoOutput _updateMaxBracketedCapturePhotoCountForSourceDevice:] hard-codes 8 for any device
+// - bracket: -[AVCapturePhotoOutput _updateMaxBracketedCapturePhotoCountForSourceDevice:] hard-codes 8 for any device
 //   with an active format (0 only while Center Stage / background blur / Studio Light / background replacement is active).
 //   The engine delivers one photo per request, so a 3-photo bracket gave 1 photo and never didFinishCapture (hang). After
 //   Apple's update, the internal count is set to 0 (KVO-notified), so the getter reads 0 and capturePhoto rejects a bracket
 //   ("exceeds -maxBracketedCapturePhotoCount") instead of hanging. M15_OLD_BRACKET=1 brings the 8 back.
-// - w4 e22 multicam: -[AVCaptureDeviceDiscoverySession supportedMultiCamDeviceSets] builds its sets from the simulator's
+// - multicam: -[AVCaptureDeviceDiscoverySession supportedMultiCamDeviceSets] builds its sets from the simulator's
 //   gestalt answer (SupportsMultiCamCapture: YES) and the device list (every virtual device, and position/type
 //   combinations), so stuntcam's cameras gave 29 sets; but no format is multi-cam and startRunning fails -11873. It now
 //   returns [] (+allSupportedMultiCamDeviceSets goes through it). The class flag AVCaptureMultiCamSession.isMultiCamSupported
@@ -107,7 +107,7 @@ static void m5diag2(void) {   // PREPARE 4 (M5_DIAG only; optional)
 // ============================================================================
 static IMP gOrigUpdBracket;
 static Ivar gPhotoInternalIvar;
-static void m15_updBracket(id self, SEL _cmd, id device) {   // w4 e22
+static void m15_updBracket(id self, SEL _cmd, id device) {   // bracketed capture unsupported
     ((void (*)(id, SEL, id))gOrigUpdBracket)(self, _cmd, device);
     id internal = object_getIvar(self, gPhotoInternalIvar);
     Ivar iv = internal ? class_getInstanceVariable(object_getClass(internal), "maxBracketedCapturePhotoCount") : NULL;
@@ -120,8 +120,8 @@ static void m15_updBracket(id self, SEL _cmd, id device) {   // w4 e22
     *p = 0;
     [self didChangeValueForKey:@"maxBracketedCapturePhotoCount"];
 }
-static id m15_multiCamSets(id self, SEL _cmd) { return @[]; }   // w4 e22
-static void m15features(void) {   // PREPARE 4 (W4): optional client hooks; a missing method only logs a MISMATCH
+static id m15_multiCamSets(id self, SEL _cmd) { return @[]; }   // no multi-cam device sets
+static void m15features(void) {   // PREPARE 4: optional client hooks; a missing method only logs a MISMATCH
     if (!getenv("M15_OLD_BRACKET")) {
         Class P = objc_getClass("AVCapturePhotoOutput");
         gPhotoInternalIvar = P ? class_getInstanceVariable(P, "_internal") : NULL;
@@ -139,13 +139,13 @@ static void m15features(void) {   // PREPARE 4 (W4): optional client hooks; a mi
 }
 
 // ============================================================================
-// w4 e40 (ledger L66; the state and the why are in fig/session_state.inc): know when AVF has run a photo's
+// Photo done (ledger L66; the state and the why are in fig/session_state.inc): know when AVF has run a photo's
 // didFinishCaptureForResolvedSettings: on its delegate queue, so sess_StopRunning can report the stop after it.
 // - _handleDidFinishCaptureNotificationWithPayload:forRequest: hands the callback to the request's delegate storage, which
 //   dispatch_asyncs it to its delegate queue (the main queue on 17.5, 26.3 and 27.0); a block queued there after it runs
 //   once the callback has returned: the photo is done. AVF's own handling of the session's DidStopRunning (it wakes the
 //   stopRunning thread) also runs on the main thread, but isn't queued in order with that dispatch_async: when main is busy
-//   it can run first (e40: 17.5 with the main queue busy, 3 of 17 runs).
+//   it can run first (17.5 with the main queue busy: 3 of 17 runs).
 //   Test faults: M40_FINISH_DELAY_MS=<ms> hands the callback over <ms> late (from a private queue), so AVF queues it after
 //   the stop: the deterministic form. M40_BUSY_DELEGATEQ_MS=<ms> first queues a <ms> sleep on the delegate queue, the
 //   condition the 17.5 race needs (not deterministic).
@@ -156,7 +156,7 @@ static void m15features(void) {   // PREPARE 4 (W4): optional client hooks; a mi
 // ============================================================================
 static IMP gOrigM40DidFinish, gOrigM40WillBegin;
 static long gM40DelayMs;
-// w4 e44 (review M2, L3): a lookup that finds no queue, or something that isn't one, logs a MISMATCH once: the photo
+// A lookup that finds no queue, or something that isn't one, logs a MISMATCH once: the photo
 // is then marked done at once (the stop doesn't wait for it), which only the canary's positive control
 // (M40_FINISH_DELAY_MS=300 alone must PASS, mutation.sh) would otherwise show.
 // Test faults: M40_NO_DELEGATEQ=1 makes the lookup find nothing (as if AVF renamed delegateStorage): the MISMATCH line; the
@@ -213,7 +213,7 @@ static void m40_didFinish(id self, SEL _cmd, id payload, id request) {
     }
     M40DidFinishNow(self, _cmd, payload, request, sid, dq);
 }
-static void m40photostop(void) {   // PREPARE 4 (W4 e40): optional client hooks
+static void m40photostop(void) {   // PREPARE 4: optional client hooks
     const char *d = getenv("M40_FINISH_DELAY_MS"); gM40DelayMs = d ? atol(d) : 0;
     d = getenv("M40_BUSY_DELEGATEQ_MS"); gM40BusyMs = d ? atol(d) : 0;
     gM40NoDelegateQ = getenv("M40_NO_DELEGATEQ") != NULL; gM40LoseDone = getenv("M40_LOSE_DONE") != NULL;

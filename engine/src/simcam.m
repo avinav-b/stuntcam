@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
-// simcam.m — spike m10: ONE merged prototype of the iOS-Simulator virtual camera (m2 source fake + m5 session layer
-// + m6 audio/gate/objc session hook/17.5 + m7 Flutter/ado/tone/orientation/Vision + m8 VisionCamera fixes + m9 iOS 27 + m10 fixes).
+// simcam.m — the iOS-Simulator virtual camera engine, one translation unit (fake capture sources + session layer
+// + audio (mic or tone), the activation gate, the objc session hook, orientation, Vision, Flutter and VisionCamera fixes, iOS 17.5 and 27.x support).
 // Loaded by the boot stub (dlopen) or SIMCTL_CHILD_DYLD_INSERT_LIBRARIES. No __interpose; nothing linked from CMCapture
 // (every private C symbol is dlsym'd and checked by the preflight, so a missing symbol can never stop the app from launching).
-// Env (all off switches kept from the spikes):
+// Env (the main switches; each off switch is described where it acts):
 //   SIMCAM=0 nothing at all · M2_FAKE=1 fake sources · M2_SESSION_HOOK=1 session layer · M2_PLIST profile · M5_LOG log (%p -> pid)
 #import <Foundation/Foundation.h>
 #import <CoreMedia/CoreMedia.h>
@@ -15,7 +15,7 @@
 #import <sys/mman.h>
 #import <stdatomic.h>
 
-static _Atomic(FILE *) gLogF;   // set once by ActOpenLog (activation worker, record queue, or inline with SIMCAM_LAZY=0 / M16_NO_ACTTIMEOUT), read by LOG on any thread (w4 e46: TSan race since an earlier change)
+static _Atomic(FILE *) gLogF;   // set once by ActOpenLog (activation worker, record queue, or inline with SIMCAM_LAZY=0 / M16_NO_ACTTIMEOUT), read by LOG on any thread (atomic: a plain pointer is a data race under TSan)
 #define LOG(fmt, ...) do { NSString *_s = [NSString stringWithFormat:@"[simcam %d] " fmt, getpid(), ##__VA_ARGS__]; fprintf(stderr, "%s\n", _s.UTF8String); FILE *_lf = atomic_load_explicit(&gLogF, memory_order_acquire); if (_lf) { fprintf(_lf, "%.3f %s\n", CFAbsoluteTimeGetCurrent(), _s.UTF8String); fflush(_lf); } } while (0)
 
 

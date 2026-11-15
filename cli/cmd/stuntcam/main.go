@@ -261,13 +261,13 @@ func cmdUp(args []string) error {
 	fmt.Printf("simulator: %s (%s, %s), %s\n", d.Name, d.UDID, runtimeName(d.RuntimeID), why)
 	if dir := foreignBootArm(d); dir != "" && !willRebootBoot(arm.Mode(*mode), *reboot) {
 		// its boot environment names that directory: a launchd-mode arm can't override it and `current` here is never read,
-		// so "armed" would be untrue (w4 e30, L8)
+		// so "armed" would be untrue
 		return usagef("%s", foreignBootArmMsg(d, dir))
 	}
 	if r, err := arm.ReadRecord(d.UDID); err == nil && r.Mode == arm.Boot && arm.Mode(*mode) == arm.Launchd &&
 		arm.SameBoot(r, d.State == "Booted", d.LastBooted) {
 		// refused before the canary runs: its boot environment already has the stub, and launchctl setenv can't override what
-		// was set at boot (on iOS 27.0 the boot values never read back, so every attempt failed as "did not stick"; w3 e17)
+		// was set at boot (on iOS 27.0 the boot values never read back, so every attempt failed as "did not stick")
 		return usagef("%s is booted armed in boot mode, which launchd mode can't change: `stuntcam up` keeps boot mode; for launchd mode, `xcrun simctl shutdown %s` and then `stuntcam up --mode launchd`", d.Name, d.UDID)
 	}
 	if !*skipVerify {
@@ -302,7 +302,7 @@ func cmdUp(args []string) error {
 	}
 	sameBoot := recErr == nil && arm.SameBoot(rec, d.State == "Booted", d.LastBooted)
 	if sameBoot && m == arm.Launchd && !*reboot {
-		// launchd ignores DYLD_INSERT_LIBRARIES once a boot environment set it (w3 e13: setenv returns 0, getenv reads "")
+		// launchd ignores DYLD_INSERT_LIBRARIES once a boot environment set it (setenv returns 0, getenv reads "")
 		return usagef("%s is armed in boot mode since this boot, and launchd mode can't be added to it; it is already armed (`stuntcam up` re-points it, --reboot re-arms it)", d.Name)
 	}
 	if sameBoot && !*reboot && (m == "" || m == arm.Boot) {
@@ -316,12 +316,12 @@ func cmdUp(args []string) error {
 		}
 		recordXcode(d.UDID, set.Rules, "up", true, false)
 		// At stays the armed boot's time: SameBoot compares the sim's boot time with it, and moving it to now made a reboot
-		// within the next 5 s count as this boot (w3 e19: status/service/source took the unarmed reboot for armed)
+		// within the next 5 s count as this boot: status, the service and source then took an unarmed reboot for armed
 		rec.Build = set.BuildID()
 		if err := arm.WriteRecord(d.UDID, rec); err != nil {
 			return err
 		}
-		// an explicit arm undoes `down` here too: left in place, the login service skipped this sim's later boots (w3 e18)
+		// an explicit arm undoes `down` here too: left in place, the login service skipped this sim's later boots
 		if err := os.Remove(arm.DownMarker(d.UDID)); err != nil && !os.IsNotExist(err) {
 			return err
 		}
@@ -414,7 +414,7 @@ func grantAll(udid string, bundles []string) error {
 
 // willRebootBoot: this `up` reboots the sim into boot mode, which replaces a boot environment from another home (an explicit
 // --mode boot reboots a booted sim; --reboot without --mode means boot). Only then is a sim armed from another home fixable
-// here (review r2 L-b).
+// here.
 func willRebootBoot(m arm.Mode, reboot bool) bool {
 	return m == arm.Boot || (reboot && m != arm.Launchd)
 }
@@ -422,14 +422,14 @@ func willRebootBoot(m arm.Mode, reboot bool) bool {
 // recordXcode writes sims/<udid>/config.json: the Xcode active now (DEVELOPER_DIR, else xcode-select), whose restore
 // rules the loader applies (design §4.1 "Which Xcode's libs"), from rulesDir (the per-content dir artifacts.Stage made).
 // Under ⌘R nothing in the app names the launching Xcode, so this record is the loader's only source. If the Xcode can't be
-// identified, an existing record is kept (w4 e30, L2). booting: stuntcam boots the sim with this process's environment, so
+// identified, an existing record is kept. booting: stuntcam boots the sim with this process's environment, so
 // its SIMCTL_CHILD_ signal variables become boot signals; otherwise they are read from the booted sim's launchd_sim. With
 // say, prints which Xcode and whether its rules are verified.
 func recordXcode(udid, rulesDir, source string, say, booting bool) xcode.Info {
 	x, err := xcodeActive()
 	if err != nil {
 		if old, rerr := arm.ReadConfig(udid); rerr == nil && old.Build != "" {
-			// keep only the Xcode: the rules dir and boot signals are this arm's (review r2 L-c)
+			// keep only the Xcode: the rules dir and boot signals are this arm's
 			fmt.Fprintf(os.Stderr, "warning: could not identify the Xcode in use (%v); keeping the Xcode recorded earlier, %s (%s)\n", err, old.Build, old.DeveloperDir)
 			x = old.Info
 		} else {
@@ -547,17 +547,17 @@ func cmdVerify(args []string) error {
 	return nil
 }
 
-// retriedLine is the one line `up` and `verify` print for a retried pass (w4 e38).
+// retriedLine is the one line `up` and `verify` print for a retried pass.
 func retriedLine(r verify.Result) string {
 	what := "the canary's retry of a photo's frame-gap check (" + r.Retried + ")"
 	switch {
-	case r.FailedFirst != "": // w4 e40: one launch failed on content, the launch run to confirm it passed
+	case r.FailedFirst != "": // one launch failed on content, the launch run to confirm it passed
 		what = "a second canary launch after the first FAILED (" + r.FailedFirst + "); an intermittent engine bug looks like this too"
 	case r.Retried == "":
 		what = "a second canary launch (the first: " + r.Relaunched + ")"
 	}
 	cache := "it is cached for " + verify.RetriedPassTTLText() + " only"
-	if r.NoCache != "" { // w4 e44 (review): SIMCTL_CHILD_* & co. bypass the cache: nothing was cached
+	if r.NoCache != "" { // SIMCTL_CHILD_* & co. bypass the cache: nothing was cached
 		cache = "it is not cached (" + r.NoCache + ")"
 	}
 	return fmt.Sprintf("note: this pass needed %s; %s. `stuntcam verify --fresh` re-runs it", what, cache)
@@ -604,7 +604,7 @@ type simStatus struct {
 	ArmedAt                                 int64             `json:",omitempty"`
 	Chain                                   []string          `json:",omitempty"`
 	Latched                                 map[string]string `json:",omitempty"` // bundle -> features
-	LatchEffect                             map[string]string `json:",omitempty"` // bundle -> what the latch does (W4 PR B: motion only stocks CoreMotion)
+	LatchEffect                             map[string]string `json:",omitempty"` // bundle -> what the latch does (motion only stocks CoreMotion)
 	PreflightFail                           string            `json:",omitempty"` // a valid preflight-fail marker of the current build: CoreMotion stock
 	Fallback                                map[string]string `json:",omitempty"` // bundle -> what its container-tmp fallback latches or stocks (engine: state dir not openable)
 	FallbackDir                             map[string]string `json:",omitempty"` // bundle -> that fallback's directory
@@ -623,7 +623,7 @@ func statusOf(d simctl.Device) simStatus {
 	if c, err := arm.ReadConfig(d.UDID); err == nil {
 		s.Xcode = c.Build
 	}
-	// boot mode is visible only in launchd_sim's own environment (w4 e26: `launchctl getenv` reads it as empty)
+	// boot mode is visible only in launchd_sim's own environment (`launchctl getenv` inside the sim reads it as empty)
 	envArmed, envDir, envErr := false, "", errors.New("not booted")
 	if d.State == "Booted" {
 		var env map[string]string
@@ -708,7 +708,7 @@ func statusOf(d simctl.Device) simStatus {
 				feats = append(feats, f...)
 			}
 		}
-		for _, m := range state.Markers(d.UDID, b) { // W4: a valid marker for the current build: stock without activating
+		for _, m := range state.Markers(d.UDID, b) { // a valid marker for the current build: stock without activating
 			if m.Build == s.Build && m.Valid(time.Now()) {
 				if s.Latched == nil {
 					s.Latched = map[string]string{}
@@ -724,7 +724,7 @@ func statusOf(d simctl.Device) simStatus {
 			s.LatchEffect[b] = state.Effect(feats)
 		}
 	}
-	for _, p := range state.PreflightFails(d.UDID) { // W4 PR B: a real preflight failure stocks CoreMotion for 24 h
+	for _, p := range state.PreflightFails(d.UDID) { // a real preflight failure stocks CoreMotion for 24 h
 		if p.Build == s.Build && p.Valid(time.Now()) {
 			s.PreflightFail = fmt.Sprintf("%s until %s", p.What, p.Until.Format("2006-01-02 15:04"))
 		}
@@ -733,8 +733,8 @@ func statusOf(d simctl.Device) simStatus {
 }
 
 // statusWithFallback adds what the engine's container-tmp fallback holds (the app couldn't open its state dir, e.g. on 17.5):
-// markers there keep the app stock just the same (review item 1). Only `stuntcam status` asks: it costs one simctl call
-// per known bundle, which the service, exec and doctor (they need only Mode) must not pay (review r2).
+// markers there keep the app stock just the same. Only `stuntcam status` asks: it costs one simctl call
+// per known bundle, which the service, exec and doctor (they need only Mode) must not pay.
 func statusWithFallback(d simctl.Device, s simStatus) simStatus {
 	for _, b := range state.Bundles(d.UDID) {
 		f, why := fallbackOf(d, b)
@@ -753,7 +753,7 @@ func statusWithFallback(d simctl.Device, s simStatus) simStatus {
 			s.Fallback, s.FallbackDir = map[string]string{}, map[string]string{}
 		}
 		s.Fallback[b], s.FallbackDir[b] = desc, f.Dir
-		if len(ff) > 0 { // per location: a state-dir latch's line never borrows the fallback's effect (review 9)
+		if len(ff) > 0 { // per location: a state-dir latch's line never borrows the fallback's effect
 			if s.FallbackEffect == nil {
 				s.FallbackEffect = map[string]string{}
 			}
@@ -775,7 +775,7 @@ func fallbackOf(d simctl.Device, bundle string) (state.Fallback, string) {
 	}
 	c := ctl
 	if c.Timeout == 0 || c.Timeout > fallbackTimeout {
-		c.Timeout = fallbackTimeout // a wedged "Booted" sim must not hold status or a clear for 120 s per bundle (review 1)
+		c.Timeout = fallbackTimeout // a wedged "Booted" sim must not hold status or a clear for 120 s per bundle
 	}
 	out, err := c.AppContainer(d.UDID, bundle, "data")
 	switch {
@@ -805,7 +805,7 @@ func fallbackOf(d simctl.Device, bundle string) (state.Fallback, string) {
 }
 
 // stateDirBlocked: the state dir is missing, not a directory or not writable. The engine can't open it either, so it keeps
-// its state in the fallback, which the clear reached: not a reason to exit 1 (w4 e35 F1: a mode-555 block exited 1).
+// its state in the fallback, which the clear reached: not a reason to exit 1 (e.g. a state dir blocked with mode 555).
 func stateDirBlocked(err error) bool {
 	return errors.Is(err, os.ErrNotExist) || errors.Is(err, syscall.ENOTDIR) || errors.Is(err, os.ErrPermission)
 }
@@ -921,9 +921,9 @@ func cmdSwap(args []string) error {
 	if err := home.WriteCurrent(d.UDID, set.Loader); err != nil {
 		return err
 	}
-	if _, err := arm.ReadConfig(d.UDID); err != nil { // as `env` does: a sim armed before config.json existed gets its record (w4 e30, L7)
+	if _, err := arm.ReadConfig(d.UDID); err != nil { // as `env` does: a sim armed before config.json existed gets its record
 		recordXcode(d.UDID, set.Rules, "swap", false, false)
-	} else if set.Rules != "" { // the new build's restore rules apply from the next launch too (review r2 M1)
+	} else if set.Rules != "" { // the new build's restore rules apply from the next launch too
 		if err := arm.SetRulesDir(d.UDID, set.Rules); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: pointing %s at the new build's restore rules: %v\n", d.Name, err)
 		}
@@ -1060,7 +1060,7 @@ func cmdSentinel(args []string) error {
 			fmt.Printf("  container-tmp fallback %s:", f.Dir)
 			if fs.Events {
 				fmt.Printf(" %d activations since the last clear", fs.App.Activations)
-				if lf := fs.App.LatchedFeatures(); len(lf) > 0 { // conditional, as in status (w4 e35 F2a)
+				if lf := fs.App.LatchedFeatures(); len(lf) > 0 { // conditional, as in status
 					fmt.Printf(", LATCHED %s if the app again can't open its state dir (%s)", strings.Join(lf, ","), state.Effect(lf))
 				}
 			} else {
@@ -1072,7 +1072,7 @@ func cmdSentinel(args []string) error {
 				fmt.Printf("  %s\n", preflightLine(p))
 			}
 		}
-		for _, p := range state.PreflightFails(d.UDID) { // W4 PR B: per sim, not per bundle
+		for _, p := range state.PreflightFails(d.UDID) { // per sim, not per bundle
 			fmt.Printf("sim: %s\n", preflightLine(p))
 		}
 		if len(unchecked) > 0 {
@@ -1109,7 +1109,7 @@ func cmdSentinel(args []string) error {
 				failed = append(failed, b)
 			}
 			// a location the engine reads was reached and left latched, or couldn't be checked for a reason other than "not
-			// booted"/"not installed": scripts must not read success (review 5)
+			// booted"/"not installed": scripts must not read success
 			if ferr != nil || (why != "" && why != "app not installed" && why != "simulator not booted") ||
 				(serr != nil && !stateDirBlocked(serr)) {
 				incomplete = append(incomplete, b)
@@ -1418,7 +1418,7 @@ type xcodeNote struct {
 
 // xcodeWarnings: DEVELOPER_DIR naming another Xcode than xcode-select, a running Xcode.app that isn't the one in use, and
 // several Xcodes installed (restores follow the one recorded at `up`, and ⌘R from another isn't noticed in-process). Several
-// Xcodes alone is information; a warning only with one of the mismatches (w4 e30, L11). Xcodes on /Volumes (disk images,
+// Xcodes alone is information; a warning only with one of the mismatches. Xcodes on /Volumes (disk images,
 // backups) are left out unless one is the Xcode in use. A DEVELOPER_DIR naming the .app counts as its Contents/Developer.
 func xcodeWarnings(act xcode.Info, aerr error, installed []xcode.Info, devDir string, running []string) []xcodeNote {
 	var w []xcodeNote
@@ -1466,7 +1466,7 @@ func recordWarning(d simctl.Device, s simStatus, act xcode.Info, aerr error) str
 	case c.Build != act.Build || !xcode.Same(xcode.NormalizeDeveloperDir(c.DeveloperDir), xcode.NormalizeDeveloperDir(act.DeveloperDir)):
 		return fmt.Sprintf("%s was armed for Xcode %s (%s) but the Xcode in use is %s (%s): `stuntcam up --udid %s` re-records it (no reboot)", d.Name, c.Build, c.DeveloperDir, act.Build, act.DeveloperDir, d.UDID)
 	case !simRulesVerified(c) && sourceRulesVerified(c.Build):
-		// the loader reads the rules staged when the sim was armed, not this build's (review r2 M1)
+		// the loader reads the rules staged when the sim was armed, not this build's
 		return fmt.Sprintf("%s applies the restore rules staged when it was armed (%s), which have none for Xcode %s; this build has them: `stuntcam up --udid %s` or `stuntcam swap --udid %s` stages them (no reboot)", d.Name, rulesDirName(c.RulesDir), c.Build, d.UDID, d.UDID)
 	}
 	return ""
@@ -1582,7 +1582,7 @@ func springboardUp(udid string, bound time.Duration) bool {
 }
 
 // envArm prepares a booted sim for per-launch arming (`stuntcam env`, and exec's runner hook on an unarmed destination):
-// its dirs, `current` if missing (an existing one is kept: a `stuntcam swap` would otherwise be undone; w3 e12), the Xcode
+// its dirs, `current` if missing (an existing one is kept: a `stuntcam swap` would otherwise be undone), the Xcode
 // record, and an "env" arm record unless one of another mode exists.
 func envArm(d simctl.Device, set artifacts.Set, source string) error {
 	if _, _, err := home.ReadCurrent(d.UDID); err == nil {
@@ -1642,7 +1642,7 @@ func cmdExec(args []string) error {
 		env = append(env, "SIMCTL_CHILD_"+k+"="+v)
 	}
 	// activations are counted in the run directory and in each -destination's own directory: one booted armed before this
-	// command (by `up`, or an earlier exec's pre-boot) logs there, not in the run directory (w3 e18: a second exec on the
+	// command (by `up`, or an earlier exec's pre-boot) logs there, not in the run directory (otherwise a second exec on the
 	// same destination reported no camera use)
 	counted := append([]string{run}, destinationIDs(cmdline)...)
 	xb := parseXcodebuild(cmdline)
@@ -1657,9 +1657,9 @@ func cmdExec(args []string) error {
 	var dest destSet
 	if ds, err := ctl.Devices(); err == nil {
 		dest = destinations(cmdline, ds)
-		// xcodebuild boots a shut-down -destination itself, and that boot does not get the SIMCTL_CHILD_ variables (w3 e13,
+		// xcodebuild boots a shut-down -destination itself, and that boot does not get the SIMCTL_CHILD_ variables (seen on
 		// Xcode 27.0: no stuntcam variable in the sim, no stub in the test host); so boot it armed before the command runs.
-		// iOS simulators only: stuntcam arms nothing else (review r1 B2)
+		// iOS simulators only: stuntcam arms nothing else
 		pre, isDest := map[string]bool{}, map[string]bool{}
 		for _, u := range destinationIDs(cmdline) {
 			isDest[u] = true
@@ -1689,7 +1689,7 @@ func cmdExec(args []string) error {
 				}
 			}
 		}
-		// already-booted iOS destinations (only the command's): the runner hook for launchd-armed and unarmed ones (w4 e42)
+		// already-booted iOS destinations (only the command's): the runner hook for launchd-armed and unarmed ones
 		for _, d := range ds {
 			if !isDest[d.UDID] || d.State != "Booted" || !isIOSRuntime(d.RuntimeID) {
 				continue
@@ -2176,7 +2176,7 @@ func gcCanaries(dir, current string, keep int, now time.Time, dry bool, rm func(
 	}
 	sort.Slice(ids, func(i, j int) bool { return ids[i].mt.After(ids[j].mt) })
 	for i, e := range ids {
-		if i >= keep && now.Sub(e.mt) > 24*time.Hour { // untouched for a day: never one a concurrent verify just picked (review L4)
+		if i >= keep && now.Sub(e.mt) > 24*time.Hour { // untouched for a day: never one a concurrent verify just picked
 			rm("old unpacked canary", filepath.Join(dir, e.name))
 		}
 	}
@@ -2196,7 +2196,7 @@ func gcStale(dir string, now time.Time, rm func(what, p string)) {
 }
 
 // alwaysKeptBuild: a build dir `gc` never removes: a stub's (tiny, and a boot env may name any of them until that sim shuts
-// down) or the runner hook's (tiny, and a running exec's test runners may name it; review r1 M3).
+// down) or the runner hook's (tiny, and a running exec's test runners may name it).
 func alwaysKeptBuild(dir string) bool {
 	for _, n := range []string{artifacts.StubName, artifacts.HookName} {
 		if _, err := os.Stat(filepath.Join(dir, n)); err == nil {
@@ -2317,7 +2317,7 @@ func controllable(d simctl.Device, key string) error {
 		return fmt.Errorf("%s was armed before live control existed: run `stuntcam up` again (add --reboot for a boot-mode simulator)", d.Name)
 	case r.Mode == arm.Launchd:
 		// the record keeps every name any arm set (so `down` unsets them all); an older stuntcam's `up` since then may have
-		// unset this one, so ask the sim (w3 e19: source reported success and no app polled the file)
+		// unset this one, so ask the sim (otherwise source reported success while no app polled the file)
 		v, err := ctl.Getenv(d.UDID, "SIMCAM_CONTROL")
 		if err != nil {
 			return fmt.Errorf("reading %s's launchd environment failed: %w", d.Name, err)
@@ -2339,7 +2339,7 @@ func setControl(d simctl.Device, key, value string) error {
 }
 
 // writeControl is setControl without the checks, for a caller that has just run them (each launchd check is a
-// `simctl spawn`, ~0.3 s; w3 e19b).
+// `simctl spawn`, ~0.3 s).
 func writeControl(d simctl.Device, key, value string) error {
 	p := home.ControlFile(d.UDID)
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {

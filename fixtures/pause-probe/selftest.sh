@@ -1,6 +1,6 @@
 #!/bin/zsh
 # SPDX-License-Identifier: Apache-2.0
-# selftest.sh <rt> [test ...] — checks of drive.sh itself (w4 e27, TODO U5 item 5), on our own sim with the probe installed.
+# selftest.sh <rt> [test ...] — checks of drive.sh itself (TODO U5 item 5), on our own sim with the probe installed.
 #   timeout     drive.sh t-timeout waits for a marker the probe never logs: the case must fail with exit 1 and one
 #               "FAIL t-timeout/<rt>: timed out …" line, and the probe must be gone afterwards
 #   <case>:<sig>:<target>   start drive.sh <case> in its own process group, wait until it holds the app (c3-session: the
@@ -10,7 +10,7 @@
 #               one FAIL line, no hold.py or debugserver for the app is left, and the app was resumed: its watchdog logged the
 #               end of the pause after the signal (afterwards it is gone, since drive.sh ends the launch console on exit, or
 #               running, untraced and not stopped).
-#   c1-photo:INTTERM:hold   optional (e27b): a double signal before the hit. drive.sh c1-photo runs with PP_TRIG=- (no photo is
+#   c1-photo:INTTERM:hold   optional: a double signal before the hit. drive.sh c1-photo runs with PP_TRIG=- (no photo is
 #               triggered, so hold.py sits in WaitForEvent with the breakpoint armed); 2 s after hold.py's "breakpoint" line,
 #               SIGINT to hold.py and SIGTERM 50 ms later. PASS when drive.sh exits 1 within 15 s with one FAIL line, hold.py
 #               logged "interrupted by signal 2" then "continued the app" or "detached" (no "cleanup error"), the breakpoint was

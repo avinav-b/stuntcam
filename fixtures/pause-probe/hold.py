@@ -59,7 +59,7 @@ try:
 except SystemExit: pass
 except Interrupted as e:
     rc = 128 + e.args[0]; log("interrupted by signal %d" % e.args[0])
-finally:   # never leave the app stopped at a breakpoint or attached (review); a second signal can't cut this short
+finally:   # never leave the app stopped at a breakpoint or attached; a second signal can't cut this short
     for s in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP): signal.signal(s, signal.SIG_IGN)
     try:
         if bp is not None: bp.SetEnabled(False)

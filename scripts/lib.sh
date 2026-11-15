@@ -1,7 +1,7 @@
 #!/bin/zsh
 # SPDX-License-Identifier: Apache-2.0
 # lib.sh <rt> <test> <cam> <orient> <tag> [K=V ...] — RN (vcorient|expoorient) or Flutter (flutter-<test>) under per-launch injection
-#   RN: fixtures/expo from Metro on :$EXPO_PORT (default 8101, m12's port; scripts/metro.sh defaults to 8099)
+#   RN: fixtures/expo from Metro on :$EXPO_PORT (default 8101; scripts/metro.sh defaults to 8099)
 #   NOINJ=1: no per-launch injection (sim booted with the stub by boot.sh); the boot log dir's dylib-<pid>.log is copied to dylib.log
 set -u; HERE=${0:A:h}; ROOT="$(cd "$(dirname "$0")/.." && pwd)"; source $ROOT/scripts/env.sh; RT=$1; T=$2; CAM=$3; OR=$4; TAG=$5; shift 5
 V=SIMCAM_UDID_$RT; UDID=${(P)V:-}; [[ -n $UDID ]] || { echo "$0: set $V to the UDID of your iOS $RT simulator" >&2; exit 2; }

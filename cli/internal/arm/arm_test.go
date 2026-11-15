@@ -273,7 +273,7 @@ func TestArmBootRecords(t *testing.T) {
 	}
 }
 
-// L5 (w4 e30): config.json keeps & < > as they are (json.Marshal wrote &, which the loader's jstr didn't decode)
+// config.json keeps & < > as they are (json.Marshal wrote &, which the loader's jstr didn't decode)
 func TestWriteConfigKeepsAmpersand(t *testing.T) {
 	h := filepath.Join(t.TempDir(), "stuntcam e30 & <co>")
 	t.Setenv("SIMCAM_HOME", h)
@@ -308,7 +308,7 @@ func TestSignals(t *testing.T) {
 }
 
 // rules_dir "" must be written (the loader reads "" as "built-in rules"; a missing key means the legacy flat dir), and a
-// config.json the loader can't hold drops the boot signals rather than becoming unreadable (review r2 L-d, nit)
+// config.json the loader can't hold drops the boot signals rather than becoming unreadable
 func TestWriteConfigEmptyRulesDirAndSize(t *testing.T) {
 	t.Setenv("SIMCAM_HOME", t.TempDir())
 	if err := WriteConfig("UA", xcode.Info{Build: "27A266a"}, "", "up", nil); err != nil {

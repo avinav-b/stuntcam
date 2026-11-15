@@ -17,7 +17,7 @@ static void sess_Finalize(CMBaseObjectRef obj) {
     M40Forget(obj);
     if (gOrigSessFinalize) gOrigSessFinalize(obj);
 }
-static int gSessHookMode; // 1 objc (_createFigCaptureSession swizzle, default), 2 got rebind (M6_SESSHOOK=got). m10: no __interpose.
+static int gSessHookMode; // 1 objc (_createFigCaptureSession swizzle, default), 2 got rebind (M6_SESSHOOK=got). No __interpose.
 static OSStatus m5_FigCaptureSessionCreate(CFAllocatorRef a, void *b, void *c, CMBaseObjectRef *out) {   // GOT route only
     OSStatus err = pFigCaptureSessionCreate(a, b, c, out);
     LOG(@"FigCaptureSessionCreate -> %d obj=%p", (int)err, out ? *out : NULL);
@@ -28,7 +28,7 @@ static OSStatus m5_FigCaptureSessionCreate(CFAllocatorRef a, void *b, void *c, C
 static void M5AdoptSession(CMBaseObjectRef obj, const char *via) {
     CMBaseObjectRef *out = &obj; OSStatus err = 0;
     if (M5S(obj)) {
-        // m10: a FigCaptureSession can be allocated at the address of one that was just freed (seen on 27.0 in Flutter's back->front switch).
+        // A FigCaptureSession can be allocated at the address of one that was just freed (seen on 27.0 in Flutter's back->front switch).
         // Ours iff its vtable is already ours; otherwise the entry is stale (pre-finalize-hook leftover) -> drop it and adopt the new object.
         const M2VTable *cur = ((const M2VTable *(*)(CMBaseObjectRef))dlsym(RTLD_DEFAULT, "CMBaseObjectGetVTable"))(obj);
         if (cur == &gSessVTable) { LOG(@"session %p already adopted (%s)", obj, via); return; }
@@ -48,7 +48,7 @@ static void M5AdoptSession(CMBaseObjectRef obj, const char *via) {
         pCAImageQueueCreate = dlsym(qc, "CAImageQueueCreate");
         pCAImageQueueRegisterIOSurfaceBuffer = dlsym(qc, "CAImageQueueRegisterIOSurfaceBuffer");
         pCAImageQueueInsertImage = dlsym(qc, "CAImageQueueInsertImage");
-        // m9/m10: copy exactly the class's slots (19 on 17.5/26.3, 24 on 27.0) after checking the names; refuse on a mismatch
+        // copy exactly the class's slots (19 on 17.5/26.3, 24 on 27.0) after checking the names; refuse on a mismatch
         int n = 0; NSString *why = M10CheckSessionDerived(vt->derivedClass, &n);
         if (why) { LOG(@"MISMATCH: %@ — not repointing any session", why); gSessBad = YES; return; }
         memcpy(gSessDerived, vt->derivedClass, (n + 1) * sizeof(void *));
@@ -65,7 +65,7 @@ static void M5AdoptSession(CMBaseObjectRef obj, const char *via) {
         gSessDerived[9] = (void *)sess_FileResume;
         gSessDerived[12] = (void *)sess_IrisCapture;
         gSessDerived[13] = (void *)sess_IrisPrepare;
-        // m10: wrap the base class's finalize so a dying session is forgotten (stops its pump/mic; fixes address-reuse + m6's gSessions leak)
+        // wrap the base class's finalize so a dying session is forgotten (stops its pump/mic; handles address reuse; gSessions doesn't leak)
         gSessBase = *vt->baseClass; gOrigSessFinalize = vt->baseClass->finalize;
         if (!getenv("M10_NO_FINALIZE") && vt->baseClass->version == 2) gSessBase.finalize = sess_Finalize;
         gSessVTable = (M2VTable){ vt->reserved, getenv("M10_NO_FINALIZE") ? vt->baseClass : &gSessBase, gSessDerived };
@@ -80,7 +80,7 @@ static void M5AdoptSession(CMBaseObjectRef obj, const char *via) {
     LOG(@"MISMATCH: session vtable pointer not found in object");
 }
 
-// ---- m6 (Q7): __interpose only applies when this dylib is present at launch (DYLD_INSERT_LIBRARIES). When a stub dlopen()s us,
+// ---- __interpose only applies when this dylib is present at launch (DYLD_INSERT_LIBRARIES). When a stub dlopen()s us,
 // it is silently ignored. Two replacements:
 //  objc: swizzle -[AVCaptureSession _createFigCaptureSession] (the only caller of FigCaptureSessionCreate in AVFCapture), call the
 //        original, then find the new FigCaptureSession in AVCaptureSessionInternal's ivars (validated by its vtable's slot names).
@@ -127,7 +127,7 @@ static void m6_createFigCaptureSession(id self, SEL c) {
     CMBaseObjectRef s = M6FindFigSession(self);
     if (s) M5AdoptSession(s, "_createFigCaptureSession swizzle"); else LOG(@"MISMATCH: objc route found no FigCaptureSession");
 }
-// W4: the GOT route is split. PREPARE 4 walks the images and records the slots (M6FindGOTSlots, logged there); SWAP only does
+// The GOT route is split. PREPARE 4 walks the images and records the slots (M6FindGOTSlots, logged there); SWAP only does
 // vm_protect and the store (M6GOTSwap). No image walk after ARMED.
 #define M6_MAXGOT 8
 static void **gGotSlots[M6_MAXGOT]; static int gGotN, gGotPatched;

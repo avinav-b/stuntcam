@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-// Part of simcam.m (single translation unit; included in order): bounded activation, shared state (W4 PR A; the plan is
-// the lazy-activation plan, the state machine and phases are in core/lazy.inc).
+// Part of simcam.m (single translation unit; included in order): bounded activation, shared state (design §4.1
+// "Activation"; the state machine and phases are in core/lazy.inc).
 //
 //   IDLE --first trapped call--> RUNNING --prepare OK, CAS--> COMMITTING (SWAP) --> ARMED  (START: a separate work item)
 //                                   |-- prepare fails (latch, preflight, exception, missing hook, forced) --> STOCK
@@ -15,45 +15,45 @@ enum { ACT_IDLE = 0, ACT_RUNNING, ACT_COMMITTING, ACT_ARMED, ACT_STOCK };
 static _Atomic int gAct;
 static int ActState(void) { return atomic_load_explicit(&gAct, memory_order_acquire); }
 static BOOL ActIsArmed(void) { return ActState() == ACT_ARMED; }
-// set on the activation thread while ActRun runs (primary re-entrancy detector, plan §2.4)
+// set on the activation thread while ActRun runs (primary re-entrancy detector)
 static __thread int gActThread;
-// prepare is running: the minimal crash handler attributes faults to `activate` only while this is set (plan §2.5)
+// prepare is running: the minimal crash handler attributes faults to `activate` only while this is set
 static _Atomic int gActRunning;
-// the step activation is in, for the timeout record's phase= (plan §2.6)
+// the step activation is in, for the timeout record's phase=
 enum { PH_START = 0, PH_TRIM, PH_SENTINEL, PH_LOOKUPS, PH_PREFLIGHT, PH_RESOLVE, PH_SWAP, PH_DONE };
 static const char *kActPhaseName[] = {"start", "trim", "sentinel", "lookups", "preflight", "resolve", "swap", "done"};
 static _Atomic int gActPhase;
-// computed once at load (no setenv after load: plan §1)
-static BOOL gActFakeBreak;              // SIMCAM_PF_BREAK / M2_PREFLIGHT_BREAK (was setenv("M2_PF_FAKEBREAK") at activation)
+// computed once at load (no setenv after load)
+static BOOL gActFakeBreak;              // SIMCAM_PF_BREAK / M2_PREFLIGHT_BREAK
 static uint64_t ActNow(void) { return clock_gettime_nsec_np(CLOCK_MONOTONIC); }
 
-// ---- W4 off switches (M16_*, parsed at load; docs/ledger.md L56, L57) ----
+// ---- activation off switches and test faults (M16_*, parsed at load; docs/ledger.md L56, L57) ----
 static long gM16SlowMs; static int gM16SlowAt = PH_PREFLIGHT;   // M16_SLOW_ACTIVATE_MS=<n>[@trim|@sentinel|@lookups|@preflight|@resolve]
 static long gM16SlowSwapMs, gM16SlowStartMs;                   // M16_SLOW_SWAP_MS, M16_SLOW_START_MS
 static long gM16FigFaultMs;                                     // M16_FIG_FAULT_AT_MS: a CoreMedia fault on a global queue n ms after the first call
 static char gM16Fail[16];                                       // M16_ACTIVATE_FAIL=preflight|throw|missing|crash|crashfig|swapthrow|crashstart|crash2
                                                                 // (swapthrow: SWAP throws, and START throws too, at its end;
-                                                                // crashstart, crash2: W4 e54, a fault in START on 1 / 2 threads)
+                                                                // crashstart, crash2: a fault in START on 1 / 2 threads)
 static BOOL gM16PfReal, gM16NeedsMain, gM16Reenter, gM16NoTimeout, gM16NoUIOrientAtLoad;
-static BOOL gM16MotionFault;                                    // M16_MOTION_FAULT=1 (PR B): a fault in a motion tick, 1 s after the first
-// M16_ORIENT_FAULT (PR B review; e29 the other three): a fault in the orientation tracker, which must count as camera:
+static BOOL gM16MotionFault;                                    // M16_MOTION_FAULT=1: a fault in a motion tick, 1 s after the first
+// M16_ORIENT_FAULT: a fault in the orientation tracker, which must count as camera:
 //   1        in upd, once ARMED with a RotationCoordinator, after the coordinators' KVO
 //   start    in M5OrientTrackStart, after its key clear (the first motion start or data call), once ARMED (it waits up to 5 s
 //            for another thread to arm the camera: the race it stands for is a camera armed while main is in that call)
 //   runmain  in M5OrientTrackRunMain's start branch, before upd (reached from M5OrientTrackStart on main), once ARMED (same wait)
 //   ensure   ActEnsure's main-thread tracker run starts with the motion key set, as if the first camera call came from inside a
-//            motion entry point (the path review low 3 closed), then faults like runmain
+//            motion entry point (ActEnsure clears the key for that run; ledger L63), then faults like runmain
 enum { ORF_NONE = 0, ORF_UPD, ORF_START, ORF_RUNMAIN, ORF_ENSURE };
 static int gM16OrientFault;
 static BOOL gM17TrackerMotionScope;                             // M17_TRACKER_MOTION_SCOPE=1 (ledger L61): upd under the motion key again
 static BOOL gM17TrackStartKeepKey;                              // M17_TRACKSTART_KEEP_KEY=1 (ledger L62): M5OrientTrackStart keeps the key
 static BOOL gM17EnsureKeepKey;                                  // M17_ENSURE_KEEP_KEY=1 (ledger L63): ActEnsure's tracker run keeps the key
-// M16_TRAP_FAULT=1 (e31, review L8): a fault in our image in the first camera call's trap (ActEnsure), once ARMED,
+// M16_TRAP_FAULT=1: a fault in our image in the first camera call's trap (ActEnsure), once ARMED,
 // before its main-thread tracker run: camera code, reached from whatever app code made that call. Its line names the feature
 // key the thread carried. M17_APP_SEND_KEEP_KEY=1 (ledger L65): motion.inc's sends that app code can answer (an interval
-// getter, the handler copy, addOperationWithBlock:) keep the motion key, as before review round 2 low 3
+// getter, the handler copy, addOperationWithBlock:) keep the motion key instead of clearing it around the app's code
 static BOOL gM16TrapFault, gM17AppSendKeepKey;
-// PR B off switches (M17_*, ledger L58-L60) are read where they act: M17_NO_MOTION_MARKERS (SCMotionStockAtLoad),
+// CoreMotion off switches (M17_*, ledger L58-L60) are read where they act: M17_NO_MOTION_MARKERS (SCMotionStockAtLoad),
 // M17_NO_MOTION_KEY (SCFeatKeyInit), M17_NO_HANDLER_MARKER (SCLoadInit); M17_TRACKER_MOTION_SCOPE (L61) is parsed below
 static void M16ParseEnv(void) {
     const char *s = getenv("M16_SLOW_ACTIVATE_MS");
@@ -97,7 +97,7 @@ static void M16SlowAt(int phase) { if (gM16SlowMs > 0 && gM16SlowAt == phase) M1
 
 // ---- hooks: resolved in PREPARE 4, installed in SWAP (memory-only: no messages, no I/O, no dyld lock) ----
 // A hook records its Method (or, for add-style hooks, the class to add on), its replacement and where the hook's original IMP
-// lives. SWAP installs group by group (client, session, audio, video: plan §2.3 SWAP 2-5) and chains to the IMP that
+// lives. SWAP installs group by group (client, session, audio, video: SWAP 2-5) and chains to the IMP that
 // method_setImplementation / class_replaceMethod returned, so a swizzle made by someone else between PREPARE and SWAP is kept.
 enum { HG_CLIENT = 0, HG_SESSION, HG_AUDIO, HG_VIDEO, HG_N };
 typedef struct { const char *what; Class cls; SEL sel; Method m; IMP repl; IMP *orig; IMP pre; const char *types; BOOL add; int group; int rc; } ActHook;

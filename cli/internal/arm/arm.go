@@ -180,7 +180,7 @@ func writeConfig(udid string, c Config) error {
 }
 
 // SetRulesDir points an existing config.json at another staged rules dir and keeps the rest: what `swap` needs, so a build
-// with new restore rules takes effect at the next launch without a reboot (design §4.1 B-MF4 (3); review r2 M1).
+// with new restore rules takes effect at the next launch without a reboot (design §4.1 B-MF4 (3)).
 func SetRulesDir(udid, rulesDir string) error {
 	c, err := ReadConfig(udid)
 	if err != nil {
@@ -191,7 +191,7 @@ func SetRulesDir(udid, rulesDir string) error {
 }
 
 // MarshalConfig is config.json's bytes: indented, and with & < > written as themselves (json.Marshal's \u0026 escapes
-// would need decoding in the loader; w4 e30, L5).
+// would need decoding in the loader).
 func MarshalConfig(c Config) ([]byte, error) {
 	var buf bytes.Buffer
 	e := json.NewEncoder(&buf)
@@ -428,7 +428,7 @@ func ArmLaunchd(sim Sim, udid string, s artifacts.Set, vars []string) error {
 		}
 	}
 	// the settings all at once, then DYLD_INSERT_LIBRARIES alone: each is a set and a read-back through `simctl spawn`
-	// (0.5-1.5 s), and one after another they took 10-25 s on a busy Mac, a window in which launches got no camera (w3 e18)
+	// (0.5-1.5 s), and one after another they took 10-25 s on a busy Mac, a window in which launches got no camera
 	settings := ordered[:len(ordered)-1]
 	errs := make([]error, len(settings))
 	var wg sync.WaitGroup

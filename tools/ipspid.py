@@ -2,9 +2,9 @@
 # ipspid.py <proc> <since> <pid> ... — crash reports of process <proc> written for one of the pids at or after <since> (epoch
 #   seconds): prints "<pid>\t<path>" per match (tab-separated: paths may hold spaces; activation.sh reads it with awk -F'\t').
 #   Looks in ~/Library/Logs/DiagnosticReports and its Retired/ (reports move there within minutes). Matching by pid, not by
-#   count or mtime, so old reports whose mtime moved and other agents' crashes of the same app never count (review L3).
+#   count or mtime, so old reports whose mtime moved and other agents' crashes of the same app never count.
 #   The report's capture time (the body's "captureTime", else the file's mtime) must be >= <since>, so a reused pid can't
-#   match an older report (review round 2).
+#   match an older report.
 import datetime, glob, json, os, re, sys
 proc, since, pids = sys.argv[1], float(sys.argv[2]), set(sys.argv[3:])
 PID = re.compile(r'"pid" : (\d+),')

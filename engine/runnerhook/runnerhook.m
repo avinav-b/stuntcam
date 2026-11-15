@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 // simcam runner hook (libsimcamrunnerhook.dylib): inserted into XCTest runner processes by `stuntcam exec` through
-// TEST_RUNNER_DYLD_INSERT_LIBRARIES (design §4.2, §4.5; w4 e42), for destinations that are launchd-armed or booted unarmed,
-// where Xcode's per-launch insert list replaces the stub's (w4 e32, e41). It never runs in a user app as an app: in a hosted
+// TEST_RUNNER_DYLD_INSERT_LIBRARIES (design §4.2, §4.5), for destinations that are launchd-armed or booted unarmed,
+// where Xcode's per-launch insert list replaces the stub's. It never runs in a user app as an app: in a hosted
 // test it runs in the test host only to put back what the variable displaced.
 //
 // 1. Restores what TEST_RUNNER_DYLD_INSERT_LIBRARIES displaced from the runner's own insert list (that variable replaces
 //    XCTest's list; for hosted tests that drops libXCTestBundleInject and the test bundle is never injected: xcodebuild hangs,
-//    w4 e26). The list comes from the "test-runner" rule of the restore-rules file ($SIMCAM_HOOK_RULES), else the built-in
+//    waiting for it). The list comes from the "test-runner" rule of the restore-rules file ($SIMCAM_HOOK_RULES), else the built-in
 //    copy below: <test host>/Frameworks/libXCTestBundleInject.dylib (when the host has it and an XCTest marker is set), MTC
 //    (unless SIMCAM_MTC=0), RPAC (if PERFC_*). Launch-only libraries (libclang_rt.*, libgmalloc) are never dlopened, nor a
 //    basename that is already mapped. Done in the constructor, the same point in launch where the boot-mode loader restores.
@@ -18,7 +18,7 @@
 //    -activate (and launchWithOptions:-style variants if present) are swizzled instead and edit launchEnvironment around the
 //    call, putting it back afterwards. Either way the list kept behind the stub is the test's own DYLD_INSERT_LIBRARIES if it
 //    set one (never dropped), else Xcode's, launch-only libraries first so a sanitizer runtime still initializes first.
-//    Variables the test set itself win. Apple's own apps (com.apple.*) are left alone. (w4 e42)
+//    Variables the test set itself win. Apple's own apps (com.apple.*) are left alone.
 // 3. Inert when the destination is boot-armed (the stub is mapped in this runner: the boot env already arms every app), when
 //    $SIMCAM_HOOK_DIR/<udid>.env says boot, or when there is nothing to add (no stub for this sim).
 // What to add comes from $SIMCAM_HOOK_DIR/<SIMULATOR_UDID>.env (KEY=VALUE lines written by exec for each destination; first
@@ -67,7 +67,7 @@ static NSArray *builtinRunnerLibs(void) {   // = restore-rules/27A266a.json "tes
              @{@"path": @"/usr/lib/libRPAC.dylib", @"if": @"PERFC_*"}];
 }
 // @testhost/<rel>: where dyld finds what XCTest names "<built products dir>/<App>.app/<rel>": that file doesn't exist; dyld
-// takes the leaf from DYLD_LIBRARY_PATH first (Xcode's platform usr/lib copy; w4 e42), so do the same, then the built and the
+// takes the leaf from DYLD_LIBRARY_PATH first (Xcode's platform usr/lib copy), so do the same, then the built and the
 // installed host
 static NSString *testhost(NSString *rel, NSDictionary *env) {
     NSFileManager *fm = NSFileManager.defaultManager;
@@ -103,10 +103,10 @@ static void restoreRunner(NSDictionary *env, BOOL xctest, BOOL runner) {
         if (![l isKindOfClass:NSDictionary.class] || ![l[@"path"] isKindOfClass:NSString.class]) continue;
         NSString *p = l[@"path"], *c = [l[@"if"] isKindOfClass:NSString.class] ? l[@"if"] : nil, *u = [l[@"unless"] isKindOfClass:NSString.class] ? l[@"unless"] : nil;
         if (!cond(c, env) || (u.length && cond(u, env))) continue;
-        if ([p hasPrefix:@"@testhost/"]) { if (!xctest || runner) continue;   // a UI-test runner never had it (w4 e42)
+        if ([p hasPrefix:@"@testhost/"]) { if (!xctest || runner) continue;   // a UI-test runner never had it
             p = testhost([p substringFromIndex:10], env); }
         else if ([p hasPrefix:@"/usr/"] || [p hasPrefix:@"/System/"]) { NSString *q = [root stringByAppendingString:p]; if (root.length && [NSFileManager.defaultManager fileExistsAtPath:q]) p = q; }
-        BOOL inject = [l[@"path"] hasPrefix:@"@testhost/"];   // a hosted test's bundle injector: without it the run hangs (w4 e26)
+        BOOL inject = [l[@"path"] hasPrefix:@"@testhost/"];   // a hosted test's bundle injector: without it the run hangs
         if (![NSFileManager.defaultManager fileExistsAtPath:p]) {
             hlog([NSString stringWithFormat:inject ? @"failed (hosted tests can't inject their bundle; the run may hang): absent %@" : @"restore: absent %@", p]); continue;
         }

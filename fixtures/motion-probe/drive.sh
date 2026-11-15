@@ -1,6 +1,6 @@
 #!/bin/zsh
 # SPDX-License-Identifier: Apache-2.0
-# drive.sh <rt: 263|27|175> <tag> <inj: boot|none> [probe args...] — one motion-probe launch (w4 e24)
+# drive.sh <rt: 263|27|175> <tag> <inj: boot|none> [probe args...] — one motion-probe launch
 #   probe args: -camera 0|1 -order motionFirst|cameraFirst [-dur s] [-hz Hz] (README.md)
 #   XENV="VAR=val ..." adds SIMCTL_CHILD_VAR=val to the launch (SIMCAM_LAZY=0: eager; SIMCAM=0: unarmed); one VAR=val per line
 #   when a value holds spaces

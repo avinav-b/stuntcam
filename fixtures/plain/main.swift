@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// m5 Q4: plain AVFoundation checks on genuine devices. Mode via env M5APP_MODE = scan | q4
+// Plain AVFoundation checks on genuine devices. Mode via env M5APP_MODE = scan | q4
 import UIKit
 import AVFoundation
 import CoreMotion
@@ -96,7 +96,7 @@ final class VC: UIViewController {
     } else { done() }
   }
 }
-// ---- m9: plain-AVF step matrix (one line per step: PASS/FAIL name detail) ----
+// ---- M9 (mode m9): plain-AVF step matrix (one line per step: PASS/FAIL name detail) ----
 final class M9: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCapturePhotoCaptureDelegate, AVCaptureFileOutputRecordingDelegate {
   var frames = 0; var firstFrame: String?; var photoCB: ((AVCapturePhoto?, Error?) -> Void)?; var movieCB: ((URL, Error?) -> Void)?
   func captureOutput(_ o: AVCaptureOutput, didOutput sb: CMSampleBuffer, from c: AVCaptureConnection) {
@@ -104,11 +104,11 @@ final class M9: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCaptur
     if firstFrame == nil, let pb = CMSampleBufferGetImageBuffer(sb) { firstFrame = "\(CVPixelBufferGetWidth(pb))x\(CVPixelBufferGetHeight(pb))" }
   }
   func photoOutput(_ o: AVCapturePhotoOutput, didFinishProcessingPhoto p: AVCapturePhoto, error: Error?) { E("photo.processing", error); photoCB?(p, error) }
-  let finished = DispatchSemaphore(value: 0)   // m10: a plain app that waits for didFinishCaptureFor (hung forever before m10)
+  let finished = DispatchSemaphore(value: 0)   // a plain app that waits for didFinishCaptureFor (hangs forever if it never comes)
   func photoOutput(_ o: AVCapturePhotoOutput, didFinishCaptureFor r: AVCaptureResolvedPhotoSettings, error: Error?) { E("photo.didFinishCapture", error); finished.signal() }
   func fileOutput(_ o: AVCaptureFileOutput, didFinishRecordingTo u: URL, from c: [AVCaptureConnection], error: Error?) { E("movie.didFinishRecording", error); movieCB?(u, error) }
 }
-// w2: the NSError a callback got, field by field (maps engine statuses to app-visible errors, design §5.4); nothing when nil
+// the NSError a callback got, field by field (maps engine statuses to app-visible errors, design §5.4); nothing when nil
 func E(_ cb: String, _ e: Error?) {
   guard let e else { return }; let n = e as NSError
   let ui = n.userInfo.keys.sorted().map { k in "\(k)=\(n.userInfo[k].map { "\($0)" } ?? "nil")".replacingOccurrences(of: "\n", with: " ") }.joined(separator: "; ")
@@ -123,7 +123,7 @@ extension VC {
     let t0 = Date(); armW4Timers()
     let ds = AVCaptureDevice.DiscoverySession(deviceTypes: allTypes, mediaType: .video, position: .unspecified)
     firstCallDone(t0)
-    if expectStock {   // W4: activation is expected to end stock (no camera, no crash, no hang)
+    if expectStock {   // activation is expected to end stock (no camera, no crash, no hang)
       R(ds.devices.isEmpty, "stock.discovery", "count=\(ds.devices.count)")
       let tl = Date(); let dv = AVCaptureDevice.default(for: .video); P("INFO latercall.ms=\(String(format: "%.2f", Date().timeIntervalSince(tl) * 1000))")
       R(dv == nil, "stock.default", "default(for: .video) is nil")
@@ -150,7 +150,7 @@ extension VC {
       DispatchQueue.global().async {
         let t0 = Date(); self.session.startRunning(); let ms = Int(Date().timeIntervalSince(t0) * 1000)
         R(self.session.isRunning, "session.start", "ms=\(ms)")
-        // w1: count the 2 s window from the first frame, not from startRunning (a cold start on a hosted runner gave 10 frames)
+        // count the 2 s window from the first frame, not from startRunning (a cold start on a hosted runner gave 10 frames)
         let tf = Date(); while m.frames == 0 && Date().timeIntervalSince(tf) < 5 { Thread.sleep(forTimeInterval: 0.02) }
         let ffms = Int(Date().timeIntervalSince(tf) * 1000); let f0 = m.frames
         Thread.sleep(forTimeInterval: 2.0)
@@ -159,16 +159,16 @@ extension VC {
         try? back.lockForConfiguration(); if back.isFocusPointOfInterestSupported { back.focusPointOfInterest = CGPoint(x: 0.5, y: 0.5); back.focusMode = .autoFocus }; back.unlockForConfiguration()
         Thread.sleep(forTimeInterval: 1.0); R(kvo >= 2, "focus.kvo", "changes=\(kvo)")
         let sem = DispatchSemaphore(value: 0)
-        // w4 e40: M5APP_PHOTOSTOP=bg|main|incallback: a photo, then stopRunning while it is in flight (bg: on this thread;
+        // M5APP_PHOTOSTOP=bg|main|incallback: a photo, then stopRunning while it is in flight (bg: on this thread;
         // main: on the main thread, the photo delegate queue; incallback: inside didFinishProcessingPhoto). The photo and its
         // didFinishCapture must arrive, the stop must neither hang nor wait the engine's 1 s bound (a stop on the delegate
         // queue can't wait for callbacks queued behind it), and from bg didFinishCapture comes before stopRunning returns.
-        // w4 e44 (review): mainsync: main does `sessionQueue.sync { stopRunning() }` (the main thread under another
-        // queue; M1); restart: stop on this thread and, 30 ms later, startRunning from another thread while the stop still
-        // waits for the photo's callbacks (L4). AVF drops that overlapping start on 17.5/26.3/27.0 (e44), so the case checks
+        // mainsync: main does `sessionQueue.sync { stopRunning() }` (the main thread under another
+        // queue); restart: stop on this thread and, 30 ms later, startRunning from another thread while the stop still
+        // waits for the photo's callbacks. AVF drops that overlapping start on 17.5/26.3/27.0, so the case checks
         // the session stays consistent and that a later start brings frames back. isRunning is false when stopRunning returns
         // (not checked for restart, where the start may already have run).
-        // w4 e48: M5APP_PHOTOS=<n>: n JPEG photos one after another (each waits for didFinishCapture, then 300 ms), one INFO
+        // M5APP_PHOTOS=<n>: n JPEG photos one after another (each waits for didFinishCapture, then 300 ms), one INFO
         // line each with its settings uniqueID, AVCapturePhoto.timestamp, the host clock at the shutter and the latency
         // (capturePhoto -> didFinishProcessingPhoto); then, with M5APP_HOLD=<s>, "HOLD" and s seconds with the session running
         // (so `stuntcam trace` can read a running app), then stop and DONE
@@ -178,7 +178,7 @@ extension VC {
             let st = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg])
             let tl = NSLock(); var ts = -1.0, exif = "-"
             m.photoCB = { p, e in
-              // w4 e54: the photo's EXIF capture time (DateTimeOriginal, SubsecTimeOriginal, OffsetTimeOriginal) as written
+              // the photo's EXIF capture time (DateTimeOriginal, SubsecTimeOriginal, OffsetTimeOriginal) as written
               var x = "-"
               if let d = p?.fileDataRepresentation(), let src = CGImageSourceCreateWithData(d as CFData, nil),
                  let pr = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [String: Any], let ex = pr[kCGImagePropertyExifDictionary as String] as? [String: Any] {
@@ -226,7 +226,7 @@ extension VC {
           R(m.finished.wait(timeout: .now() + 3) == .success, "photostop.didFinishCapture", ps)
           R(stopMs >= 0 && stopMs < 900, "photostop.stop", "\(ps) stopRunning took \(stopMs) ms (< 900)")
           if ps == "restart" {
-            // AVF (17.5, 26.3, 27.0; e44) doesn't forward a startRunning that overlaps a stopRunning still waiting for its
+            // AVF (17.5, 26.3, 27.0) doesn't forward a startRunning that overlaps a stopRunning still waiting for its
             // DidStopRunning: isRunning is still true then, and the start returns without starting. So the overlapping start
             // must leave a coherent session (isRunning agrees with frames; no DidStart then DidStop), and a start after the
             // stop must resume frames.
@@ -283,18 +283,18 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
     let c = UISceneConfiguration(name: nil, sessionRole: s.role); c.delegateClass = SceneDelegate.self; return c
   }
 }
-// ---- w1 ordering fixtures (design §10.3, U2): what the app touches before its first camera call.
+// ---- ordering fixtures (design §10.3, U2): what the app touches before its first camera call.
 //   M5APP_ORDER=motion  : CoreMotion first (one manager, push updates at 100 Hz), then the camera steps
 //   M5APP_ORDER=motion2 : a two-manager motion recorder: a pull manager plus a push manager on an OperationQueue, both kept running
 //                         through the camera steps; gyro/magnetometer/deviceMotion availability reported (INFO, not gated yet)
 //   M5APP_ORDER=audio   : AVCaptureDevice.default(for: .audio) first
 //   M5APP_ORDER=session : an AVCaptureSession exists before discovery
 //   M5APP_ORDER=threads : three threads make their first capture call at once (U13), then the camera steps
-//   M5APP_ORDER=motion-main-camera-bg : (e29) the first motion call on main; a background thread makes the first camera call
+//   M5APP_ORDER=motion-main-camera-bg : the first motion call on main; a background thread makes the first camera call
 //                         0.3 s later (M16_ORIENT_FAULT=start|runmain wait in that main-thread call until it arms)
-//   M5APP_ORDER=motion-subclass-camera : (e31) a CMMotionManager subclass whose accelerometerUpdateInterval getter makes the
+//   M5APP_ORDER=motion-subclass-camera : a CMMotionManager subclass whose accelerometerUpdateInterval getter makes the
 //                         app's first camera call (on main): the stand-in reads that getter inside its motion scope, the
-//                         dynamic send review round 2 low 3 is about (with M16_TRAP_FAULT the trap faults there)
+//                         dynamic send from inside the stand-in (with M16_TRAP_FAULT the trap faults there)
 final class CamIntervalManager: CMMotionManager {
   var camCalled = false
   override var accelerometerUpdateInterval: TimeInterval {
@@ -341,15 +341,15 @@ extension VC {
         }
         run()
       }
-    case "motion-only":   // W4: CoreMotion only, never the camera
+    case "motion-only":   // CoreMotion only, never the camera
       motionChecks(order) { self.done() }
-    case "camera-then-motion":   // W4: the first camera call first (with SIMCAM_PF_BREAK: stock), then CoreMotion in the same launch
+    case "camera-then-motion":   // the first camera call first (with SIMCAM_PF_BREAK: stock), then CoreMotion in the same launch
       let t0 = Date(); armW4Timers()
       let n = AVCaptureDevice.DiscoverySession(deviceTypes: allTypes, mediaType: .video, position: .unspecified).devices.count
       firstCallDone(t0)
       P("INFO camera-then-motion discovery=\(n)")
       motionChecks(order) { self.done() }
-    case "motion-threads":   // W4: three threads make their first motion query at once
+    case "motion-threads":   // three threads make their first motion query at once
       let g = DispatchGroup(); let start = DispatchSemaphore(value: 0); let lock = NSLock()
       var qms = [Double](repeating: -1, count: 3); var counts = [0, 0, 0]
       let mgrs = (0..<3).map { _ in CMMotionManager() }; let q = OperationQueue()
@@ -366,21 +366,21 @@ extension VC {
       _ = g.wait(timeout: .now() + 5)
       DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
         lock.lock(); let c = counts; let m = qms; lock.unlock()
-        // M5APP_EXPECT_MOTION=stock (review): three threads hit the forwarding traps at once; stock delivers nothing
+        // M5APP_EXPECT_MOTION=stock: three threads hit the forwarding traps at once; stock delivers nothing
         if expectMotionStock { R(c.allSatisfy { $0 == 0 }, "order.motion-threads.stock.updates", "counts=\(c)") }
         else { R(c.allSatisfy { $0 >= 90 }, "order.motion-threads.updates", "counts=\(c)") }
         R(m.allSatisfy { $0 >= 0 && $0 <= 5 }, "order.motion-threads.firstquery", "ms=\(m.map { String(format: "%.2f", $0) })")
         for mg in mgrs { mg.stopAccelerometerUpdates() }
         self.done()
       }
-    case "motion-main-camera-bg":   // e29: the first motion call on main while another thread arms the camera 0.3 s later
+    case "motion-main-camera-bg":   // the first motion call on main while another thread arms the camera 0.3 s later
       Thread.detachNewThread {
         Thread.sleep(forTimeInterval: 0.3)
         let n = AVCaptureDevice.DiscoverySession(deviceTypes: allTypes, mediaType: .video, position: .unspecified).devices.count
         P("INFO motion-main-camera-bg discovery=\(n)")
       }
       motionChecks(order) { self.done() }
-    case "motion-subclass-camera":   // e31: the first camera call from an app getter the stand-in reads (see above)
+    case "motion-subclass-camera":   // the first camera call from an app getter the stand-in reads (see above)
       let m = CamIntervalManager(); m.accelerometerUpdateInterval = 0.01; motion = [m]
       var n = 0
       m.startAccelerometerUpdates(to: .main) { d, _ in if d != nil { n += 1 } }
@@ -389,7 +389,7 @@ extension VC {
         R(n >= 135, "order.motion-subclass-camera.updates", "updates=\(n) in 1.5 s at 100 Hz, want>=135")
         m.stopAccelerometerUpdates(); self.done()
       }
-    case "none":   // W4: neither camera nor motion
+    case "none":   // neither camera nor motion
       P("INFO none: idle 2 s"); DispatchQueue.main.asyncAfter(deadline: .now() + 2) { self.done() }
     case "audio":
       let mic = AVCaptureDevice.default(for: .audio)
@@ -424,7 +424,7 @@ extension VC {
     }
   }
 }
-// ---- W4 (bounded activation, the lazy-activation plan) ----
+// ---- bounded activation (design §4.1) ----
 //   M5APP_EXPECT=stock       activation is expected to end stock: the camera checks become stock.* checks (no devices), then DONE
 //   M5APP_SIGCHECK=1         after the first capture call returns, print the image owning the current SIGSEGV handler
 //   M5APP_FAKESDK_AT_MS=<n>  n ms after the first capture call starts, a background thread installs a chaining SIGSEGV/SIGBUS
@@ -433,7 +433,7 @@ extension VC {
 //   M5APP_SIGCHECK_AT_MS=<n> n ms after the first capture call starts, a background thread prints "INFO sigcheck during SIGSEGV
 //                            handler=<image>" (the handler while prepare still runs)
 //   INFO firstcall.ms=<ms>   how long the first capture call took (per thread in the threads mode, from the shared start)
-//   M5APP_EXPECT_MOTION=stock (W4 PR B) CoreMotion is expected stock (a marker): the motion checks of motion-only and
+//   M5APP_EXPECT_MOTION=stock CoreMotion is expected stock (a marker): the motion checks of motion-only and
 //                            camera-then-motion become order.<mode>.stock.* checks (no accelerometer, no updates), then DONE
 let w4env = ProcessInfo.processInfo.environment
 let expectStock = w4env["M5APP_EXPECT"] == "stock"
@@ -475,7 +475,7 @@ func armW4Timers() {
 }
 @inline(never) func appFault() { let p = UnsafeMutablePointer<Int>(bitPattern: Int(atoi("8")))!; p.pointee = 1 }
 extension VC {
-  // the motion checks of M5APP_ORDER=motion (one push manager at 100 Hz), for the W4 modes that don't go on to the camera
+  // the motion checks of M5APP_ORDER=motion (one push manager at 100 Hz), for the activation modes that don't go on to the camera
   func motionChecks(_ order: String, then next: @escaping () -> Void) {
     let hz = 100.0
     let push = CMMotionManager(); push.accelerometerUpdateInterval = 1 / hz
@@ -509,7 +509,7 @@ extension VC {
     }
   }
 }
-// ---- w4 e58: camera mount/unmount cycles in one process (memory) ----
+// ---- camera mount/unmount cycles in one process (memory) ----
 //   M5APP_MODE=cycle M5APP_CYCLES=<n> (default 50), M5APP_CYCLE_WAIT=<s> (idle s seconds first), M5APP_CYCLE_HOLD=1 (no exit at
 //   the end): each cycle builds a new session (back wide input, video data output,
 //   photo output, preview layer), starts it, waits for 10 frames, stops it and drops everything. M5APP_CYCLE_PHOTO=1 also
@@ -575,7 +575,7 @@ extension VC {
     }
   }
 }
-// ---- w4 e62: M5APP_MODE=lidar: what selecting the back LiDAR depth camera does (e61 F4) ----
+// ---- M5APP_MODE=lidar: what selecting the back LiDAR depth camera does ----
 //   M5APP_LIDAR_DEV=lidar (default) | wide | truedepth: the device under test (wide / truedepth are controls)
 //   M5APP_LIDAR_FORCE=photodepth: set photoOutput.isDepthDataDeliveryEnabled = true without checking it is supported
 //   M5APP_LIDAR_FORCE=depthout: addOutput(AVCaptureDepthDataOutput) without checking canAddOutput

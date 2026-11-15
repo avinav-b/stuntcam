@@ -1,6 +1,6 @@
 #!/bin/zsh
 # SPDX-License-Identifier: Apache-2.0
-# drive.sh <rt> <case>  — one U5 case on our own simulator (w4 e25). Results: $SIMCAM_RESULTS/e25-<case>-<rt>/
+# drive.sh <rt> <case>  — one U5 case on our own simulator. Results: $SIMCAM_RESULTS/e25-<case>-<rt>/
 #   cases: c1-photo c1-kvo c1-vdo c1-kvorun (lldb 10 s holds x3) | c2-photo c2-photobg c2-rec (background x5) |
 #          c3-session c3-photo c3-rec (kill -STOP 60 s x3) | c4 (4K60 30 s recording)
 #          t-timeout (harness self-test: waits for a line the probe never logs; must FAIL)
@@ -23,7 +23,7 @@ postcheck() {   # ops with no pause, after the case: each must complete
 }
 hold() { pp_ours || pp_fail "refusing lldb: pid $PID is not our probe"
   pp_run env PYTHONPATH=$LLDBPY $PY $HERE/hold.py $PID $1 3 10 $CMD $2 $3 $4 >> $OUT/host.log 2>&1 || pp_fail "hold.py $1 failed (exit $?; see host.log)"; }
-# on any exit, never leave our app stopped or a launch console behind (review). hold.py first: SIGTERM runs its
+# on any exit, never leave our app stopped or a launch console behind. hold.py first: SIGTERM runs its
 # finally (continue, detach), and it must finish before the app is resumed and the console goes (10 s at most).
 # SIGCONT, then 0.5 s for the app's watchdog to log the end of the pause, then end the console (that ends the app)
 on_exit() { pp_stopchild; [[ -n ${PID:-} ]] && kill -0 $PID 2>/dev/null && { kill -CONT $PID; sleep 0.5; }; [[ -n ${LP:-} ]] && kill $LP 2>/dev/null; return 0; }

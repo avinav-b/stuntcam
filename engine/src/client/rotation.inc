@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 // Part of simcam.m (single translation unit; included in order): rotation coordinator, preview rotation.
 // ============================================================================
-// m5: AVCaptureDeviceRotationCoordinator — the simulator build is a stub (getters return ivars = 0, nothing observes
+// AVCaptureDeviceRotationCoordinator — the simulator build is a stub (getters return ivars = 0, nothing observes
 // orientation). Hook the two getters to derive the angle from the UI orientation + device position, and fire KVO when
 // the orientation changes.
 // ============================================================================
-// W4: the coordinator table is allocated in PREPARE 4 (CFBridgingRetain'd, kept as void *) and published in SWAP 8 with release
-// (plan A6); readers acquire it. M5CoordOrientationChanged also returns unless ARMED, so a tracker started during prepare never
-// reads it before it is published. kCoordPosKey is the associated-object key (it was &gCoords).
+// The coordinator table is allocated in PREPARE 4 (CFBridgingRetain'd, kept as void *) and published in SWAP 8 with release
+// semantics; readers acquire it. M5CoordOrientationChanged also returns unless ARMED, so a tracker started during prepare never
+// reads it before it is published. kCoordPosKey is the associated-object key.
 static void *_Atomic gCoordsRaw; static void *gCoordsNext; static char kCoordPosKey;
 static NSHashTable *M5Coords(void) { return (__bridge NSHashTable *)atomic_load_explicit(&gCoordsRaw, memory_order_acquire); }
 static double M5AngleFor(long iface, long position) {
@@ -29,7 +29,7 @@ static id m5_coordInit(id self, SEL c, id device, id layer) {
 }
 // the getters run on any thread (a camera queue while main is busy): they read the atomic gUIOrientA, never gUIOrient
 static CGFloat m5_coordAngle(id self, SEL c) { return M5AngleFor(M5UIOrientAny(), [objc_getAssociatedObject(self, &kCoordPosKey) longValue]); }
-// m12: capture angle follows the device orientation (gravity), preview angle the preview layer's UI orientation (as AVF documents)
+// capture angle follows the device orientation (gravity), preview angle the preview layer's UI orientation (as AVF documents)
 static CGFloat m12_coordCapAngle(id self, SEL c) { return M5AngleFor(M12OrientOn() ? M12DevOrient() : M5UIOrientAny(), [objc_getAssociatedObject(self, &kCoordPosKey) longValue]); }
 static void M5CoordOrientationChanged(void) {
     if (!ActIsArmed()) return;
@@ -55,9 +55,9 @@ static void M5CoordPublish(void) { if (gCoordsNext) atomic_store_explicit(&gCoor
 // Empirically upright+full-frame when RotationDegrees = connection.videoRotationAngle + 90 (our buffers are landscape
 // sensor frames). The fig layer cannot see the connection, so adjust in the layer's own update method.
 static IMP gOrigDidUpd; static char gDidUpdType;
-// m12 (measured, 26.3): the sim preview layer turns the buffer by (angle - R) clockwise, but by (180 - angle - R) when its connection is mirrored,
+// Measured on 26.3: the sim preview layer turns the buffer by (angle - R) clockwise, but by (180 - angle - R) when its connection is mirrored,
 // and never mirrors. Device: turn by angle, mirror if videoMirrored. So R = 0 (unmirrored) / 180 - 2*angle (mirrored), and the pump flips the
-// buffer itself (see M12PreviewFlip). m7's "angle + 270" equals R = 0 only for angle 90 (portrait).
+// buffer itself (see M12PreviewFlip). A fixed "angle + 270" equals R = 0 only for angle 90 (portrait).
 static float M12PreviewR(id layer, float conn) {
     BOOL mir = [[[layer valueForKey:@"connection"] valueForKey:@"videoMirrored"] boolValue];
     if (!getenv("M12_NO_PREVIEWMIRROR")) { NSString *key = [NSString stringWithFormat:@"<%@: %p", NSStringFromClass([layer class]), layer];

@@ -37,5 +37,5 @@ yarn-error.*
 *.tsbuildinfo
 
 # generated native folders
-# stuntcam: ios/ is kept in git (the exact native project the spikes built); regenerate with `npx expo prebuild -p ios --clean`
+# stuntcam: ios/ is kept in git (the exact native project the tests run); regenerate with `npx expo prebuild -p ios --clean`
 /android

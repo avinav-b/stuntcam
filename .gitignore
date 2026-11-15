@@ -7,7 +7,6 @@ node_modules/
 .build/
 *.dSYM/
 
-# Added with the prototype import
 # Build outputs (./build.sh, canary/build.sh, fixtures/plain/build.sh; Metro/Flutter caches live in build/ too)
 /results/
 /results

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// m7 auto-run harness: camera (camera_avfoundation) + mobile_scanner. No taps.
+// Auto-run harness: camera (camera_avfoundation) + mobile_scanner. No taps.
 // Env (via SIMCTL_CHILD_*): M7_TEST=all|camera|scanner|stream|audio (default all), M7_AUDIO=1|0 for `audio`.
 import 'dart:async';
 import 'dart:io';
@@ -210,7 +210,7 @@ class _M7AppState extends State<M7App> {
   }
 
   Future<void> scannerTest() async {
-    // m12: QR + EAN-13 from the default scene
+    // QR + EAN-13 from the default scene
     final ctl = MobileScannerController(formats: const [BarcodeFormat.qrCode, BarcodeFormat.ean13]);
     final seen = <String, String>{};
     final got = Completer<String>();

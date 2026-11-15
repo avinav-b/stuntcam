@@ -5,7 +5,7 @@
 #import <objc/message.h>
 #import <dlfcn.h>
 #import <mach-o/dyld.h>
-static NSString *gOut = @"/tmp/simcam-m11/results/app";   // spike output dir
+static NSString *gOut = @"/tmp/simcam-m11/results/app";   // the probe's output dir
 static void note(NSString *s) {
     NSString *p = [NSString stringWithFormat:@"%@/lite.%d.log", gOut, getpid()];
     NSString *line = [NSString stringWithFormat:@"%.3f %@\n", [NSDate date].timeIntervalSince1970, s];

@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
-// Part of simcam.m (single translation unit; included in order): scene v2, virtual device orientation, switchable sources (was m12_scene.inc).
+// Part of simcam.m (single translation unit; included in order): scene v2, virtual device orientation, switchable sources.
 // ============================================================================
-// m12: scene v2 (orientation watermark + QR + EAN-13), virtual device orientation, switchable sources (scene / still image / video file).
-// Included from simcam.m right after the frame-source globals. Off switches: M12_NO_SCENE2 (m10 scene: fixture image + red bar),
-// M12_NO_ORIENT (buffer content fixed to the portrait-device layout, coordinator/gravity follow the UI orientation as in m10).
+// Scene v2 (orientation watermark + QR + EAN-13), virtual device orientation, switchable sources (scene / still image / video file).
+// Included from simcam.m right after the frame-source globals. Off switches: M12_NO_SCENE2 (the plain scene: fixture image + red bar),
+// M12_NO_ORIENT (buffer content fixed to the portrait-device layout, coordinator/gravity follow the UI orientation).
 // ============================================================================
 static double M5AngleFor(long iface, long position);   // defined with the rotation coordinator hooks
 static _Atomic long gDevOrientForced;    // 0 = follow the simulator (UIDevice orientation, else UI), 1..4 = UIDeviceOrientation set by env/control file
 static _Atomic long gDevOrientSeen = 1;  // last valid UIDevice orientation / UI orientation, refreshed on the main thread
-static _Atomic long gUIOrientA = 1;      // m12: atomic mirror of gUIOrient (read from the pump queue)
+static _Atomic long gUIOrientA = 1;      // atomic mirror of gUIOrient (read from the pump queue)
 // the UI orientation for readers off the main thread (coordinator getters, motion ticks): gUIOrient itself is main-only
 static long M5UIOrientAny(void) { return atomic_load_explicit(&gUIOrientA, memory_order_relaxed); }
 static long M12DevOrient(void) { long f = atomic_load(&gDevOrientForced); return f ? f : atomic_load(&gDevOrientSeen); }
@@ -103,7 +103,7 @@ static void M12DrawFill(CGContextRef c, CGImageRef img, double cw, double ch) { 
     double iw = CGImageGetWidth(img), ih = CGImageGetHeight(img), s = MAX(cw / iw, ch / ih);
     M12DrawImg(c, img, CGRectMake((cw - iw * s) / 2, (ch - ih * s) / 2, iw * s, ih * s), NO);
 }
-// w2 e10b: the QR is built off the pump queue, started at activation (m12init). CoreImage's first render in an app compiles Metal
+// The QR is built off the pump queue, started at activation (M12Enqueue). CoreImage's first render in an app compiles Metal
 // functions into that app's own cache (Library/Caches/<bundle>/com.apple.metal); with that cache empty (fresh install, new device)
 // it took 0.2-0.8 s, more on a busy or just-booted sim, and it ran inside the first pump tick, so it delayed the first frame. Until
 // the QR is ready the scene draws its white quiet-zone square without it; barcode detection reruns when it arrives.
@@ -197,7 +197,7 @@ static CVPixelBufferRef M12Render(M5Sess *S) {
     return pb;
 }
 
-// ---- m12 mirroring: flip so that (rotate by `angle`, then this flip) == (mirror after rotating) ; angle 0/180 -> horizontal, 90/270 -> vertical
+// ---- mirroring: flip so that (rotate by `angle`, then this flip) == (mirror after rotating) ; angle 0/180 -> horizontal, 90/270 -> vertical
 static CVPixelBufferRef M12Flip(CVPixelBufferRef src, int angle, VTPixelRotationSessionRef *sess, int *sessAngle) {
     BOOL vert = ((angle % 180) + 180) % 180 == 90;
     if (!*sess || *sessAngle != (vert ? 1 : 2)) {
@@ -245,8 +245,8 @@ static void M12DetectBarcodes(CVPixelBufferRef pb) {
     long g = atomic_load(&gScanGen); if (g == gScanGenDone && gBarcodeDicts) return; gScanGenDone = g;
     static Class RQ, HD; static dispatch_once_t o1;
     dispatch_once(&o1, ^{ dlopen("/System/Library/Frameworks/Vision.framework/Vision", RTLD_NOW); RQ = objc_getClass("VNDetectBarcodesRequest"); HD = objc_getClass("VNImageRequestHandler");
-        // w1: on 17.5 the add_image callback in client/vision.inc fires before Vision's classes are registered, so when we are the
-        // first to load Vision the revision pin was never installed and detection found 0 codes (w1 e2). Install it here too.
+        // On 17.5 the add_image callback in client/vision.inc fires before Vision's classes are registered, so when we are the
+        // first to load Vision the revision pin would never be installed and detection would find 0 codes. Install it here too.
         if (RQ && !getenv("M7_NO_VISIONFIX")) M7VisionInstall(); });
     if (!RQ || !HD) { LOG(@"m12 barcode detect: Vision unavailable"); gBarcodeDicts = @[]; return; }
     id rq = [[RQ alloc] init];
@@ -277,6 +277,6 @@ static void M12DetectBarcodes(CVPixelBufferRef pb) {
         [out addObject:top];
     }
     gBarcodeDicts = out;
-    static int emptyRuns; if (!out.count && ++emptyRuns <= 5) gScanGenDone = -1;   // w1: the scene always has codes; retry before caching none
+    static int emptyRuns; if (!out.count && ++emptyRuns <= 5) gScanGenDone = -1;   // the scene always has codes; retry before caching none
     LOG(@"m12 barcode detect (gen %ld): %lu codes %@ err=%@", g, (unsigned long)out.count, names, e);
 }

@@ -9,7 +9,7 @@
 //   - with TSan/ASan loaded, timeouts are x10.
 // An expired op is a hang, recorded for the next activation. Two hangs of one feature in this process latch it in-process
 // (SCLatched), and the latch error-completes (design §5.4 table) with SC_LATCH_STATUS, which apps get as AVFoundation's
-// generic -11800 with that OSStatus underneath (w2 e9 error map): photo -> every photo not yet encoded fails; movie ->
+// generic -11800 with that OSStatus underneath: photo -> every photo not yet encoded fails; movie ->
 // active recordings stop with it and new ones fail at once; session -> running sessions get a runtime error and stop, and a
 // latched startRunning gets at most one runtime error per 5 s (design §5.4; in between it is stopped without one). Before
 // any session exists a latch means stock (the activation-time latch, below). Not wired yet: no movie op is bracketed with
@@ -56,7 +56,7 @@ static void TRLatch(int fi);                                 // core/trace.inc
 // latched startRunning). Returns YES and stamps the time if one may be posted now.
 static _Atomic uint64_t gSCSessErrAt;
 // M12RuntimeError(SC_LATCH_AUTO): the session latch's stop. Whether it carries the runtime error is decided on the pump queue
-// when it finds a running session, so a latch that fires with no session running doesn't use up the 5 s window (w2 e16).
+// when it finds a running session, so a latch that fires with no session running doesn't use up the 5 s window.
 #define SC_LATCH_AUTO INT_MIN
 static BOOL SCSessionErrorAllowed(void) {
     uint64_t now = clock_gettime_nsec_np(CLOCK_MONOTONIC), prev = atomic_load(&gSCSessErrAt);
@@ -72,9 +72,9 @@ static double gSCScale = 1;
 static int gSCFd = -1, gSCAct;                // events fd (O_APPEND), this activation's number
 static char gSCBuild[32] = "-", gSCPath[1024];
 static int gSCIdx = -1;   // PREPARE 1: which gSCDir events.log opened in (0 state dir, 1 container tmp); this build's marker goes only there
-// W4: `activate` (a timeout, crash or exception during activation) is a feature like the others: two strikes latch the camera.
-// PR B: `motion` (a crash in the CoreMotion stand-in, attributed through the thread-specific feature key below) latches
-// CoreMotion only: it never closes the camera (D6), it only writes latched-motion-<build>.
+// `activate` (a timeout, crash or exception during activation) is a feature like the others: two strikes latch the camera.
+// `motion` (a crash in the CoreMotion stand-in, attributed through the thread-specific feature key below) latches
+// CoreMotion only: it never closes the camera, it only writes latched-motion-<build>.
 #define SC_NFEAT 7
 #define SC_FMOTION 6
 static const char *gSCFeatures[SC_NFEAT] = {"session", "photo", "movie", "provider", "engine", "activate", "motion"};
@@ -82,7 +82,7 @@ static _Atomic int gSCHangs[SC_NFEAT], gSCLatchedNow[SC_NFEAT];
 static int SCFeatureIndex(const char *f) { for (int i = 0; i < SC_NFEAT; i++) if (!strcmp(gSCFeatures[i], f)) return i; return 4; }
 static BOOL SCClosesCamera(int fi) { return fi != SC_FMOTION; }
 
-// ---- the thread-specific feature key (design §5.4 provider path (b); W4 PR B, plan §2.6 "Attributing motion") ----
+// ---- the thread-specific feature key (design §5.4 provider path (b)) ----
 // Created at load. Every motion entry point saves the key's value, sets `motion` and restores the saved value on exit (never
 // clears it, so a value set further up the same thread survives); around the call into the app's handler the key is saved,
 // cleared and restored the same way, so a fault in app code never counts. SCOnSignal reads it first (a lock-free TSD read).
@@ -194,7 +194,7 @@ static void *SCWatchdog(void *arg) {
 typedef struct { uintptr_t lo, hi; } SCRange;
 static SCRange gSCSelf, gSCRelated[12]; static _Atomic int gSCNRelated;
 static struct sigaction gSCOld[32];   // what the full handler chains to
-static struct sigaction gSCPre[32];   // what the minimal (prepare) handler chains to: the handler before activation (plan §2.5)
+static struct sigaction gSCPre[32];   // what the minimal (prepare) handler chains to: the handler before activation
 static const int kSCSigs[] = {SIGSEGV, SIGBUS, SIGILL, SIGABRT, SIGTRAP, SIGFPE};
 #define SC_NSIGS ((int)(sizeof kSCSigs / sizeof *kSCSigs))
 static BOOL SCTextRange(const struct mach_header *mh, intptr_t slide, SCRange *r) {
@@ -205,7 +205,7 @@ static BOOL SCTextRange(const struct mach_header *mh, intptr_t slide, SCRange *r
         }
     return NO;
 }
-// W4: called before the minimal handler goes in (PREPARE 1) and again after PREPARE 2's dlopens. A range is written before the
+// Called before the minimal handler goes in (PREPARE 1) and again after PREPARE 2's dlopens. A range is written before the
 // count that covers it is published, so a handler never reads a half-written range; ranges already cached stay as they are.
 static void SCCacheRanges(void) {
     Dl_info di; const struct mach_header *self = dladdr((const void *)SCCacheRanges, &di) ? di.dli_fbase : NULL;
@@ -249,11 +249,11 @@ static void SCChain(int sig, siginfo_t *si, void *ctx, struct sigaction *old) {
     if (sig != SIGABRT && si && si->si_code != SI_USER && si->si_code != SI_QUEUE) return;
     raise(sig);
 }
-// PR B (plan §2.6 B2): PREPARE 1 counts this build's `motion` strikes in the window and keeps the newest one's epoch and the
+// PREPARE 1 counts this build's `motion` strikes in the window and keeps the newest one's epoch and the
 // latched-motion marker's path next to the events.log in use, so the full handler can write the marker on the second strike
 // itself (async-signal-safe: open, write, futimens). Motion is decided at load, so a marker the next launch's PREPARE 1 wrote
 // would come one launch late. M17_NO_HANDLER_MARKER=1 (ledger L60) skips the write.
-// e29 (review round 2, low 2): written to a temp file next to it (path precomputed by PREPARE 1), its until set, then
+// Written to a temp file next to it (path precomputed by PREPARE 1), its until set, then
 // renamed into place, so the marker never exists with mtime = now (which another process's prune reads as expired).
 // M17_MARKER_INPLACE=1 (ledger L64) writes in place again, as SCWriteMarker does under it.
 static int gSCMotionPrior; static long gSCMotionPriorEpoch; static char gSCMotionMarkerUse[1100], gSCMotionMarkerTmp[1200]; static BOOL gM17NoHandlerMarker;
@@ -269,7 +269,7 @@ static void SCMotionMarkerFromHandler(void) {   // async-signal-safe only
 static void SCOnSignal(int sig, siginfo_t *si, void *ctx) {   // async-signal-safe only
     uintptr_t pc = SCPC(ctx);
     BOOL self = pc >= gSCSelf.lo && pc < gSCSelf.hi;
-    // the feature key first (PR B): a fault in our image on a thread inside a motion entry point is `motion`, not `provider`
+    // the feature key first: a fault in our image on a thread inside a motion entry point is `motion`, not `provider`
     // or an inflight op's feature, and it never closes the camera. An app handler runs with the key cleared (and an app PC).
     const void *tk = atomic_load_explicit(&gSCFeatKeyOn, memory_order_relaxed) ? pthread_getspecific(gSCFeatKey) : NULL;
     const char *op = NULL;
@@ -278,14 +278,14 @@ static void SCOnSignal(int sig, siginfo_t *si, void *ctx) {   // async-signal-sa
     if (self && tk == (const void *)kSCMotion) feature = kSCMotion;
     else if (self) feature = op ? op : "provider";
     else if (op && SCInRelated(pc)) feature = op;
-    // under a debugger a crash is never counted (design §5.4): it may be the user stopping in lldb (review r1)
+    // under a debugger a crash is never counted (design §5.4): it may be the user stopping in lldb
     BOOL traced = atomic_load(&gSCTraced);
     SCEventRaw(!feature ? "crash-other" : traced ? "crash-traced" : "crash", feature, "signal=", sig);
     if (feature == kSCMotion && !traced) SCMotionMarkerFromHandler();
-    TRCrash(sig);   // the op ring to trace-<pid>.txt (W4 e48; async-signal-safe)
+    TRCrash(sig);   // the op ring to trace-<pid>.txt (async-signal-safe)
     SCChain(sig, si, ctx, (sig > 0 && sig < 32) ? &gSCOld[sig] : NULL);
 }
-// W4 minimal handler, installed in PREPARE 1 (plan §2.5, D3). While prepare runs it counts as an `activate` op (design §5.4
+// The minimal handler, installed in PREPARE 1. While prepare runs it counts as an `activate` op (design §5.4
 // path a): a fault on any thread whose PC is in our image or a related image is `crash activate`. Anything else, or any
 // fault once gActRunning is clear, only chains to the handler that was there before activation.
 static _Atomic int gSCPrepRecorded, gSCMinimalOn;
@@ -301,7 +301,7 @@ static BOOL SCIsHandler(const struct sigaction *a, void *fn) { return (a->sa_fla
 static BOOL SCSameAction(const struct sigaction *a, const struct sigaction *b) {
     return a->sa_flags == b->sa_flags && ((a->sa_flags & SA_SIGINFO) ? (void *)a->sa_sigaction == (void *)b->sa_sigaction : a->sa_handler == b->sa_handler);
 }
-// install order (plan A5): read the current handler first, then install ours; if what we replaced differs from the pre-read
+// install order: read the current handler first, then install ours; if what we replaced differs from the pre-read
 // (someone installed in between), chain to that instead. The minimal handler never runs with gSCPre unset.
 static void SCInstallMinimal(void) {
     for (int i = 0; i < SC_NSIGS; i++) {
@@ -313,7 +313,7 @@ static void SCInstallMinimal(void) {
     }
     atomic_store(&gSCMinimalOn, 1);
 }
-// conditional restore (plan §2.5): put back the pre-activation handler only where ours is still current. Something that
+// conditional restore: put back the pre-activation handler only where ours is still current. Something that
 // installed itself on top (a crash SDK during a slow prepare) is left as it is; it chains to the minimal handler, which only
 // chains on. Returns the number of signals restored.
 static int SCRestoreConditional(void) {
@@ -338,11 +338,11 @@ static void SCInstallFull(void) {
     }
 }
 
-// ---- W4: load-time state, markers, the record queue's writer (plan §2.6) ----
+// ---- load-time state, markers, the record queue's writer ----
 // Markers (mtime = until; one past its until is ignored and deleted by the next prepare):
 //   <state>/<bundle>/latched-<build>         the latched camera features; read at load: the camera starts STOCK, no prepare,
-//                                            and CoreMotion is stock (D6)
-//   <state>/<bundle>/latched-motion-<build>  `motion` (PR B): read at load by motion only; the camera is unaffected
+//                                            and CoreMotion is stock
+//   <state>/<bundle>/latched-motion-<build>  `motion`: read at load by motion only; the camera is unaffected
 //   <state>/preflight-fail-<build>           a real preflight failure, until +24 h: read at load by motion only (the camera
 //                                            always runs its own preflight); a passing preflight unlinks it
 // Every location is covered twice: SIMCAM_STATE_DIR and the container-tmp fallback (17.5, where the state dir can't be written).
@@ -399,9 +399,9 @@ static BOOL SCMarkerValidAtLoad(void) {
     for (int i = 0; i < 2; i++) { struct stat st; if (gSCMarker[i][0] && stat(gSCMarker[i], &st) == 0 && st.st_mtime > now) { snprintf(gSCMarkerAtLoad, sizeof gSCMarkerAtLoad, "%s", gSCMarker[i]); return YES; } }
     return NO;
 }
-// PR B (plan §3): CoreMotion is decided once, at load, from markers only. Any valid one of this build's latched-<build> (a
-// camera latch, D6), latched-motion-<build> or preflight-fail-<build>, in either location, with the sentinel on and no clear,
-// makes CoreMotion stock for the process. Markers this process writes later can't change it (D2: a camera activation that
+// CoreMotion is decided once, at load, from markers only. Any valid one of this build's latched-<build> (a
+// camera latch), latched-motion-<build> or preflight-fail-<build>, in either location, with the sentinel on and no clear,
+// makes CoreMotion stock for the process. Markers this process writes later can't change it (a camera activation that
 // fails in this launch keeps the stand-in for the launch). M17_NO_MOTION_MARKERS=1 (ledger L58) ignores them.
 static BOOL SCMotionStockAtLoad(void) {
     if (gSCSentinel != 1 || getenv("M17_NO_MOTION_MARKERS")) return NO;
@@ -439,7 +439,7 @@ static void SCClearAtLoad(void) {
     }
     for (int i = 0; i < 2; i++) { if (gSCDir[i][0]) SCUnlinkLatchMarkers(gSCDir[i], NULL); if (gSCPfPath[i][0]) unlink(gSCPfPath[i]); }
 }
-// e29 (review round 2, low 2): a marker is written to "<dir>/.<name>.tmp-<pid>", its mtime set to the until, then renamed
+// A marker is written to "<dir>/.<name>.tmp-<pid>", its mtime set to the until, then renamed
 // into place. In place, it existed with mtime = now between open(O_TRUNC) and futimens, and another process's PREPARE 1 prune
 // (st_mtime <= now) could unlink it. Temp names start with '.', so no prune, load-time stat or CLI listing matches them.
 // M17_MARKER_INPLACE=1 (ledger L64) writes in place again; M16_SLOW_MARKER_MS=<n> pauses n ms after the content is written,
@@ -468,13 +468,13 @@ static void SCPruneTmp(const char *dir, const char *name, long now) {
     char p[1400]; snprintf(p, sizeof p, "%s/%s", dir, name); struct stat st;
     if (stat(p, &st) == 0 && st.st_ctime < now - 60 && unlink(p) == 0) LOG(@"sentinel: removed a stale marker temp file %s", p);
 }
-// Prune one expired marker (review, L4): a stat, then an unlink by path, could delete a fresh marker that another
+// Prune one expired marker: a stat, then an unlink by path, could delete a fresh marker that another
 // process renamed over the expired one in between. So the file is renamed aside first (".<name>.tmp-prune-<pid>": a temp
 // name, which no reader matches and SCPruneTmp removes after 60 s if this process dies here), re-checked on the renamed
 // inode, and unlinked only if it is still expired; a fresh one goes back (RENAME_EXCL: if a newer marker landed at the path
 // meanwhile, that one stays and ours goes). Remaining window: while it is aside (a few syscalls), a fresh marker is missing
 // from its path, so another process's load-time stat in that instant reads "no marker" for one launch.
-// M16_PRUNE_PAUSE_MS=<n> (e34, pf-prune-kept): pauses n ms after the caller's stat found the marker expired, before the rename,
+// M16_PRUNE_PAUSE_MS=<n> (activation.sh pf-prune-kept): pauses n ms after the caller's stat found the marker expired, before the rename,
 // so a test can rename a fresh marker over it in between (the "kept" branch).
 static BOOL SCPruneExpired(const char *dir, const char *name, const char *p, long now) {
     char aside[1400]; snprintf(aside, sizeof aside, "%s/.%s.tmp-prune-%d", dir, name, getpid());
@@ -487,7 +487,7 @@ static BOOL SCPruneExpired(const char *dir, const char *name, const char *p, lon
     return NO;
 }
 // PREPARE 3: a real preflight failure writes preflight-fail-<build> (until +24 h) next to the events.log in use, as the latch
-// marker; a passing preflight unlinks it in both locations (plan B3)
+// marker; a passing preflight unlinks it in both locations
 static void SCPreflightMarker(BOOL passed, const char *what) {
     if (gSCSentinel == 0) return;
     for (int i = 0; i < 2; i++) {
@@ -512,11 +512,11 @@ static void SCCountStrikes(NSArray *past, NSString *build, long now, int act, in
     for (int i = 0; i < SC_NFEAT; i++) if (counts[i] >= 2) until[i] = e2[i] + 86400;
     if (newest) for (int i = 0; i < SC_NFEAT; i++) newest[i] = e1[i];
 }
-// PREPARE 1 step 6 (plan §2.6): write this build's marker ONLY next to the events.log in use (gSCIdx), so `stuntcam sentinel
+// PREPARE 1 step 6: write this build's marker ONLY next to the events.log in use (gSCIdx), so `stuntcam sentinel
 // clear` (the state dir, and this container-tmp fallback on a booted sim) removes every marker that can latch; unlink it in
 // the other location (one an older engine wrote to both). In both locations, delete every other build's latched-* marker the
 // parsed past no longer supports (swap-back: another build's 20 activations pushed its strikes out).
-// PR B: the same for latched-motion-<build> (motion latched: >= 2 `motion` strikes; it never closes the camera), and a stale
+// The same for latched-motion-<build> (motion latched: >= 2 `motion` strikes; it never closes the camera), and a stale
 // latched-motion-<other build> is deleted like a stale latched-<other build>.
 static void SCMarkersUpdate(NSArray *past, long now, BOOL latched, const char *feats, long until, BOOL mLatched, long mUntil) {
     for (int i = 0; i < 2; i++) {
@@ -543,7 +543,7 @@ static void SCMarkersUpdate(NSArray *past, long now, BOOL latched, const char *f
         }
         closedir(d);
     }
-    // preflight-fail-<any build> past its until, in both locations' sim-level dirs (review; plan §2.6). Unexpired ones of
+    // preflight-fail-<any build> past its until, in both locations' sim-level dirs. Unexpired ones of
     // other builds stay: no event records a preflight failure, so nothing says they are stale, and that build still reads them.
     for (int i = 0; i < 2; i++) {
         char dir[1100]; snprintf(dir, sizeof dir, "%s", gSCPfPath[i]); char *sl = strrchr(dir, '/'); if (!gSCPfPath[i][0] || !sl) continue; *sl = 0;
@@ -557,7 +557,7 @@ static void SCMarkersUpdate(NSArray *past, long now, BOOL latched, const char *f
         closedir(d);
     }
 }
-// the trim (plan A4): only past 4000 lines; the kept 2000 go to a temp file, which replaces events.log only if the file is
+// the trim: only past 4000 lines; the kept 2000 go to a temp file, which replaces events.log only if the file is
 // unchanged since the read (size, mtime, inode), under flock. The record queue appends under the same lock.
 static void SCTrim(void) {
     struct stat st0; if (stat(gSCPath, &st0) != 0) return;
@@ -603,7 +603,7 @@ static int SCTailMaxAct(const char *path) {
     while (*p) { char *nl = strchr(p, '\n'); char *sp = strchr(p, ' '); if (sp && (!nl || sp < nl)) { int a = atoi(sp + 1); if (a > mx) mx = a; } if (!nl) break; p = nl + 1; }
     return mx;
 }
-// the record queue's writer (plan §2.6): this launch's path and activation number if PREPARE 1 published them, else the
+// the record queue's writer: this launch's path and activation number if PREPARE 1 published them, else the
 // load-time state dir, then the container-tmp fallback (mkdir -p each; the first that opens), activation = tail max + 1.
 // Returns the activation number used, 0 if nothing could be written.
 static int SCRecordEvent(const char *kind, const char *feature, const char *detail) {
@@ -680,7 +680,7 @@ static int SCPrepare(void) {
     if (ml && *ml) { SCEventRaw("crash", ml, "manual", -1); SCEventRaw("crash", ml, "manual", -1); }
     long now = time(NULL); int counts[SC_NFEAT]; long until[SC_NFEAT], newest[SC_NFEAT];
     SCCountStrikes(past, @(gSCBuild), now, gSCAct, counts, until, newest);
-    // PR B: this build's motion strikes before this launch, for the full handler's latched-motion marker (B2)
+    // this build's motion strikes before this launch, for the full handler's latched-motion marker
     gSCMotionPrior = counts[SC_FMOTION]; gSCMotionPriorEpoch = newest[SC_FMOTION];
     snprintf(gSCMotionMarkerUse, sizeof gSCMotionMarkerUse, "%s", gSCMotionMarker[gSCIdx]);
     snprintf(gSCMotionMarkerTmp, sizeof gSCMotionMarkerTmp, "%s/.latched-motion-%s.tmp-%d", gSCDir[gSCIdx], gSCBuild, getpid());
@@ -718,7 +718,7 @@ static void SCStart(void) {
     atexit_b(^{ SCEventRaw("exit", "-", "atexit", -1); });
     LOG(@"sentinel: activation %d build %s traced=%d scale=x%.0f events=%s (self %#lx-%#lx, %d related images)", gSCAct, gSCBuild,
         atomic_load(&gSCTraced), gSCScale, gSCPath, (unsigned long)gSCSelf.lo, (unsigned long)gSCSelf.hi, atomic_load(&gSCNRelated));
-    // Conformance hook (W1 tests): SIMCAM_WD_TEST=
+    // Conformance hook (conformance tests): SIMCAM_WD_TEST=
     //   hang        two photo ops that never end (1 s timeout) -> 2 hangs -> in-process latch; next activation latched
     //   pause       a photo op with a 3 s timeout whose work takes 2 s; stop the process from the host for >3 s meanwhile
     //               (kill -STOP <pid>; sleep 10; kill -CONT <pid>) -> no hang

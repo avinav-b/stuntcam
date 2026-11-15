@@ -3,12 +3,12 @@
 # lives under $SIMCAM_HOME, never in the clone.
 #   Why: simulator processes can't see macOS privacy-protected (TCC) folders. From a clone under ~/Documents, ~/Desktop,
 #   ~/Downloads or iCloud Drive, dyld and the apps get "no such file" for the stub, the engine, profiles, media and log
-#   paths, so nothing loads and nothing is logged (measured internally, W1 e1, step 1).
-#   SIMCAM_HOME (default ~/Library/Application Support/stuntcam; readable and writable from sim apps, m11):
+#   paths, so nothing loads and nothing is logged.
+#   SIMCAM_HOME (default ~/Library/Application Support/stuntcam; readable and writable from sim apps):
 #     builds/<hash>/   copies of the engine and stub made by ./build.sh (build/current_*.txt point here)
 #     dev/<hash>/profiles/, dev/<hash>/media/   engine/profiles/ and fixtures/media/, staged by content (hash of the
 #                      files): what $SIMCAM_DEV points at. Clones with different profiles get different dirs, so a sim one
-#                      clone armed never reads another clone's profile (w4 e23b: parallel runs saw each other's flash).
+#                      clone armed never reads another clone's profile (otherwise parallel runs see each other's flash).
 #     dev/profiles/, dev/media/   the latest clone's copies, kept only for the Go CLI's fallback (artifacts.dataFiles);
 #                      scripts never pass these paths to a simulator
 #     logs/            boot logs: logs/bootlogs-<rt>-<HHMMSS>/ (stub.log, dylib-<pid>.log)
@@ -18,7 +18,7 @@
 #     restore-rules/<hash>/   the clone's restore-rules/<xcode build>.json, staged by content like dev/<hash>/ ($SIMCAM_RULES_DIR;
 #                      "" if the clone has none). The hash is the CLI's too (artifacts.RulesHash): sha1 of one "<name> <sha1>"
 #                      line per [0-9]*.json in C order, 12 hex digits. An armed sim's rules never change under it, and
-#                      another clone's or a stale file never feeds the loader's "newest" best guess (w4 e30, M2).
+#                      another clone's or a stale file never feeds the loader's "newest" best guess.
 [[ -n ${_SIMCAM_ENV:-} ]] && return 0; _SIMCAM_ENV=1
 : ${ROOT:=${${(%):-%x}:A:h:h}}
 export SIMCAM_HOME=${SIMCAM_HOME:-$HOME/Library/Application Support/stuntcam}

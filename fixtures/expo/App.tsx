@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// m1b spike: auto-running camera compatibility probe.
+// Auto-running camera compatibility probe.
 // Test selection: launch arg `-CAMTEST vc|expo|vcfull|vclidar|…` (NSUserDefaults, read via RN Settings).
 // Every result line is prefixed `M1B|` and also mirrored to Documents/m1b.log
 // so the host can read it from the app container without Metro.
@@ -342,7 +342,7 @@ function CycleTest({ lib }: { lib: 'vc' | 'expo' }) {
 }
 
 
-// ---------------------------------------------------------------- m12: orientation (preview screenshot + photo + movie), barcodes
+// ---------------------------------------------------------------- orientation (preview screenshot + photo + movie), barcodes
 const CAM = ((Settings.get('CAM') as string | undefined) ?? 'back') as 'back' | 'front';
 function VcOrient() {
   const device = useCameraDevice(CAM);
@@ -426,7 +426,7 @@ function ExpoOrient() {
 // ---------------------------------------------------------------- vcfull: exhaustive, generic VisionCamera checks
 // Written from fixtures/expo/README.md ("vcfull") and VisionCamera's own TypeScript types. Every check is a step()
 // named vcf.*; the full list with its denominator is in the README. The pre-registered failures are VCF_EXPECTED and the
-// pre-registered n/a passes VCF_EXPECTED_NA (review r3): anything else is reported as unexpected.
+// pre-registered n/a passes VCF_EXPECTED_NA: anything else is reported as unexpected.
 type Sz = { width: number; height: number };
 const VCF_EXPECTED = new Set([
   'vcf.video.4k60.fps', // the simulator's software encoder manages 16-32 fps at 4K60 (v1.0 cap)
@@ -972,7 +972,7 @@ function VcFull() {
         return 'no onError in any stage';
       });
       } catch (e) {
-        // a call outside step() threw: say so, and still count and summarise what ran (review r3)
+        // a call outside step() threw: say so, and still count and summarise what ran
         L(`FAIL vcf.aborted ${errStr(e)}`);
         setStage(null);
       }
@@ -1020,7 +1020,7 @@ function VcFull() {
   );
 }
 
-// ---------------------------------------------------------------- VisionCamera: the back LiDAR depth device (w4 e62, e61 F4)
+// ---------------------------------------------------------------- VisionCamera: the back LiDAR depth device
 // `-CAMTEST vclidar`: pick the LiDAR device as VisionCamera 5 exposes it (by `type === 'lidar-depth'`, and what
 // `useCameraDevice('back', { physicalDevices: ['lidar-depth'] })` returns), mount <Camera> with a photo output, take a
 // photo (default; then `enableDepthData: true`, which an app should only ask for when `supportsDepthDataDelivery`), then

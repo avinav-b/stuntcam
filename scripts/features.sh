@@ -1,6 +1,6 @@
 #!/bin/zsh
 # SPDX-License-Identifier: Apache-2.0
-# features.sh <rt> — do the camera features stuntcam can't deliver read as unsupported? (design §6.5; L53, L54, w4 e23b)
+# features.sh <rt> — do the camera features stuntcam can't deliver read as unsupported? (design §6.5; L53, L54)
 #   On a sim armed by scripts/boot.sh <rt> stub, runs the features probe (fixtures/features-probe) twice through its
 #   drive.sh: one read-out (`read`) and one AVCam-style "enable if supported" launch (`feature ifsupported`, back-wide).
 #   FAIL if, on any camera the read-out lists:

@@ -14,7 +14,7 @@ static void M5Tick(M5Sess *S) {
             CFRelease(sb); CVPixelBufferRelease(pb);
         } else if ([k.kind isEqualToString:@"preview"]) {
             CVPixelBufferRef pb = M5Convert(k, src);
-            NSArray *note = M12OrientOn() ? M12PreviewNote(k.sinkID) : nil;   // m12: mirrored preview (front camera), as on a device
+            NSArray *note = M12OrientOn() ? M12PreviewNote(k.sinkID) : nil;   // mirrored preview (front camera), as on a device
             if ([note[1] boolValue]) { VTPixelRotationSessionRef fs = k.flipSess; int fk = k.flipKind; CVPixelBufferRef f = M12Flip(pb, [note[0] intValue], &fs, &fk); k.flipSess = fs; k.flipKind = fk; CVPixelBufferRelease(pb); pb = f; }
             M5PreviewPush(S.obj, k, pb);
             CVPixelBufferRelease(pb);
@@ -31,12 +31,12 @@ static void M5Tick(M5Sess *S) {
         }
     }
     NSArray *recs; @synchronized (S.recs) { recs = S.recs.allValues; }
-    for (M5Rec *r in recs) @synchronized (r) { M5RecAppend(r, src, pts); }   // m8: per-recording lock (stop races the pump)
+    for (M5Rec *r in recs) @synchronized (r) { M5RecAppend(r, src, pts); }   // per-recording lock (stop races the pump)
     CVPixelBufferRelease(src);
 }
 
 static void M5ReadActiveFormat(M5Sess *S) {
-    // m8: the fig source configuration carries no format in the simulator ("/0x0, ?-?"); read the genuine AVCaptureDevice behind the
+    // the fig source configuration carries no format in the simulator ("/0x0, ?-?"); read the genuine AVCaptureDevice behind the
     // connection instead. sourceID is the string "<AVCaptureFigVideoDevice 0x...>" — matched against discovered devices (no pointer deref).
     S.fmtW = kSrcW; S.fmtH = kSrcH; S.fps = 30;
     if (getenv("M8_NO_FORMATDIMS")) return;
@@ -53,7 +53,7 @@ static void M5ReadActiveFormat(M5Sess *S) {
         if (!dd) continue;
         CMVideoDimensions dm = CMVideoFormatDescriptionGetDimensions(dd.activeFormat.formatDescription);
         if (dm.width > 0) { S.fmtW = dm.width; S.fmtH = dm.height; }
-        S.position = dd.position;   // m12: front/back decides the buffer content rotation
+        S.position = dd.position;   // front/back decides the buffer content rotation
         CMTime mfd = dd.activeVideoMinFrameDuration; if (CMTIME_IS_VALID(mfd) && mfd.value > 0) S.fps = MIN(60, round(1.0 / CMTimeGetSeconds(mfd)));
         LOG(@"m8 format read: device=%@ %dx%d minFD=%.4f", dd.localizedName, S.fmtW, S.fmtH, CMTimeGetSeconds(mfd));
         break;
@@ -74,7 +74,7 @@ static void M5WireSinks(M5Sess *S) {
             id ow = M5KVC(cc, @"outputWidth"), oh = M5KVC(cc, @"outputHeight"), of = M5KVC(cc, @"outputFormat");
             if ([ow intValue] > 0 && [oh intValue] > 0) { k.w = [ow intValue]; k.h = [oh intValue]; }
             if ([of unsignedIntValue]) k.fmt = [of unsignedIntValue];
-            // m10: 17.5 carries the connection angle as `orientation` (enum), 26/27 as `rotationDegrees` (m6 M6Deg); m7 only read the latter
+            // 17.5 carries the connection angle as `orientation` (enum), 26/27 as `rotationDegrees`; M6Deg reads both
             if ([cls containsString:@"VideoData"]) { k.kind = @"vdo"; k.vdoRot = M6Deg(cc, @"rotationDegrees", @"orientation", S.position); k.mirrored = [M5KVC(cc, @"mirroringEnabled") boolValue]; }
             else if ([cls containsString:@"Preview"]) { k.kind = @"preview"; k.fmt = kCVPixelFormatType_32BGRA; k.w = kSrcW; k.h = kSrcH; k.rotation = [M5KVC(cc, @"rotationDegrees") floatValue]; if (getenv("M5_PREVIEW_ROT")) k.rotation = atof(getenv("M5_PREVIEW_ROT")); }
             else if ([cls containsString:@"Metadata"]) k.kind = @"metadata";
@@ -98,11 +98,11 @@ static void M5WireSinks(M5Sess *S) {
 }
 static void M5StartPump(M5Sess *S) {
     double fps = S.fps > 0 ? S.fps : 30;
-    if (S.timer && gPumpFps == fps) return;   // m8: restart at the active format's frame rate
+    if (S.timer && gPumpFps == fps) return;   // restart at the active format's frame rate
     if (S.timer) { dispatch_source_cancel(S.timer); S.timer = nil; }
     gPumpFps = fps;
     S.timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, gPumpQ);
-    // first tick 10 ms after start (was 100 since m5): w2 e11 measured 100/30/10/0 ms on 26.3 + 27.0, 32 launches, 0 enqueue
+    // first tick 10 ms after start: 100/30/10/0 ms measured on 26.3 + 27.0, 32 launches, 0 enqueue
     // errors or dropped frames at any value; 10 ms gives first frames ~100 ms sooner and 0 adds nothing. SIMCAM_FIRST_TICK_MS overrides.
     static long firstMs = -1; if (firstMs < 0) { const char *f = getenv("SIMCAM_FIRST_TICK_MS"); firstMs = f ? MAX(0, atol(f)) : 10; }
     dispatch_source_set_timer(S.timer, dispatch_time(DISPATCH_TIME_NOW, firstMs * NSEC_PER_MSEC), (uint64_t)(NSEC_PER_SEC / fps), 0);
@@ -125,7 +125,7 @@ static OSStatus sess_SetConfiguration(CMBaseObjectRef s, id config) {
     return 0;
 }
 static OSStatus sess_StartRunning(CMBaseObjectRef s) {
-    // w4 e44 (review L4): a stop of this session still waiting for photo callbacks (sess_StopRunning) is reported
+    // A stop of this session still waiting for photo callbacks (sess_StopRunning) is reported
     // first, so AVF never gets this DidStartRunning before that DidStopRunning
     if (M40FlushStop(s)) LOG(@"session %p StartRunning: a deferred stop was outstanding; reported it first", s);
     int op = SCOpBegin("session", 2.0);
@@ -134,7 +134,7 @@ static OSStatus sess_StartRunning(CMBaseObjectRef s) {
     LOG(@"session %p StartRunning (cid=%lld)", s, cid);
     dispatch_sync(gPumpQ, ^{
         // a start during an interruption ends it here: this DidStartRunning is the one AVF waits for, and a second one from
-        // M12EndInterrupt would restart a session AVF thinks is running (then it forwards none of its stops; w3 e20)
+        // M12EndInterrupt would restart a session AVF thinks is running (then it forwards none of its stops)
         if (S.interrupted && !getenv("M14_OLD_ENDINT")) { LOG(@"session %p started while interrupted: interruption over", s); S.interrupted = NO; }
         S.running = YES;
         M5SessPost(s, @"ConfigurationDidBecomeLive", @{@"ConfigurationID": @(cid)});
@@ -159,8 +159,8 @@ static OSStatus sess_StopRunning(CMBaseObjectRef s) {
     LOG(@"session %p StopRunning", s);
     dispatch_sync(gPumpQ, ^{
         // a stop during an interruption ends it for this session: AVF posts InterruptionEnded on the DidStopRunning below, and
-        // M12EndInterrupt must not restart a session the app stopped (it did: AVF took the unasked DidStartRunning and never
-        // forwarded the app's later start or stop, so the engine pumped until teardown; w3 e20, 6/6 on 26.3 and 27.0)
+        // M12EndInterrupt must not restart a session the app stopped (otherwise AVF takes the unasked DidStartRunning and never
+        // forwards the app's later start or stop, so the engine pumps until teardown; 6 of 6 runs on 26.3 and 27.0)
         if (S.interrupted && !getenv("M14_OLD_ENDINT")) { LOG(@"session %p stopped while interrupted: not restarted when the interruption ends", s); S.interrupted = NO; }
         S.running = NO;
         M5UpdateMic(S);
@@ -172,7 +172,7 @@ static OSStatus sess_StopRunning(CMBaseObjectRef s) {
     // session op, so a slow encode isn't counted as a session hang. No deadlock: photo blocks only post asynchronously.
     BOOL drain = !getenv("M13_NO_PHOTODRAIN");   // off-switch: negative control for the canary's photo-then-stop (L51)
     if (drain) dispatch_sync(M5PhotoQ(), ^{});
-    // w4 e40 (L66, fig/session_state.inc): and after AVF has run their delegates' didFinishCapture. From a private queue, so
+    // ledger L66 (fig/session_state.inc): and after AVF has run their delegates' didFinishCapture. From a private queue, so
     // AVF's stopRunning thread waits on its own condition, holding none of its locks, while the delegate queue catches up.
     // Not on a photo delegate queue, main included (M40OnDelegateQueue): the callbacks it would wait for run there after it.
     if (drain && !getenv("M40_OLD_STOP")) {
@@ -180,7 +180,7 @@ static OSStatus sess_StopRunning(CMBaseObjectRef s) {
         if (M40OnDelegateQueue()) { if (M40HasPending(s)) LOG(@"session %p StopRunning on a photo delegate queue (%s): not waiting for its callbacks", s, pthread_main_np() ? "main thread" : "marked queue"); }
         else sids = M40BeginStop(s, &stopId);
         if (sids && getenv("M54_FLUSH_RACE")) {
-            // test fault (W4 e54): a start's flush lands between M40BeginStop and the waiter's dispatch; it must return only
+            // test fault: a start's flush lands between M40BeginStop and the waiter's dispatch; it must return only
             // after this stop's DidStopRunning is queued
             long posted0 = atomic_load(&gM40StopsPosted);
             CFRetain(s);
@@ -196,7 +196,7 @@ static OSStatus sess_StopRunning(CMBaseObjectRef s) {
             CFRetain(s);
             long lateMs = getenv("M59_LATE_WAITER") ? atol(getenv("M59_LATE_WAITER")) : 0;
             dispatch_async(M40StopQ(s), ^{
-                // test fault (W4 e59): the waiter runs <ms> late, as if starved of CPU, past a start's kM40WaitS flush bound
+                // test fault: the waiter runs <ms> late, as if starved of CPU, past a start's kM40WaitS flush bound
                 if (lateMs > 0) { usleep((useconds_t)lateMs * 1000); LOG(@"M59_LATE_WAITER: session %p stop waiter ran %ld ms late", s, lateMs); }
                 uint64_t t0 = clock_gettime_nsec_np(CLOCK_MONOTONIC);
                 BOOL flushed = NO;
@@ -206,7 +206,7 @@ static OSStatus sess_StopRunning(CMBaseObjectRef s) {
                 else if (left) LOG(@"session %p StopRunning: %lu photo(s) without didFinishCapture after %.1f s; stop reported anyway", s, (unsigned long)left, kM40WaitS);
                 else LOG(@"session %p StopRunning: in-flight photo callbacks done after %.1f ms", s, ms);
                 M5SessPost(s, @"DidStopRunning", nil);
-                M40EndStop(stopId);   // after the post: a start's flush waits for this (W4 e54)
+                M40EndStop(stopId);   // after the post: a start's flush waits for this
                 dispatch_async(gPumpQ, ^{ CFRelease(s); });   // a last release finalizes, which syncs to the pump queue
             });
             return 0;
@@ -246,7 +246,7 @@ static OSStatus sess_FileStart(CMBaseObjectRef s, CFStringRef sinkID, id setting
     NSString *ft = M5KVC(settings, @"outputFileType") ?: AVFileTypeQuickTimeMovie;
     // movie in the portrait-device orientation: landscape buffer + rotation transform (like a real device)
     float rot = M6Deg(settings, @"videoRotationDegrees", @"videoOrientation", S.position);
-    r.rot = (int)rot; r.mirror = M12OrientOn() && [M5KVC(settings, @"videoMirrored") boolValue];   // m12
+    r.rot = (int)rot; r.mirror = M12OrientOn() && [M5KVC(settings, @"videoMirrored") boolValue];   // mirrored only with the virtual orientation on
     r.w = S.fmtW ?: kSrcW; r.h = S.fmtH ?: kSrcH;
     if (r.w != kSrcW || r.h != kSrcH) { M5Sink *cv = [M5Sink new]; cv.w = r.w; cv.h = r.h; cv.fmt = '420v'; r.conv = cv; }
     NSDictionary *vset = M5KVC(settings, @"videoSettings"); NSString *codec = vset[AVVideoCodecKey];
@@ -262,7 +262,7 @@ static OSStatus sess_FileStart(CMBaseObjectRef s, CFStringRef sinkID, id setting
     r.adaptor = [AVAssetWriterInputPixelBufferAdaptor assetWriterInputPixelBufferAdaptorWithAssetWriterInput:in sourcePixelBufferAttributes:nil];
     if ([S.audioMovieSinks containsObject:r.sinkID] && r.writer && !getenv("M6_NO_MIC")) {
         double rate = gMicASBD.mSampleRate > 0 ? gMicASBD.mSampleRate : 48000;
-        // m8: AVF's audioSettings, with rate/channels matched to our source (tone/mic) and no channel layout
+        // AVF's audioSettings, with rate/channels matched to our source (tone/mic) and no channel layout
         NSMutableDictionary *as = [M5KVC(settings, @"audioSettings") mutableCopy];
         if (as) { as[AVSampleRateKey] = @(rate); as[AVNumberOfChannelsKey] = @1; [as removeObjectForKey:AVChannelLayoutKey]; }
         NSDictionary *def = @{AVFormatIDKey: @(kAudioFormatMPEG4AAC), AVSampleRateKey: @(rate), AVNumberOfChannelsKey: @1, AVEncoderBitRateKey: @(64000)};
@@ -284,9 +284,9 @@ static OSStatus sess_FileStart(CMBaseObjectRef s, CFStringRef sinkID, id setting
 }
 // slot 7: FileSinkStopRecording(session, sinkID)
 static OSStatus M12StopRec(CMBaseObjectRef s, CFStringRef sinkID, int stopStatus);
-// w2 probe: SIMCAM_TEST_MOVIE_ERR=<status> makes every app-requested stop report that status (maps Fig statuses to AVF errors)
+// test probe: SIMCAM_TEST_MOVIE_ERR=<status> makes every app-requested stop report that status (maps Fig statuses to AVF errors)
 static OSStatus sess_FileStop(CMBaseObjectRef s, CFStringRef sinkID) { static int me; static dispatch_once_t o; dispatch_once(&o, ^{ me = getenv("SIMCAM_TEST_MOVIE_ERR") ? atoi(getenv("SIMCAM_TEST_MOVIE_ERR")) : 0; }); return M12StopRec(s, sinkID, me); }
-// m12: stopStatus != 0 = stopped by an interruption: the file is finished normally but reported with that status (device: AVErrorSessionWasInterrupted + AVErrorRecordingSuccessfullyFinishedKey)
+// stopStatus != 0 = stopped by an interruption: the file is finished normally but reported with that status (device: AVErrorSessionWasInterrupted + AVErrorRecordingSuccessfullyFinishedKey)
 static OSStatus M12StopRec(CMBaseObjectRef s, CFStringRef sinkID, int stopStatus) {
     M5Sess *S = M5S(s);
     M5Rec *r; @synchronized (S.recs) { r = S.recs[(__bridge NSString *)sinkID]; }

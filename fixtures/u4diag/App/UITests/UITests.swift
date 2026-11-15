@@ -13,7 +13,7 @@ final class M11UITests: XCTestCase {
         app.launch()
         waitDone(app, "")
     }
-    // w4 e42: a test that inserts its own library ($U4MARK_LIB in the runner's environment, TEST_RUNNER_U4MARK_LIB); both it and
+    // a test that inserts its own library ($U4MARK_LIB in the runner's environment, TEST_RUNNER_U4MARK_LIB); both it and
     // stuntcam must load in the app
     func testOwnInsert() throws {
         let env = ProcessInfo.processInfo.environment
@@ -25,7 +25,7 @@ final class M11UITests: XCTestCase {
         waitDone(app, "-OWN")
         print("M11-UITEST-OWN launchEnvironment after launch: \(app.launchEnvironment["DYLD_INSERT_LIBRARIES"] ?? "-")")
     }
-    // w4 e42: activate() on an app that isn't running launches it
+    // activate() on an app that isn't running launches it
     func testActivate() throws {
         let app = XCUIApplication()
         app.terminate()

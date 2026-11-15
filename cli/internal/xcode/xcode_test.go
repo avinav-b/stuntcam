@@ -52,7 +52,7 @@ func TestRules(t *testing.T) {
 	if f, v := Rules(d, ""); filepath.Base(f) != "27A9275.json" || v {
 		t.Fatalf("not recorded -> newest: %q %v", f, v)
 	}
-	// the loader's notion of a usable file (w4 e30): no "rules", or not JSON, is neither verified nor a best guess
+	// the loader's notion of a usable file: no "rules", or not JSON, is neither verified nor a best guess
 	os.WriteFile(filepath.Join(d, "26E5.json"), []byte(`{"proto": 1}`), 0o644)
 	if f, v := Rules(d, "26E5"); filepath.Base(f) != "27A9275.json" || v {
 		t.Fatalf("no rules key: %q %v", f, v)
@@ -97,7 +97,7 @@ func TestRunTimeout(t *testing.T) {
 	}
 }
 
-// a grandchild holding stdout open must not outlast the timeout (review r2 L-a)
+// a grandchild holding stdout open must not outlast the timeout
 func TestRunTimeoutGrandchild(t *testing.T) {
 	old := Timeout
 	defer func() { Timeout = old }()

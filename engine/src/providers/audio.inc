@@ -2,7 +2,7 @@
 // Part of simcam.m (single translation unit; included in order): movie audio, synthetic audio source.
 
 // ---- movie --------------------------------------------------------------------
-// ---- m6: audio. The simulator FigCaptureSession never captures audio (StartRunning/StopRunning/FileSink* are one shared stub),
+// ---- audio. The simulator FigCaptureSession never captures audio (StartRunning/StopRunning/FileSink* are one shared stub),
 // so the mic is captured in-process with an AudioQueue (CoreSimulator routes it to the Mac microphone) and fed to (a) our movie
 // writer's AAC input and (b) audio data sinks (LocalQueue), all on the host clock like the video frames.
 #import <AudioToolbox/AudioToolbox.h>
@@ -41,10 +41,10 @@ static void M5AudioSessionPrepare(void) {
     e = nil; [as setActive:YES error:&e];
     LOG(@"audio session active err=%@ rate=%.0f inputs=%@", e, as.sampleRate, [as.currentRoute.inputs valueForKey:@"portName"]);
 }
-// ---- m7: synthetic audio source (default). M7_AUDIO_SRC = tone (default) | silence | mic
+// ---- synthetic audio source (default). M7_AUDIO_SRC = tone (default) | silence | mic
 static dispatch_source_t gToneTimer; static double gTonePhase; static long gToneBufs; static int gAudioSrc; // 0 tone 1 silence 2 mic
-// w1: the tone state (timer, counters, gMicFmt) is only touched on gToneQ: start and stop run there synchronously, so a stop/start
-// can no longer free gMicFmt under a still-running timer handler, and the counter read is not a race (TSan, w1 e5).
+// The tone state (timer, counters, gMicFmt) is only touched on gToneQ: start and stop run there synchronously, so a stop/start
+// can't free gMicFmt under a still-running timer handler, and the counter read is not a race (TSan).
 static dispatch_queue_t gToneQ;
 static dispatch_queue_t M7ToneQ(void) { static dispatch_once_t o; dispatch_once(&o, ^{ gToneQ = dispatch_queue_create("m7.tone", DISPATCH_QUEUE_SERIAL); }); return gToneQ; }
 static int M7AudioSrcWanted(void) {

@@ -2,18 +2,18 @@
 // simcam loader (libsimcamloader.dylib): dlopened by the frozen boot stub from the path in $SIMCAM_SIM_DIR/current, so it can
 // change without a reboot (design §4.1, B-MF4). libSystem only (it runs inside the stub's constructor). In app processes
 // (an executable in a .app bundle, in the device's data dir or an Xcode build-products dir, not under the runtime root) it:
-//   1. restores what Xcode/XCTest would have inserted (the boot env's DYLD_INSERT_LIBRARIES displaced it) [m11]:
+//   1. restores what Xcode/XCTest would have inserted (the boot env's DYLD_INSERT_LIBRARIES displaced it):
 //      XCTestBundleInjectPath set (hosted tests)  -> exactly that list;
 //      else XCODE_SCHEME_NAME set (UI-test target) -> the rules file's "ui-test-target" libs;
 //      else Xcode-launched (MTC_/PERFC_/IDE_ vars, DYLD_LIBRARY_PATH in DerivedData) -> its "xcode-run" libs.
 //      The rules file is <rules_dir>/<xcode_build>.json, the build being the one `stuntcam up` (or scripts/boot.sh) recorded in
 //      $SIMCAM_SIM_DIR/config.json, and rules_dir the per-content dir it staged ($SIMCAM_HOME/restore-rules/<hash>/, so an
-//      armed sim's rules never change under it; w4 e30, M2): under ⌘R nothing in the app names the launching Xcode, so the arm-time record is the
-//      source (w4 e26). No record or no file for that build: the newest rules file (else the built-in 27A266a rules) plus ONE
+//      armed sim's rules never change under it): under ⌘R nothing in the app names the launching Xcode, so the arm-time record is the
+//      source. No record or no file for that build: the newest rules file (else the built-in 27A266a rules) plus ONE
 //      line, "restore rules unverified for Xcode <build>; …" (design §4.1 "Which Xcode's libs", B-MF5).
 //      Never dlopened, in any rule or the chain: libraries that only work when inserted at launch (sanitizer runtimes
 //      libclang_rt.*, libgmalloc). A sanitized app links its own runtime; dlopening the test bundle's copy aborts ASan and
-//      maps a second TSan (w4 e26). Nor a second copy of a library whose basename is already mapped from another path. Both
+//      maps a second TSan. Nor a second copy of a library whose basename is already mapped from another path. Both
 //      are logged in one line, "skipped (must load at launch, or a second copy)"; a chain entry skipped as a second copy is
 //      also said on stderr (the chain is the user's own list).
 //      SIMCAM_XCODE_LIBS=0 skips all restores; SIMCAM_MTC=0 skips MTC.
@@ -25,7 +25,7 @@
 //   3. dlopens the engine: $SIMCAM_DYLIB, else libsimcam.dylib next to this loader (a build dir holds a matching pair).
 //      Not in *-Runner.app (UI-test runners) or app extensions (.appex).
 //   4. dlopens each line of the chain file ($SIMCAM_CHAIN, else $SIMCAM_SIM_DIR/chain.txt), so tools that arrive after boot
-//      can still add libraries without a reboot [m11 1e]. Lines starting with '#' and our own libraries (libsimcam*) are skipped.
+//      can still add libraries without a reboot. Lines starting with '#' and our own libraries (libsimcam*) are skipped.
 // SIMCAM=0 -> nothing. SIMCAM_STUB_LOG=<file> logs; SIMCAM_STUB_ENVDUMP=1 also logs the whole env.
 #include <stdlib.h>
 #include <string.h>
@@ -160,7 +160,7 @@ static int jstr(const char *p, char *out, size_t n) {   // a string value into o
             char c = *++p;
             if (c == 'n') u[0] = '\n'; else if (c == 't') u[0] = '\t'; else if (c == 'r') u[0] = '\r';
             else if (c == 'b') u[0] = '\b'; else if (c == 'f') u[0] = '\f';
-            else if (c == 'u') {   // Go's encoder writes \u0026 for '&' unless told not to (w4 e30, L5)
+            else if (c == 'u') {   // Go's encoder writes \u0026 for '&' unless told not to
                 int cp = jhex4(p + 1); if (cp < 0) { out[k] = 0; return 0; }
                 p += 4;
                 if (cp >= 0xD800 && cp < 0xDC00 && p[1] == '\\' && p[2] == 'u') {   // a surrogate pair
@@ -193,7 +193,7 @@ static const char *jget(const char *obj, const char *key) {   // the value of ke
 }
 static const char *jfirst(const char *arr) { arr = jws(arr); if (*arr != '[') return NULL; arr = jws(arr + 1); return *arr == ']' ? NULL : arr; }
 static const char *jnext(const char *el) { const char *p = jskip(el); if (!p) return NULL; p = jws(p); return *p == ',' ? jws(p + 1) : NULL; }
-// the whole file into buf (NUL-terminated); -1 if unreadable or if it fills the buffer (it may be truncated: w4 e30, L4)
+// the whole file into buf (NUL-terminated); -1 if unreadable or if it fills the buffer (it may be truncated)
 static ssize_t slurp(const char *path, char *buf, size_t n) {
     buf[0] = 0;
     int fd = open(path, O_RDONLY | O_CLOEXEC); if (fd < 0) return -1;
@@ -224,7 +224,7 @@ static void readcfg(void) {         // once per process, on first use
     if (cfgdone) return; cfgdone = 1;
     const char *sd = getenv("SIMCAM_SIM_DIR"); if (!sd || !*sd) return;
     snprintf(simdir, sizeof simdir, "%s", sd);
-    for (size_t l = strlen(simdir); l > 1 && simdir[l - 1] == '/'; l--) simdir[l - 1] = 0;   // ".../sims/<udid>/" (w4 e30, L6)
+    for (size_t l = strlen(simdir); l > 1 && simdir[l - 1] == '/'; l--) simdir[l - 1] = 0;   // ".../sims/<udid>/": trailing slashes dropped
     char cf[1100]; snprintf(cf, sizeof cf, "%s/config.json", simdir);
     if (slurp(cf, cfgbuf, sizeof cfgbuf) <= 0 || !jskip(cfgbuf)) { cfgbuf[0] = 0; cfgbad = access(cf, F_OK) == 0; slog("no readable config.json (Xcode build not recorded): ", cf); return; }
     const char *v = jget(cfgbuf, "proto"); int proto = v ? atoi(v) : 0;
@@ -376,7 +376,7 @@ __attribute__((constructor)) static void simcam_loader(void) {
             strncpy(seen[ns], e, 1023); seen[ns++][1023] = 0;
             if (strstr(e, "libsimcamstub") || strstr(e, "libsimcamloader")) continue;
             // runtime-relative entries (/usr/lib/libRPAC.dylib) get the runtime root; everything else (DerivedData anywhere, incl.
-            // /Volumes, /private/var, /tmp; paths already under the root) loads as given (review r1)
+            // /Volumes, /private/var, /tmp; paths already under the root) loads as given
             snprintf(p, sizeof p, "%s", e);
             if (root && (!strncmp(e, "/usr/", 5) || !strncmp(e, "/System/", 8)) && strncmp(e, root, strlen(root))) {
                 char q[1024]; snprintf(q, sizeof q, "%s%s", root, e);

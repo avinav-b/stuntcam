@@ -71,7 +71,7 @@ func regular(p string) bool {
 }
 
 // ErrSymlink: a component of the fallback path inside the container is a symlink; the CLI never follows one out of the
-// container (the engine would), so that location is reported as not checked (review 6).
+// container (the engine would), so that location is reported as not checked.
 var ErrSymlink = errors.New("a symlink in the container's tmp/simcam-state path (not followed)")
 
 // linked reports whether <container>/tmp, Root or Dir exists as something other than a real directory (a symlink).
@@ -120,7 +120,7 @@ func (s FallbackState) Empty() bool {
 // Latches describes what in the fallback latches or stocks the given build's next launch ("" = nothing). Markers count at
 // every launch (the engine checks both locations at load), so their features are returned; features counted in the fallback
 // events.log only apply if the app falls back again (the engine reads that log only when it can't open its state dir), so
-// they are described as such and not returned (review 4).
+// they are described as such and not returned.
 func (s FallbackState) Latches(build string, now time.Time) (desc string, feats []string) {
 	var parts []string
 	if f := s.App.LatchedFeatures(); len(f) > 0 {
@@ -150,7 +150,7 @@ func (f Fallback) Clear(why string) ([]string, error) {
 		return nil, ErrSymlink
 	}
 	// the clear line first, as the engine's SCClearAtLoad does: an app launching meanwhile then sees the clear before the
-	// markers go, instead of re-latching from the old records after they went (review 2)
+	// markers go, instead of re-latching from the old records after they went
 	if p := filepath.Join(f.Dir, "events.log"); realDir(f.Dir) && regular(p) {
 		if err := AppendClear(p, why, false); err != nil {
 			errs = append(errs, err)
@@ -188,7 +188,7 @@ func (f Fallback) Clear(why string) ([]string, error) {
 
 // AppendClear appends the clear line to an events.log as the engine's SCAppendLocked appends: under flock(LOCK_EX), and only
 // to the inode the path still names (a trim renames a shorter copy over the log; a line written to the old inode would be
-// lost and the kept records would re-latch the app; review 3). create: make the file if missing (the state dir; never
+// lost and the kept records would re-latch the app). create: make the file if missing (the state dir; never
 // in an app's container). Never follows a symlink.
 func AppendClear(path, why string, create bool) error {
 	line := fmt.Sprintf("%d 0 clear - - %s\n", time.Now().Unix(), strings.ReplaceAll(why, "\n", " "))
@@ -218,7 +218,7 @@ func AppendClear(path, why string, create bool) error {
 }
 
 // LockWait bounds the wait for events.log's lock: an app stopped inside its locked append or trim (a debugger breakpoint,
-// a suspended app) must not hang the recovery command forever (review r2 LOW 1).
+// a suspended app) must not hang the recovery command forever.
 var LockWait = 5 * time.Second
 
 func lockWait(f *os.File, wait time.Duration) error {

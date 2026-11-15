@@ -1,7 +1,7 @@
 #!/bin/zsh
 # SPDX-License-Identifier: Apache-2.0
-# drive.sh <rt: 263|27> <inj: boot|none> <tag> read | feature <feature> [camera] — one features-probe launch (w4 e22)
-#   XENV="VAR=val ..." per-launch engine settings; MOVIE_SECONDS=<s> movie length (w4 e23b)
+# drive.sh <rt: 263|27> <inj: boot|none> <tag> read | feature <feature> [camera] — one features-probe launch
+#   XENV="VAR=val ..." per-launch engine settings; MOVIE_SECONDS=<s> movie length
 #   inj=boot: the sim was booted by scripts/boot.sh <rt> stub (engine log copied from the boot log dir); none: booted plainly
 #   UDID: $SIMCAM_UDID_<rt>. Writes $SIMCAM_RESULTS/features-<rt>-<inj>-<what>-<tag>/: app.log, host.log, dylib.log
 #   Waits for END (90 s at most), or for the app to go away (crash: the console closes; host.log says so).
@@ -12,8 +12,8 @@ B=dev.simcam.e22.featuresprobe; WHAT=$MODE; [[ $MODE == feature ]] && WHAT=$FEAT
 OUT=$SIMCAM_RESULTS/features-$RT-$INJ-$WHAT-$TAG; rm -rf $OUT; mkdir -p $OUT
 hlog() { printf 'HOST| %.3f %s\n' $(( EPOCHREALTIME - 978307200 )) "$*" >> $OUT/host.log; }
 typeset -a ARGS; ARGS=(-mode $MODE); [[ $MODE == feature ]] && ARGS+=(-feature $FEAT -camera $CAM -nocatch $NOCATCH)
-[[ -n ${MOVIE_SECONDS:-} ]] && ARGS+=(-seconds $MOVIE_SECONDS)   # w4 e23b: movie length (default 3 s)
-# w4 e23b: XENV="VAR=val ..." adds SIMCTL_CHILD_VAR=val to the launch, as scripts/run.sh does (e.g. XENV=M15_OLD_BRACKET=1)
+[[ -n ${MOVIE_SECONDS:-} ]] && ARGS+=(-seconds $MOVIE_SECONDS)   # movie length (default 3 s)
+# XENV="VAR=val ..." adds SIMCTL_CHILD_VAR=val to the launch, as scripts/run.sh does (e.g. XENV=M15_OLD_BRACKET=1)
 typeset -a ENVS; ENVS=(); for kv in ${=XENV:-}; do ENVS+=(SIMCTL_CHILD_$kv); done
 xcrun simctl terminate $UDID $B 2>/dev/null
 xcrun simctl privacy $UDID grant camera $B 2>/dev/null; xcrun simctl privacy $UDID grant microphone $B 2>/dev/null

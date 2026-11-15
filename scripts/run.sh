@@ -1,7 +1,7 @@
 #!/bin/zsh
 # SPDX-License-Identifier: Apache-2.0
 # run.sh <app> <rt: 263|27|175> <inj: boot|launchd|launch|none> <tag>
-#   app: canary | vc | vc-audio | vcfull | vcfull-audio | expo | expo-audio | flutter (m7 "all") | flutter-<test>
+#   app: canary | vc | vc-audio | vcfull | vcfull-audio | expo | expo-audio | flutter (all tests) | flutter-<test>
 #   inj=boot   : the sim was booted by boot.sh with the stub; nothing per-launch (boot env wins)
 #   inj=launchd: the same for a sim armed in launchd mode (boot.sh <rt> launchd, or launchd-arm.sh); nothing per-launch
 #   inj=launch : per-launch SIMCTL_CHILD_DYLD_INSERT_LIBRARIES=<real dylib> + config (sim booted plainly)
@@ -79,7 +79,7 @@ fi
 ELAPSED=$(python3 -c "import time;print('%.1f'%(time.time()-$T0))")
 PID=$(grep -ohE '\[simcam [0-9]+\]' $OUT/launch.txt $OUT/app.log 2>/dev/null | head -1 | grep -oE '[0-9]+')
 # boot and launchd modes: dylib log is per pid in the boot log dir
-# this app's own log (its pid), not the newest file: with lazy arming an app that never arms writes none (review r1)
+# this app's own log (its pid), not the newest file: with lazy arming an app that never arms writes none
 if [[ $INJ == boot || $INJ == launchd ]]; then BL=$(cat $ROOT/build/bootlogdir-$RT.txt 2>/dev/null)
   if [[ -n $PID && -f $BL/dylib-$PID.log ]]; then cp $BL/dylib-$PID.log $OUT/dylib.log
   else echo "no engine log for this launch (pid ${PID:-unknown}): the app did not arm, or logged nothing" > $OUT/dylib.log; fi
@@ -90,7 +90,7 @@ if [[ $APPN == canary ]]; then
   # no verdict: still running when run.sh gave up is INCONCLUSIVE (a starved machine); gone without one (a crash) is FAIL
   [[ -z $R && -n ${STILL_RUNNING:-} ]] && R="RESULT core=INCONCLUSIVE ext=INCONCLUSIVE (no verdict; still running after $(( CB + 15 )) s; last=$(grep CANARY $OUT/app.log | tail -1 | cut -c1-160))"
   [[ -z $R ]] && R="RESULT core=FAIL ext=FAIL (no verdict; last=$(grep CANARY $OUT/app.log | tail -1 | cut -c1-160))"
-  # w4 e54 (review r2): an engine MISMATCH that silently turns a fix off fails the run, whatever the canary said:
+  # an engine MISMATCH that silently turns a fix off fails the run, whatever the canary said:
   # `MISMATCH: w4 e40` (a photo request's delegateStorage.delegateQueue lookup failed, so a stop doesn't wait for photo
   # callbacks: L66 off). In the console (app.log) or the per-pid engine log. The canary's own core verdict follows "core was".
   MM=$(grep -h -m1 -oE 'MISMATCH: w4 e40[^;]{0,120}' $OUT/app.log $OUT/dylib.log 2>/dev/null | head -1)

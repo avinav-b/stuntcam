@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 // Part of simcam.m (single translation unit; included in order): photo encode and still-image slots.
 // ---- photo ----------------------------------------------------------------------
-// W4 e54 (review, ledger L72): the EXIF/TIFF capture times are `when`, the wall clock at the frame grab (the instant
+// Ledger L72: the EXIF/TIFF capture times are `when`, the wall clock at the frame grab (the instant
 // the photo's timestamp is, L68), with milliseconds (SubsecTime*) and the UTC offset (OffsetTime*), as a device writes them;
-// they were the encode's time, 100-480 ms later. M54_OLD_EXIF=1 stamps them at the encode again (with the subseconds).
+// the encode's time would be 100-480 ms later. M54_OLD_EXIF=1 stamps them at the encode (with the subseconds).
 static NSData *M5EncodePhoto(CVPixelBufferRef src, int w, int h, NSString *uti, int exifOrientation, NSDictionary **metaOut, NSDate *when) {
     CIImage *ci = [CIImage imageWithCVPixelBuffer:src];
     if (w > 0 && h > 0) ci = [ci imageByApplyingTransform:CGAffineTransformMakeScale((double)w / kSrcW, (double)h / kSrcH)];
@@ -43,19 +43,19 @@ static OSStatus sess_IrisPrepare(CMBaseObjectRef s, CFStringRef sinkID, id setti
     return 0;
 }
 // slot 12: IrisStillImageSinkCaptureImage(session, sinkID, settings)
-// w2: control-file event photo-error:<status> (core/control.inc) makes the next photo complete with that ErrorStatus and no image,
+// Control-file event photo-error:<status> (core/control.inc) makes the next photo complete with that ErrorStatus and no image,
 // to map Fig statuses to the NSError apps get (input for mid-session error completion, design §5.4).
 static _Atomic int gPhotoErrNext;
 static OSStatus sess_IrisCapture(CMBaseObjectRef s, CFStringRef sinkIDr, id settings) {
     NSString *sinkID = (__bridge NSString *)sinkIDr;
     long long sid = [M5KVC(settings, @"settingsID") longLongValue];
-    TRRecord(TR_SLOT12, sid, 0);   // W4 e48: the slot-12 mark (design §9), before the (long) log line
+    TRRecord(TR_SLOT12, sid, 0);   // the slot-12 mark (design §9), before the (long) log line
     LOG(@"IrisCaptureImage %@ settings=%@", sinkID, M5Desc(settings, 2500));
     M5DumpProps(settings);
     int w = [M5KVC(settings, @"outputWidth") intValue], h = [M5KVC(settings, @"outputHeight") intValue];
     CMVideoDimensions od = M8Dims(M5KVC(settings, @"outputDimensions"));
     if ((w <= 0 || h <= 0) && od.width > 0 && !getenv("M8_NO_PHOTODIMS")) { w = od.width; h = od.height; }
-    if ((w <= 0 || h <= 0) && gIrisMaxDims.width > 0 && !getenv("M8_NO_PHOTODIMS")) { w = gIrisMaxDims.width; h = gIrisMaxDims.height; }   // m8: 4032x3024 for 4:3
+    if ((w <= 0 || h <= 0) && gIrisMaxDims.width > 0 && !getenv("M8_NO_PHOTODIMS")) { w = gIrisMaxDims.width; h = gIrisMaxDims.height; }   // 4032x3024 for 4:3
     if (w <= 0 || h <= 0) { w = getenv("M5_PHOTO_W") ? atoi(getenv("M5_PHOTO_W")) : 4032; h = w * kSrcH / kSrcW; }
     BOOL pvOn = [M5KVC(settings, @"previewEnabled") boolValue] && !getenv("M8_NO_PREVIEWSURFACE");
     int pvW = [M5KVC(settings, @"previewWidth") intValue], pvH = [M5KVC(settings, @"previewHeight") intValue]; OSType pvF = [M5KVC(settings, @"previewFormat") unsignedIntValue] ?: '420f';
@@ -65,7 +65,7 @@ static OSStatus sess_IrisCapture(CMBaseObjectRef s, CFStringRef sinkIDr, id sett
     unsigned ftype = [M5KVC(settings, @"outputFileType") unsignedIntValue];
     BOOL hevc = codec == 'hvc1';
     NSString *uti = hevc ? @"public.heic" : @"public.jpeg";
-    M40PhotoBegin(s, sid);   // w4 e40: pending until AVF has run the delegate's didFinishCapture (a stop waits for that)
+    M40PhotoBegin(s, sid);   // pending until AVF has run the delegate's didFinishCapture (a stop waits for that)
     CFRetain(s);
     dispatch_async(gPumpQ, ^{
         NSMutableDictionary *base = [@{@"SectionID": sinkID, @"SettingsID": @(sid)} mutableCopy];
@@ -77,23 +77,23 @@ static OSStatus sess_IrisCapture(CMBaseObjectRef s, CFStringRef sinkIDr, id sett
         M5SessPost(s, @"IrisWillCaptureStillImage", base);
         TRRecord(TR_WILL_CAPTURE, sid, 0);
         CVPixelBufferRef src = gLatest ? CVPixelBufferRetain(gLatest) : (M12Scene2On() ? M12Render(M5S(s)) : M5Render());
-        // w4 e48 (ledger L68): the photo's timestamp (PresentationTimestamp -> AVCapturePhoto.timestamp) is this instant, when
+        // Ledger L68: the photo's timestamp (PresentationTimestamp -> AVCapturePhoto.timestamp) is this instant, when
         // its source frame is taken, as a device's is the sensor frame's: within a few ms of the slot-12 mark (design §9 asks
-        // <= 50 ms). It was stamped after the encode, 120-160 ms later for a 12 MP JPEG (e48). M48_OLD_PTS=1 stamps it there again.
+        // <= 50 ms). After the encode it would be 120-160 ms later for a 12 MP JPEG; M48_OLD_PTS=1 stamps it there.
         BOOL oldPts = getenv("M48_OLD_PTS") != NULL;
         // the wall clock too, the EXIF capture time (L72): one value, back-computed from grabMach, for both the timestamp op and
-        // the EXIF, so a preemption between two clock reads can't put them apart (W4 e57, review)
+        // the EXIF, so a preemption between two clock reads can't put them apart
         uint64_t grabMach = mach_absolute_time(), grabWall = TRWallAt(grabMach);
         if (!oldPts) TRRecordAtWall(TR_TIMESTAMP, sid, CMTimeConvertScale(CMClockMakeHostTimeFromSystemUnits(grabMach), 1000000000, kCMTimeRoundingMethod_Default).value, grabMach, grabWall);
-        // M38_FIRST_PHOTO_STALL_MS=<ms> (test fault, w4 e38): the process's first photo stalls the frame pump for that long, as
+        // M38_FIRST_PHOTO_STALL_MS=<ms> (test fault): the process's first photo stalls the frame pump for that long, as
         // a lazy encoder setup on the pump queue would; later photos don't. The canary's in-process retry of the frame-gap
         // check passes such a regression, so the CLI must report it as a retried pass, never a plain cached one.
         { static _Atomic int done; const char *ms = getenv("M38_FIRST_PHOTO_STALL_MS");
           if (ms && atoi(ms) > 0 && atomic_exchange(&done, 1) == 0) { LOG(@"M38 first-photo stall %d ms", atoi(ms)); usleep((useconds_t)atoi(ms) * 1000); } }
         M5SessPost(s, @"IrisDidCaptureStillImage", base);
         TRRecord(TR_DID_CAPTURE, sid, 0);
-        // w1 U7: encode, mirroring, the preview image and the completion run on their own serial queue, so a slow encode
-        // (7.6 s once on a starved hosted runner) no longer stalls preview/VDO frames on the pump queue. Photos still complete
+        // encode, mirroring, the preview image and the completion run on their own serial queue, so a slow encode
+        // (7.6 s once on a starved hosted runner) doesn't stall preview/VDO frames on the pump queue. Photos still complete
         // in request order; the early notifications above stay on the pump queue, in order with the frames. Each pending photo
         // holds one retained source frame (~8 MB BGRA at 1080p) until its encode; a burst of n holds n of them.
         // M13_PHOTO_ON_PUMP: the old placement (encode on the pump queue), a negative control for the canary's frame-gap check
@@ -122,7 +122,7 @@ static OSStatus sess_IrisCapture(CMBaseObjectRef s, CFStringRef sinkIDr, id sett
             // device-like: landscape sensor pixels + EXIF orientation 6 (rotate 90° CW for portrait display)
             if (M12OrientOn() && [M5KVC(settings, @"outputMirroring") boolValue]) { VTPixelRotationSessionRef fs = NULL; int fk = 0; CVPixelBufferRef f = M12Flip(img, rotDeg, &fs, &fk); if (fs) { VTPixelRotationSessionInvalidate(fs); CFRelease(fs); } CVPixelBufferRelease(img); img = f; LOG(@"m12 photo mirrored (rot %d)", rotDeg); }
             NSData *enc = M5EncodePhoto(img, w, h, uti, getenv("M5_PHOTO_ORIENT") ? atoi(getenv("M5_PHOTO_ORIENT")) : exifO, &meta, [NSDate dateWithTimeIntervalSince1970:grabWall / 1e9]);
-            CVPixelBufferRef pvpb = NULL;   // m8: preview image (onPreviewImageAvailable / previewCGImageRepresentation)
+            CVPixelBufferRef pvpb = NULL;   // preview image (onPreviewImageAvailable / previewCGImageRepresentation)
             if (pvOn && pvW > 0 && pvH > 0) { M5Sink *cv = [M5Sink new]; cv.w = pvW; cv.h = pvH; cv.fmt = pvF; pvpb = M5Convert(cv, img); }   // cv frees its pool/transfer session (M5Sink dealloc, L75)
             CVPixelBufferRelease(img);
             IOSurfaceRef surf = M5BytesSurface(enc);
@@ -140,7 +140,7 @@ static OSStatus sess_IrisCapture(CMBaseObjectRef s, CFStringRef sinkIDr, id sett
             if (oldPts) TRRecordAt(TR_TIMESTAMP, sid, CMTimeConvertScale(pts, 1000000000, kCMTimeRoundingMethod_Default).value, ptsMach);
             M5SessPost(s, @"IrisStillImageComplete", done);
             TRRecord(TR_STILL_COMPLETE, sid, 0);
-            // m10: AVF fires captureOutput:didFinishCaptureForResolvedSettings: only after ReadyForResponsiveRequest (sets the 0x8000 callback flag,
+            // AVF fires captureOutput:didFinishCaptureForResolvedSettings: only after ReadyForResponsiveRequest (sets the 0x8000 callback flag,
             // then -_handlePotentiallyFinalPhotoRequestCallbackWithPayload:). Also drives readyForResponsiveRequestAfterResolvedSettings: / readiness.
             if (!getenv("M10_NO_RESPONSIVE")) M5SessPost(s, @"ReadyForResponsiveRequest", base);
             CFRelease(surf); if (pvpb) CVPixelBufferRelease(pvpb);

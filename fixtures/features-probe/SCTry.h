@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SCTry.h — run a block, catch any Objective-C exception it raises (features-probe, w4 e22)
+// SCTry.h — run a block, catch any Objective-C exception it raises (features-probe)
 #import <Foundation/Foundation.h>
 NS_ASSUME_NONNULL_BEGIN
 /// nil if the block returned normally, else "<name>: <reason>" of the exception it raised
