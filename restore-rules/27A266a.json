@@ -66,5 +66,5 @@
     }
   ],
   "switches": {"SIMCAM_XCODE_LIBS=0": "no restores", "SIMCAM_MTC=0": "skip libMainThreadChecker"},
-  "unverified": ["Xcode 26.6 / 27.1 / 27.2 (U4 part 2)", "Detox / idb inserts (displaced; design §4.1 rule 4: announced, not restored)"]
+  "unverified": ["Xcode 26.6 (U4 part 2); 27.1 and 27.2 have their own files (W4 e64)", "Detox / idb inserts (displaced; design §4.1 rule 4: announced, not restored)"]
 }

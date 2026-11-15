@@ -9,7 +9,7 @@ happens outside that, how to report a problem and what to expect back. Every cla
 
 | | Verified | Notes |
 |---|---|---|
-| **Xcode** | 27.0 (build 27A266a) | The only Xcode measured so far. ⌘R, ⌘U, `xcodebuild test` (hosted and UI tests) and `stuntcam exec` were all run on it. A second Xcode side by side, and an Xcode update with a simulator booted, are not tested yet (design §11 U4 part 2) |
+| **Xcode** | 27.0 (27A266a); 27.1 (27A9275) and 27.2 (27B52) | 27.0: ⌘R, ⌘U, `xcodebuild test` (hosted and UI tests) and `stuntcam exec` were all run on it. 27.1 and 27.2 (GitHub's `xcode-27` runner, three Xcodes side by side): `xcodebuild test` hosted and UI tests measured, inserted libraries and markers identical to 27.0's, camera frames delivered with each one's own `restore-rules` file; ⌘R not driven (its libraries checked present with the same install names). An Xcode update with a simulator booted is not tested yet (design §11 U4 part 2). measured internally, W4 e64 |
 | **iOS Simulator runtimes, full** | 26.3.1 (23D8133), 27.0 (24A434) | Boot mode: the whole matrix (plain AVFoundation, VisionCamera 5, expo-camera, Flutter `camera` + `mobile_scanner`), orientation, Xcode Run and tests, soak, TSan torture, mutation suite. Launchd mode: the matrix, orientation and UI tests via `stuntcam exec` (hosted tests run there without a camera). MATRIX.md; measured internally, W4 e46 |
 | **iOS Simulator runtime, point release** | 27.2 (24B8117) | W4 e56: the self-test (`verify` 5/5 pass); boot mode: the matrix (plain AVFoundation, VisionCamera 5, expo-camera, Flutter `camera` + `mobile_scanner`), plain-AVFoundation orientation, `conformance.sh` and a 20-launch plain soak; launchd mode: the matrix and plain orientation. Preflight passed on 27.0's layout with no engine change. Not run on 27.2: Xcode Run and tests, `stuntcam exec`/UI tests, `activation.sh`, the all-app soak, TSan, the mutation suite, the other stacks' orientation. measured internally, W4 e56 |
 | **iOS Simulator runtime, smoke** | 17.5 (21F79) | A smaller run that passed in boot and launchd modes (e46): the self-test, the four app stacks' checks and plain-AVFoundation orientation. If an app can't open stuntcam's state folder, its records go to its container's `tmp/` instead (any runtime; `status` and `sentinel clear` look there) |
@@ -37,7 +37,7 @@ can't reach a verdict, `up` arms anyway with a warning. At the app's first camer
   "Inconclusive" (the Mac was too busy, or the simulator didn't boot in time) is never cached; see
   [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 - **Another Xcode build.** Xcode Run and tests insert their own libraries, which boot mode displaces and the loader puts
-  back. The libraries to restore are recorded per Xcode build in `restore-rules/<build>.json`; only `27A266a.json` exists.
+  back. The libraries to restore are recorded per Xcode build in `restore-rules/<build>.json`; `27A266a.json`, `27A9275.json` and `27B52.json` exist.
   For a build without a file the loader uses the newest file it has, and every app it restores for prints:
 
   ```
@@ -45,7 +45,7 @@ can't reach a verdict, `up` arms anyway with a warning. At the app's first camer
   ```
 
   `up` prints the same line, and `stuntcam doctor` says whether the rules for the Xcode in use are verified. "Unverified"
-  means exactly this: the camera is expected to work (measured with a faked build id; a second real Xcode is untested), but the debugger, console or test injection under that Xcode have not been
+  means exactly this: the camera is expected to work (measured with a faked build id, and with real Xcode 27.1 and 27.2 using the 27.0 file before theirs existed), but the debugger, console or test injection under that Xcode have not been
   checked, and launchd mode (no Xcode Run camera, nothing of Xcode's displaced) is the safe choice. After switching or
   updating Xcode, run `stuntcam up` again from a shell where the new one is active; `doctor` flags a mismatch.
 

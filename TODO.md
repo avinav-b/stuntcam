@@ -298,9 +298,10 @@ Follow-ups from importing the prototype (spikes m1b–m12) into this repo.
       needs a rules-file field for it.
 - [ ] `tools/inventory`: the insert-list diff of design §4.1 (Xcode's insert list captured in launchd mode, before the libs
       remove themselves, against `restore-rules/<build>.json`), so a fifth library fails the beta ritual. Not built.
-- [ ] U4 part 2 (needs a second Xcode, an Apple ID download; e26 "For the owner"): Xcode 27.1/26.6 side by side, an Xcode
-      update with a sim booted; then add `restore-rules/<build>.json` for each measured build. Until then every other
-      build gets the 27A266a rules and the "unverified" line.
+- [x] Xcode 27.1 (27A9275) and 27.2 (27B52): measured side by side on GitHub's `xcode-27` runner (W4 e64); their
+      `restore-rules/<build>.json` added. ⌘R under them not driven (libs and Xcode's helper names checked statically).
+- [ ] U4 part 2, the rest (e26 "For the owner"): Xcode 26.6 side by side, an Xcode update with a sim booted. Builds
+      without a file get the newest file's rules and the "unverified" line.
 - [ ] idb: not installed on the Mac, so the `IDB_*` displaced signal is unmeasured (e26, e28).
 - [ ] The displaced-line signals are heuristics (review L9): any `IDB_*` variable, and `ASAN_OPTIONS`/`TSAN_OPTIONS`/
       Guard Malloc's `MALLOC_*` set for every launch, could print a false "displaced" line. e30 removes the boot-env case

@@ -2,6 +2,7 @@
 package xcode
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -160,5 +161,48 @@ func TestActiveFollowsDeveloperDir(t *testing.T) {
 func TestUnverifiedLine(t *testing.T) {
 	if got := UnverifiedLine("27Z1"); got != "restore rules unverified for Xcode 27Z1; if console/debugger misbehave use --mode launchd" {
 		t.Fatal(got)
+	}
+}
+
+// The shipped rule files: each is one the loader would use, is named for the build it records, and (all measured so far)
+// carries the same rules as 27A266a.json.
+func TestShippedRules(t *testing.T) {
+	dir := filepath.Join("..", "..", "..", "restore-rules")
+	files, _ := filepath.Glob(filepath.Join(dir, "[0-9]*.json"))
+	if len(files) == 0 {
+		t.Fatal("no restore-rules/*.json")
+	}
+	read := func(f string) (build string, rules json.RawMessage) {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var doc struct {
+			Build string          `json:"xcode_build"`
+			Rules json.RawMessage `json:"rules"`
+		}
+		if err := json.Unmarshal(b, &doc); err != nil {
+			t.Fatalf("%s: %v", f, err)
+		}
+		return doc.Build, doc.Rules
+	}
+	_, base := read(filepath.Join(dir, "27A266a.json"))
+	for _, f := range files {
+		if !Usable(f) {
+			t.Errorf("%s: the loader wouldn't use it", f)
+		}
+		build, rules := read(f)
+		if build+".json" != filepath.Base(f) {
+			t.Errorf("%s records xcode_build %q", f, build)
+		}
+		if string(rules) != string(base) {
+			t.Errorf("%s: rules differ from 27A266a.json's", f)
+		}
+	}
+	if f, v := Rules(dir, "27B52"); filepath.Base(f) != "27B52.json" || !v {
+		t.Errorf("27B52: %q %v", f, v)
+	}
+	if f, v := Rules(dir, "27C5"); filepath.Base(f) != "27B52.json" || v {
+		t.Errorf("unknown build -> newest: %q %v", f, v)
 	}
 }
