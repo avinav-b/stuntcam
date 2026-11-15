@@ -19,7 +19,7 @@ happens outside that, how to report a problem and what to expect back. Every cla
 
 **Camera stacks:** plain AVFoundation (Swift, Objective-C), VisionCamera 5, expo-camera, Flutter `camera` and
 `mobile_scanner`. Known gaps: Expo Go is untested; Flutter `camera` in landscape is 90° off; Detox needs launchd mode
-(docs/USAGE.md). Libraries that compile their camera code out of simulator builds (for example VisionCamera 4) can't be fixed at
+(docs/TROUBLESHOOTING.md). Libraries that compile their camera code out of simulator builds (for example VisionCamera 4) can't be fixed at
 runtime by stuntcam; that is a question for the library (design §12, §13).
 
 stuntcam 1.0 is on npm (`npx stuntcam up`). Until v1.1 there is no webcam source.
