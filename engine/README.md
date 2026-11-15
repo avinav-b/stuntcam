@@ -11,7 +11,7 @@ The in-app library (`libsimcam.dylib`) and the boot stub. Build with `../build.s
 - `runnerhook/runnerhook.m`: `libsimcamrunnerhook.dylib` (Foundation; its own hash dir). Never in a user app as such:
   `stuntcam exec -- xcodebuild test` inserts it into the XCTest runner on launchd-armed or unarmed sims, where it adds the
   stub and stuntcam's variables to each app a UI test launches, and puts back what that insert displaced from the runner
-  (`libXCTestBundleInject`, MTC, RPAC: restore-rules `test-runner`). Inert on boot-armed sims (design §4.2).
+  (`libXCTestBundleInject`, MTC, RPAC: restore-rules `test-runner`). Inert on boot-armed sims.
 - `src/simcam.m`: the engine's single translation unit. It includes the fragments below **in order**: they share
   file-scope state and `__attribute__((constructor))` functions run in source order.
   - `fig/`: answers to the simulator's capture layer: capture sources and their attributes/formats, per-session
