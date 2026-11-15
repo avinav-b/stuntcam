@@ -22,7 +22,7 @@ happens outside that, how to report a problem and what to expect back. Every cla
 (README). Libraries that compile their camera code out of simulator builds (for example VisionCamera 4) can't be fixed at
 runtime by stuntcam; that is a question for the library (design §12, §13).
 
-stuntcam is pre-release: build it from source (README). Until v1.1 there is no webcam source.
+stuntcam 1.0 is on npm (`npx stuntcam up`). Until v1.1 there is no webcam source.
 
 ## Outside what's verified
 

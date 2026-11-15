@@ -4,8 +4,11 @@ A camera for the iOS Simulator. Your app's real camera code runs unmodified: no 
 simulator shows a synthetic scene (or your image or video) through Apple's own AVFoundation, so previews, photos, video,
 QR and barcode scanning and orientation behave the way they do on a phone.
 
-> **Status: pre-release.** The engine, tests and `stuntcam` command are here; packages aren't published yet: build from
-> source (below). Physical devices are never involved.
+```sh
+npx stuntcam up
+```
+
+Needs an Apple silicon Mac with Xcode 27. Physical devices are never involved.
 
 Two things to know first:
 
@@ -26,12 +29,20 @@ only ever talk to Apple's genuine device, session, input and output objects. Mor
 Tested on iOS 17.5, 26.3 and 27.0 with Xcode 27.0 ([docs/MATRIX.md](docs/MATRIX.md)): a plain AVFoundation app,
 VisionCamera 5.2.4, expo-camera 58 and Flutter `camera` + `mobile_scanner`.
 
-## Install (pre-release: from source)
+## Install
 
-npm (`npx stuntcam up`) and Homebrew packages are built and tested locally (`scripts/package.sh`)
-but not published yet. Until then:
+Nothing to install: run it with `npx`, which fetches the `stuntcam` package from npm.
 
-Needs a Mac with Xcode 27, and Go 1.23 or newer.
+```sh
+npx stuntcam up
+```
+
+Needs an Apple silicon Mac with Xcode 27, and Node.js for `npx`. The commands below are written as `stuntcam …`; with
+`npx`, type `npx stuntcam …`.
+
+### From source
+
+For working on stuntcam itself. Needs Go 1.23 or newer.
 
 ```sh
 git clone https://github.com/avinav-b/stuntcam.git && cd stuntcam
@@ -41,10 +52,9 @@ cli/build.sh                        # the stuntcam command → cli/bin/stuntcam
 export PATH="$PWD/cli/bin:$PATH"    # e.g. in your shell profile
 ```
 
-`stuntcam` then works from any directory: it finds the build in the checkout it was built in. Run from inside another
-stuntcam checkout, it uses that checkout's build instead. The checkout can live
-anywhere, `~/Documents` included: stuntcam copies what simulators read into `~/Library/Application Support/stuntcam`,
-because simulator processes can't read macOS privacy-protected folders.
+A source build finds the build in the checkout it was built in; run from inside another stuntcam checkout, it uses that
+checkout's build instead. The checkout can live anywhere, `~/Documents` included: stuntcam copies what simulators read
+into `~/Library/Application Support/stuntcam`, because simulator processes can't read macOS privacy-protected folders.
 
 ## Quick start
 
