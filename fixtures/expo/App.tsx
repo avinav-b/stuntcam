@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // m1b spike: auto-running camera compatibility probe.
-// Test selection: launch arg `-CAMTEST vc|expo|vcfull|…` (NSUserDefaults, read via RN Settings).
+// Test selection: launch arg `-CAMTEST vc|expo|vcfull|vclidar|…` (NSUserDefaults, read via RN Settings).
 // Every result line is prefixed `M1B|` and also mirrored to Documents/m1b.log
 // so the host can read it from the app container without Metro.
 import React, { useEffect, useRef, useState } from 'react';
@@ -1020,6 +1020,111 @@ function VcFull() {
   );
 }
 
+// ---------------------------------------------------------------- VisionCamera: the back LiDAR depth device (w4 e62, e61 F4)
+// `-CAMTEST vclidar`: pick the LiDAR device as VisionCamera 5 exposes it (by `type === 'lidar-depth'`, and what
+// `useCameraDevice('back', { physicalDevices: ['lidar-depth'] })` returns), mount <Camera> with a photo output, take a
+// photo (default; then `enableDepthData: true`, which an app should only ask for when `supportsDepthDataDelivery`), then
+// remount with a depth frame output added. `-LIDARDEV wide` runs the same steps on the back wide camera (control).
+function VcLidar() {
+  const all = useCameraDevices();
+  const hookPick = useCameraDevice('back', { physicalDevices: ['lidar-depth'] });
+  const want = ((Settings.get('LIDARDEV') as string | undefined) ?? 'lidar') === 'wide' ? 'wide-angle' : 'lidar-depth';
+  const device = all.find((d) => d.position === 'back' && d.type === want);
+  const [phase, setPhase] = useState<'wait' | 'photo' | 'depth' | 'done'>('wait');
+  const photoOutput = usePhotoOutput({});
+  const depthOutput = React.useMemo(
+    () => VisionCamera.createDepthFrameOutput({ targetResolution: { width: 640, height: 480 }, enablePhysicalBufferRotation: false, dropFramesWhileBusy: true, allowDeferredStart: false, enableFiltering: false } as any),
+    [],
+  );
+  const camRef = useRef<CameraRef>(null);
+  const started = useRef<(() => void) | null>(null);
+  const startedP = useRef<Promise<void> | null>(null);
+  const armStarted = () => (startedP.current = new Promise<void>((res) => (started.current = res)));
+  const devRef = useRef(device); devRef.current = device;
+  const allRef = useRef(all); allRef.current = all;
+  const pickRef = useRef(hookPick); pickRef.current = hookPick;
+  const desc = (d: CameraDevice) =>
+    `id=${d.id} name='${d.localizedName}' type=${d.type} virtual=${d.isVirtualDevice} physical=[${d.physicalDevices.map((p) => p.type).join(',')}] mediaTypes=[${d.mediaTypes.join(',')}] zoom=${d.minZoom}..${d.maxZoom} switch=[${d.zoomLensSwitchFactors.join(',')}] torch=${d.hasTorch} flash=${d.hasFlash}`;
+
+  useEffect(() => {
+    (async () => {
+      L(`BEGIN vclidar want=${want}`);
+      await step('vcl.permission', async () => {
+        let s: string = VisionCamera.cameraPermissionStatus;
+        if (s !== 'authorized') s += ` (requested->${await VisionCamera.requestCameraPermission()})`;
+        return 'status=' + s;
+      });
+      for (let i = 0; i < 30 && allRef.current.length === 0; i++) await sleep(200);
+      L(`INFO vcl.allDevices count=${allRef.current.length} ${allRef.current.map((x) => `${x.localizedName}/${x.position}/${x.type}`).join(', ')}`);
+      L(`INFO vcl.hookPick useCameraDevice('back',{physicalDevices:['lidar-depth']}) -> ${pickRef.current ? desc(pickRef.current) : 'undefined'}`);
+      const d = devRef.current;
+      if (!d) { L(`FAIL vcl.device no back device with type ${want}`); L('END vclidar'); setPhase('done'); return; }
+      L(`PASS vcl.device ${desc(d)}`);
+      for (const t of ['photo', 'video', 'stream', 'depth-photo', 'depth-stream'] as const) {
+        await step(`vcl.resolutions.${t}`, async () => {
+          const rs = d.getSupportedResolutions(t);
+          return `count=${rs.length} ${rs.map((r) => `${r.width}x${r.height}`).join(',')}`;
+        });
+      }
+      await step('vcl.supportsOutput', async () => `photo=${d.supportsOutput(photoOutput)} depth=${d.supportsOutput(depthOutput)}`);
+      armStarted();
+      setPhase('photo');
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (phase === 'photo') {
+      (async () => {
+        await step('vcl.photo.onStarted', () => startedP.current!, 15000);
+        await sleep(3000);
+        L('SCREENSHOT vcl-photo');
+        await sleep(1500);
+        L(`INFO vcl.photoOutput supportsDepthDataDelivery=${(photoOutput as any).supportsDepthDataDelivery}`);
+        await step('vcl.photo.default', async () => {
+          const pf = await photoOutput.capturePhotoToFile({ flashMode: 'off', enableShutterSound: false }, {});
+          return `w=${pf.width} h=${pf.height} orientation=${pf.orientation} ${fileInfo(pf.filePath)}`;
+        });
+        // what an app that doesn't check supportsDepthDataDelivery gets (VisionCamera's own check, or AVFoundation's)
+        await step('vcl.photo.enableDepthData', async () => {
+          const ph = await photoOutput.capturePhoto({ flashMode: 'off', enableShutterSound: false, enableDepthData: true } as any, {});
+          const depth = (ph as any).depth;
+          return `w=${ph.width} h=${ph.height} depth=${depth ? `${depth.width}x${depth.height}` : 'none'}`;
+        });
+        armStarted();
+        setPhase('depth');
+      })();
+    } else if (phase === 'depth') {
+      (async () => {
+        await step('vcl.depth.onStarted', () => startedP.current!, 10000);
+        await sleep(3000);
+        L('SCREENSHOT vcl-depth');
+        await sleep(1000);
+        await step('vcl.depth.photo', async () => {
+          const pf = await photoOutput.capturePhotoToFile({ flashMode: 'off', enableShutterSound: false }, {});
+          return `w=${pf.width} h=${pf.height} ${fileInfo(pf.filePath)}`;
+        });
+        L('END vclidar');
+        setPhase('done');
+      })();
+    }
+  }, [phase]);
+
+  if (!device || phase === 'wait' || phase === 'done') return <Text style={styles.t}>vclidar: {phase} device={String(!!device)}</Text>;
+  return (
+    <VCamera
+      key={phase}
+      ref={camRef}
+      style={StyleSheet.absoluteFill}
+      device={device}
+      isActive
+      outputs={phase === 'photo' ? [photoOutput] : [photoOutput, depthOutput]}
+      onStarted={() => { L(`INFO vcl.${phase}.onStarted fired`); started.current?.(); }}
+      onConfigured={() => L(`INFO vcl.${phase}.onConfigured`)}
+      onError={(e) => L(`FAIL vcl.${phase}.onError ${errStr(e)}`)}
+    />
+  );
+}
+
 export default function App() {
   const test = (Settings.get('CAMTEST') as string | undefined) ?? 'none';
   useEffect(() => {
@@ -1028,7 +1133,7 @@ export default function App() {
   return (
     <View style={styles.c}>
       <Text style={styles.t}>m1b test={test}</Text>
-      {test === 'vcorient' ? <VcOrient /> : test === 'expoorient' ? <ExpoOrient /> : test === 'vc' ? <VcTest /> : test === 'vcfull' ? <VcFull /> : test === 'expo' ? <ExpoTest /> : test === 'vccycle' ? <CycleTest lib="vc" /> : test === 'expocycle' ? <CycleTest lib="expo" /> : null}
+      {test === 'vcorient' ? <VcOrient /> : test === 'expoorient' ? <ExpoOrient /> : test === 'vc' ? <VcTest /> : test === 'vcfull' ? <VcFull /> : test === 'vclidar' ? <VcLidar /> : test === 'expo' ? <ExpoTest /> : test === 'vccycle' ? <CycleTest lib="vc" /> : test === 'expocycle' ? <CycleTest lib="expo" /> : null}
     </View>
   );
 }

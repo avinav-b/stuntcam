@@ -72,3 +72,13 @@ should report unavailable).
 (isAdjustingFocus changed ≥2 times after a focus point), `photo` (JPEG bytes and dims), `photo.didFinishCapture` (waits
 on `captureOutput:didFinishCaptureFor:`, which hung before m10), `movie` (2 s recording, duration > 1 s), `session.stop`.
 `lock` and `input` only appear on failure paths.
+
+## The back LiDAR depth camera (w4 e62)
+`M5APP_MODE=lidar`: discovery and `default(.builtInLiDARDepthCamera, …)` for `.video` and `.depthData`, the device's
+formats with `supportedDepthDataFormats` and `activeDepthDataFormat`, then a session with a video data output, a photo
+output and a preview layer: frames for 5 s, a photo with default settings, a depth photo only if the photo output says
+`isDepthDataDeliverySupported`, then an `AVCaptureDepthDataOutput` (added only if `canAddOutput`) and 3 s more.
+`M5APP_LIDAR_DEV=wide|truedepth` runs the same steps on another camera (controls); `M5APP_LIDAR_FORCE=photodepth` sets
+`isDepthDataDeliveryEnabled = true` without the check (AVFoundation throws: the app crashes, by design of the test),
+`M5APP_LIDAR_FORCE=depthout` adds the depth output without `canAddOutput`. Run it with
+`XENV="M5APP_MODE=lidar" scripts/run.sh plain <rt> launchd <tag>`. Results: measured internally, W4 e62.

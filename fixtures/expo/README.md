@@ -89,3 +89,10 @@ and the app traps (a library bug that would hit a device too).
 Status 2026-11-12, before `vcf.front.mirror` and the Orientation-6 check existed (engine at `b67b94f`, iOS 26.3,
 `cfg-m10.plist`): 99/102, two failures beyond the known one, both engine gaps: `vcf.format.video.1280x720` (no 720p format in the profile) and `vcf.zoom.ramp` (the engine does not act on
 `rampToVideoZoomFactor:withRate:`, so the ramp never starts or ends).
+
+## `-CAMTEST vclidar`: the back LiDAR depth device (w4 e62)
+Picks the back device with `type === 'lidar-depth'` (and logs what `useCameraDevice('back', { physicalDevices:
+['lidar-depth'] })` returns), mounts `<Camera>` with a photo output, takes a photo, asks for one with `enableDepthData:
+true`, then remounts with a depth frame output added and takes another photo. `-LIDARDEV wide` runs the same steps on the
+back wide camera (control). run.sh has no case for it; drive it like the other `-CAMTEST` modes
+(`EXPO_PORT` = your Metro).

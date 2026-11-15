@@ -120,7 +120,8 @@ not armed; use `id=`. On GitHub-hosted macOS runners the engine and its self-tes
 **Known limits:** 4K60 video records at about 16–32 fps (the simulator's software encoder; 1080p60 is fine); no 720p
 format yet; zoom is accepted but the picture doesn't zoom (on iOS 26 ramps are ignored); front photos keep the same EXIF orientation with mirroring
 on; focus can't be locked; flash is offered but never fires; Live Photo, depth data, bracketed capture and MultiCam are
-reported as unsupported; no live webcam until v1.1.
+reported as unsupported; the back LiDAR camera is listed (as on an iPhone 17 Pro) but works as the wide camera with no
+depth; no live webcam until v1.1.
 
 > **Apple's AVCam sample crashes at the shutter** under stuntcam: it saves a Live Photo video even when Live Photo is
 > unsupported, and AVFoundation throws. Turn off its Live Photo toggle, or build it from

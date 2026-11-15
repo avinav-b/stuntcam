@@ -7,6 +7,13 @@ Follow-ups from importing the prototype (spikes m1b–m12) into this repo.
       this Xcode can create (or match by build), and say which build was picked. iOS 18.x: Xcode 27.0's default (arm64) download
       request says not available; Apple's index lists 18.x as universal-only — try `-architectureVariant universal` (8.9 GB;
       needs free disk above the 40 GB floor) before concluding U6 needs another Xcode.
+- [ ] (W4 e62) The back LiDAR depth camera (e61 F4) behaves exactly like the back wide camera with no depth on 26.3 and
+      27.0 (frames, photos, no crash; depth requests fail the way they do on a camera without depth). Recommended for v1.0:
+      keep it and document it (design §6.5 + README: "advertised, no depth; selecting it gives the wide camera's picture")
+      (owner decision). Drop it from `cfg-m10.plist`/`cfg-iphone.plist` together with the next profile change (e.g. the
+      720p formats below), since that already changes the profile sha: then also canary `8 cameras listed` → 7, the
+      features matrix's `depth:back-lidar`, and new shipped verdicts. Front TrueDepth has the same no-depth gap.
+      measured internally, W4 e62
 - [ ] (W4 e57) The canary's trace-stage check `timestamp - slot12 (0..50 ms)` missed once in the 200-launch loop under load
       (27.0 L200-41: 98.4 ms). Always the first traced photo (photo 3); photos 4/5 stay ~0.2 ms; 4 of 88 first photos were
       over 10 ms. Between the slot-12 mark and the frame grab, `sess_IrisCapture` logs `M5Desc(settings, 2500)`, runs
@@ -395,12 +402,29 @@ Follow-ups from importing the prototype (spikes m1b–m12) into this repo.
 - [ ] w4 e55 F2: zoom (`VideoZoomFactor`, and on 27.0 `rampToVideoZoomFactor` too — contradicting the vcfull note below) is
       accepted but never rendered; README's "Device behaviour: … zoom" overclaims. Crop the source by the zoom factor, or
       document it as unrendered and fix README.
-- [ ] Design flag names: §4 `up` synopsis `--mic tone|silence|mic`, §5 source `synthetic[:seed]`, the CI line and §9
-      `--source synthetic --mic tone` don't match the CLI (`--source scene|image:|video:`, no `--mic`; the tone is the
-      default). Fix the design or add `--mic`.
-- [ ] Re-run §9 against the production app ×3 per runtime on the final head (after the memory work), and the release-gate
-      run in boot mode with the T3 loader chained.
+- [ ] Design flag names: §4 `up` synopsis `--mic tone|silence|mic`, §5 source `synthetic[:seed]` and the CI line don't
+      match the CLI (`--source scene|image:|video:`, no `--mic`; the tone is the default). Fix the design or add `--mic`.
+      §9 fixed in w4 e61 (`--source scene`, no mic flag).
+- [x] Re-run §9 against the production app ×3 per runtime on the final head (w4 e61, `d31a353`, engine `169441b21047`,
+      measured internally, W4 e61): every stuntcam-owned check passes ×3 on 26.3 and 27.0 and in boot mode
+      (EXIF time ≤ 20 ms, 140/140 photos); step 7's < 20 MB fails in every soak, Release included (+57.4 / +36.8 MiB,
+      app/RN-side per e58). Boot mode runs alongside T3's panel, but the panel's loader isn't chained in boot mode.
+- [x] §9 item 7 criterion (w4 e61): growth is mostly a one-time first-cycle step (+26–28 MiB Release) then tapering. Owner
+      decision 2026-11-14: judge on Release after 5 warm-up cycles plus stuntcam's own allocations flat (design §9 step 7);
+      e61 passes it (26.3 +15.9, 27.0 +4.9 MiB; engine share 1.6 KB per e58). §9 is a pass on the final code.
+- [ ] w4 e61 boot mode + T3 panel: the panel's `libServeSimCapabilityLoader` never reaches app processes in a boot-mode
+      sim (the panel doesn't insert it after a boot-mode boot; `launchctl setenv DYLD_INSERT_LIBRARIES` inside the sim
+      doesn't stick). Decide whether the stub should chain a foreign loader named somewhere else (e.g. `up --chain`), or
+      document "boot mode: T3 panel capabilities that need its loader are off".
+- [ ] w4 e61: after `down` on a boot-mode sim, `status` says `booted-unarmed` but `up --source/--log` says "already booted
+      armed: add --reboot" (plain `up` re-enables). Make the messages agree.
+- [ ] w4 e61: the iPhone profile advertises "Back LiDAR Depth Camera", so apps offer a LiDAR lens; depth isn't on
+      day 1. Check what choosing it does (formats, errors), or drop the device from the profile.
+- [ ] w4 e61 F1: a sim restarted by something else drops launchd-mode arming silently until the next `up` (`status`
+      reports it). Consider a `service`/doctor hint, or have `trace`/`status` flag "restarted since armed".
 - [ ] w4 e55 F3: TROUBLESHOOTING line for T3's device panel replacing the stub in launchd's env (run `up` again).
+      w4 e61: the panel inserts its loader only the first time a booted sim is opened; after a reboot + `up` the env held
+      the stub alone.
 - [ ] Motion stand-in rate is capped at 100 Hz (10 ms timer floor): document, or allow faster if an app needs it.
 - [ ] U5 follow-ups (w4 e25): (1) a recording across a long freeze holds one frame for the freeze (frames stamped with
       the host clock); check what a device does and drop or re-time frames if needed. (2) done (w4 e27): the debugger rule

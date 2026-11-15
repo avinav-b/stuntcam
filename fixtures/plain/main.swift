@@ -22,7 +22,7 @@ final class VC: UIViewController {
     super.viewDidAppear(animated)
     let mode = ProcessInfo.processInfo.environment["M5APP_MODE"] ?? "m9"
     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-      let run = { mode == "scan" ? self.scan() : mode == "m9" ? self.m9() : mode == "cycle" ? self.cycle() : self.q4() }
+      let run = { mode == "scan" ? self.scan() : mode == "m9" ? self.m9() : mode == "cycle" ? self.cycle() : mode == "lidar" ? self.lidar() : self.q4() }
       if let order = ProcessInfo.processInfo.environment["M5APP_ORDER"] { self.ordering(order, then: run) } else { run() }
     }
   }
@@ -573,6 +573,136 @@ extension VC {
       if w4env["M5APP_CYCLE_HOLD"] == "1" { P("HOLD"); return }   // keep the process for heap/leaks; the driver terminates it
       DispatchQueue.main.async { self.done() }
     }
+  }
+}
+// ---- w4 e62: M5APP_MODE=lidar: what selecting the back LiDAR depth camera does (e61 F4) ----
+//   M5APP_LIDAR_DEV=lidar (default) | wide | truedepth: the device under test (wide / truedepth are controls)
+//   M5APP_LIDAR_FORCE=photodepth: set photoOutput.isDepthDataDeliveryEnabled = true without checking it is supported
+//   M5APP_LIDAR_FORCE=depthout: addOutput(AVCaptureDepthDataOutput) without checking canAddOutput
+//   Lines: "INFO lidar.<step> …" (what AVFoundation reports) and PASS/FAIL for frames and photos.
+final class L62: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCapturePhotoCaptureDelegate, AVCaptureDepthDataOutputDelegate {
+  let lock = NSLock(); var frames = 0, depth = 0, depthDrops = 0; var firstFrame: String?, firstDepth: String?
+  var photoCB: ((AVCapturePhoto?, Error?) -> Void)?; let finished = DispatchSemaphore(value: 0)
+  func captureOutput(_ o: AVCaptureOutput, didOutput sb: CMSampleBuffer, from c: AVCaptureConnection) {
+    lock.lock(); frames += 1
+    if firstFrame == nil, let pb = CMSampleBufferGetImageBuffer(sb) { firstFrame = "\(CVPixelBufferGetWidth(pb))x\(CVPixelBufferGetHeight(pb))/\(fcc(CVPixelBufferGetPixelFormatType(pb)))" }
+    lock.unlock()
+  }
+  func photoOutput(_ o: AVCapturePhotoOutput, didFinishProcessingPhoto p: AVCapturePhoto, error: Error?) { E("lidar.photo.processing", error); photoCB?(p, error) }
+  func photoOutput(_ o: AVCapturePhotoOutput, didFinishCaptureFor r: AVCaptureResolvedPhotoSettings, error: Error?) { E("lidar.photo.didFinishCapture", error); finished.signal() }
+  func depthDataOutput(_ o: AVCaptureDepthDataOutput, didOutput d: AVDepthData, timestamp: CMTime, connection: AVCaptureConnection) {
+    lock.lock(); depth += 1; if firstDepth == nil { firstDepth = "\(CVPixelBufferGetWidth(d.depthDataMap))x\(CVPixelBufferGetHeight(d.depthDataMap))/\(fcc(d.depthDataType))" }; lock.unlock()
+  }
+  func depthDataOutput(_ o: AVCaptureDepthDataOutput, didDrop d: AVDepthData, timestamp: CMTime, connection: AVCaptureConnection, reason: AVCaptureOutput.DataDroppedReason) { lock.lock(); depthDrops += 1; lock.unlock() }
+}
+func fcc(_ s: FourCharCode) -> String {
+  let b = [UInt8(s >> 24 & 255), UInt8(s >> 16 & 255), UInt8(s >> 8 & 255), UInt8(s & 255)]
+  return b.allSatisfy { $0 >= 32 && $0 < 127 } ? String(bytes: b, encoding: .ascii)! : "\(s)"
+}
+func fmtDesc(_ f: AVCaptureDevice.Format) -> String {
+  let d = CMVideoFormatDescriptionGetDimensions(f.formatDescription)
+  return "\(d.width)x\(d.height)/\(fcc(CMFormatDescriptionGetMediaSubType(f.formatDescription)))@\(f.videoSupportedFrameRateRanges.map { Int($0.maxFrameRate) }.max() ?? 0)"
+}
+extension VC {
+  func lidar() {
+    let env = ProcessInfo.processInfo.environment; let which = env["M5APP_LIDAR_DEV"] ?? "lidar"; let force = env["M5APP_LIDAR_FORCE"] ?? ""
+    let m = L62(); objc_setAssociatedObject(self, "l62", m, .OBJC_ASSOCIATION_RETAIN)
+    P("os=\(UIDevice.current.systemVersion) dev=\(which) force=\(force.isEmpty ? "-" : force)")
+    let nc = NotificationCenter.default
+    for n in [AVCaptureSession.runtimeErrorNotification, AVCaptureSession.wasInterruptedNotification, AVCaptureSession.didStartRunningNotification, AVCaptureSession.didStopRunningNotification] {
+      nc.addObserver(forName: n, object: nil, queue: nil) { x in P("INFO lidar.note \(x.name.rawValue) \(x.userInfo.map { "\($0)" } ?? "")") }
+    }
+    // 1. discovery
+    let dsV = AVCaptureDevice.DiscoverySession(deviceTypes: [.builtInLiDARDepthCamera], mediaType: .video, position: .back).devices
+    let dsD = AVCaptureDevice.DiscoverySession(deviceTypes: [.builtInLiDARDepthCamera], mediaType: .depthData, position: .back).devices
+    let dsU = AVCaptureDevice.DiscoverySession(deviceTypes: [.builtInLiDARDepthCamera], mediaType: nil, position: .unspecified).devices
+    P("INFO lidar.discovery video/back=\(dsV.map { $0.uniqueID }) depthData/back=\(dsD.map { $0.uniqueID }) nil/unspecified=\(dsU.map { $0.uniqueID })")
+    let defV = AVCaptureDevice.default(.builtInLiDARDepthCamera, for: .video, position: .back)
+    let defD = AVCaptureDevice.default(.builtInLiDARDepthCamera, for: .depthData, position: .back)
+    P("INFO lidar.default for:.video=\(defV?.uniqueID ?? "nil") for:.depthData=\(defD?.uniqueID ?? "nil") same=\(defV != nil && defV === dsV.first)")
+    let dev: AVCaptureDevice? = which == "wide" ? AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back)
+      : which == "truedepth" ? AVCaptureDevice.default(.builtInTrueDepthCamera, for: .video, position: .front) : defV
+    guard let dev else { R(false, "lidar.device", "no \(which) device"); done(); return }
+    R(true, "lidar.device", desc(dev))
+    // 2. the device and its formats
+    P("INFO lidar.device class=\(type(of: dev)) hasMedia video=\(dev.hasMediaType(.video)) depthData=\(dev.hasMediaType(.depthData)) virtual=\(dev.isVirtualDevice) constituents=\(dev.constituentDevices.map { short($0.deviceType) }) zoom=\(dev.minAvailableVideoZoomFactor)-\(dev.maxAvailableVideoZoomFactor) torch=\(dev.hasTorch) flash=\(dev.hasFlash) focusPOI=\(dev.isFocusPointOfInterestSupported)")
+    var withDepth = 0
+    for (i, f) in dev.formats.enumerated() {
+      let dd = f.supportedDepthDataFormats; if !dd.isEmpty { withDepth += 1 }
+      P("INFO lidar.format \(i) \(fmtDesc(f)) photoDims=\(f.supportedMaxPhotoDimensions.map { "\($0.width)x\($0.height)" }) depthFormats=\(dd.count)\(dd.isEmpty ? "" : " \(dd.map(fmtDesc))") unsupportedOutputs=\(f.unsupportedCaptureOutputClasses.map { NSStringFromClass($0) })")
+    }
+    P("INFO lidar.formats n=\(dev.formats.count) withDepth=\(withDepth) active=\(fmtDesc(dev.activeFormat)) activeDepthDataFormat=\(dev.activeDepthDataFormat.map(fmtDesc) ?? "nil")")
+    // 3. session: input + video data + photo + preview
+    do {
+      let input = try AVCaptureDeviceInput(device: dev)
+      session.beginConfiguration()
+      P("INFO lidar.session preset=\(session.sessionPreset.rawValue) canAddInput=\(session.canAddInput(input))")
+      if session.canAddInput(input) { session.addInput(input) }
+      P("INFO lidar.input ports=\(input.ports.map { $0.mediaType.rawValue })")
+      let vdo = AVCaptureVideoDataOutput(); vdo.setSampleBufferDelegate(m, queue: DispatchQueue(label: "l62.vdo"))
+      let po = AVCapturePhotoOutput()
+      P("INFO lidar.outputs canAdd vdo=\(session.canAddOutput(vdo)) photo=\(session.canAddOutput(po))")
+      if session.canAddOutput(vdo) { session.addOutput(vdo) }; if session.canAddOutput(po) { session.addOutput(po) }
+      session.commitConfiguration()
+      R(session.inputs.count == 1 && session.outputs.count == 2, "lidar.session.config", "inputs=\(session.inputs.count) outputs=\(session.outputs.count) active=\(fmtDesc(dev.activeFormat)) activeDepth=\(dev.activeDepthDataFormat.map(fmtDesc) ?? "nil")")
+      P("INFO lidar.photoOutput depthSupported=\(po.isDepthDataDeliverySupported) matte=\(po.isPortraitEffectsMatteDeliverySupported) calibration=\(po.isCameraCalibrationDataDeliverySupported) virtualDelivery=\(po.isVirtualDeviceConstituentPhotoDeliverySupported) codecs=\(po.availablePhotoCodecTypes.map { $0.rawValue }) maxDims=\(po.maxPhotoDimensions.width)x\(po.maxPhotoDimensions.height)")
+      let layer = AVCaptureVideoPreviewLayer(session: session); layer.frame = view.bounds; layer.videoGravity = .resizeAspectFill; view.layer.addSublayer(layer)
+      DispatchQueue.global().async { self.lidarRun(dev: dev, m: m, po: po, layer: layer, force: force) }
+    } catch { E("lidar.input", error); R(false, "lidar.input", "\(error)"); done() }
+  }
+  func lidarRun(dev: AVCaptureDevice, m: L62, po: AVCapturePhotoOutput, layer: AVCaptureVideoPreviewLayer, force: String) {
+    let t0 = Date(); session.startRunning()
+    R(session.isRunning, "lidar.session.start", "ms=\(Int(Date().timeIntervalSince(t0) * 1000))")
+    let tf = Date(); while m.frames == 0 && Date().timeIntervalSince(tf) < 5 { Thread.sleep(forTimeInterval: 0.02) }
+    let ff = Int(Date().timeIntervalSince(tf) * 1000); m.lock.lock(); let f0 = m.frames; m.lock.unlock()
+    Thread.sleep(forTimeInterval: 5.0)
+    m.lock.lock(); let n5 = m.frames - f0; m.lock.unlock()
+    R(n5 > 100, "lidar.frames5s", "n=\(n5) fps=\(String(format: "%.1f", Double(n5) / 5)) first=\(m.firstFrame ?? "-") firstFrameAfterStart=\(ff)ms")
+    DispatchQueue.main.sync { P("INFO lidar.preview contents=\(layer.contents.map { "\(type(of: $0))" } ?? "nil") sublayers=\(layer.sublayers?.count ?? 0)") }
+    // 4. photos: default settings, then depth requested (only when the output says it is supported, unless forced)
+    func shot(_ name: String, _ st: AVCapturePhotoSettings) {
+      let sem = DispatchSemaphore(value: 0)
+      m.photoCB = { p, e in
+        var x = "err=\(e.map { "\($0)" } ?? "nil")"
+        if let p {
+          let data = p.fileDataRepresentation()
+          x += " bytes=\(data?.count ?? 0) depthData=\(p.depthData.map { "\(CVPixelBufferGetWidth($0.depthDataMap))x\(CVPixelBufferGetHeight($0.depthDataMap))/\(fcc($0.depthDataType))" } ?? "nil") matte=\(p.portraitEffectsMatte != nil) calibration=\(p.cameraCalibrationData != nil) resolved=\(p.resolvedSettings.photoDimensions.width)x\(p.resolvedSettings.photoDimensions.height)"
+          if let data, let src = CGImageSourceCreateWithData(data as CFData, nil) {
+            let pr = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [String: Any]
+            x += " type=\(CGImageSourceGetType(src).map { "\($0)" } ?? "-") image=\(pr?[kCGImagePropertyPixelWidth as String] ?? "-")x\(pr?[kCGImagePropertyPixelHeight as String] ?? "-")"
+            x += " auxDepth=\(CGImageSourceCopyAuxiliaryDataInfoAtIndex(src, 0, kCGImageAuxiliaryDataTypeDepth) != nil) auxDisparity=\(CGImageSourceCopyAuxiliaryDataInfoAtIndex(src, 0, kCGImageAuxiliaryDataTypeDisparity) != nil)"
+          }
+          R(e == nil && (data?.count ?? 0) > 0, "lidar.\(name)", x)
+        } else { R(false, "lidar.\(name)", x) }
+        sem.signal()
+      }
+      P("INFO lidar.\(name).settings codec=\(st.format?[AVVideoCodecKey].map { "\($0)" } ?? "-") depth=\(st.isDepthDataDeliveryEnabled) embeds=\(st.embedsDepthDataInPhoto)")
+      po.capturePhoto(with: st, delegate: m)
+      if sem.wait(timeout: .now() + 8) == .timedOut { R(false, "lidar.\(name)", "timeout (no didFinishProcessingPhoto in 8 s)") }
+      R(m.finished.wait(timeout: .now() + 3) == .success, "lidar.\(name).didFinishCapture")
+    }
+    shot("photo.default", AVCapturePhotoSettings())
+    if po.isDepthDataDeliverySupported || force == "photodepth" {
+      P("INFO lidar.photo.depth set photoOutput.isDepthDataDeliveryEnabled=true (supported=\(po.isDepthDataDeliverySupported))")
+      po.isDepthDataDeliveryEnabled = true
+      let st = AVCapturePhotoSettings(); st.isDepthDataDeliveryEnabled = true
+      shot("photo.depth", st)
+    } else { P("INFO lidar.photo.depth skipped: isDepthDataDeliverySupported=NO (a correct app never asks)") }
+    // 5. AVCaptureDepthDataOutput
+    let ddo = AVCaptureDepthDataOutput(); ddo.setDelegate(m, callbackQueue: DispatchQueue(label: "l62.depth"))
+    session.beginConfiguration()
+    let can = session.canAddOutput(ddo)
+    P("INFO lidar.depthOutput canAddOutput=\(can)")
+    if can || force == "depthout" { P("INFO lidar.depthOutput addOutput (checked=\(can))"); session.addOutput(ddo) }
+    session.commitConfiguration()
+    P("INFO lidar.depthOutput outputs=\(session.outputs.map { NSStringFromClass(type(of: $0)) }) connection=\(ddo.connection(with: .depthData).map { "enabled=\($0.isEnabled) active=\($0.isActive)" } ?? "nil") activeDepth=\(dev.activeDepthDataFormat.map(fmtDesc) ?? "nil") running=\(session.isRunning)")
+    m.lock.lock(); let f1 = m.frames; m.lock.unlock()
+    Thread.sleep(forTimeInterval: 3.0)
+    m.lock.lock(); let n3 = m.frames - f1, dn = m.depth, dd = m.depthDrops; m.lock.unlock()
+    P("INFO lidar.depthOutput after3s depth=\(dn) drops=\(dd) first=\(m.firstDepth ?? "-") videoFrames=\(n3) running=\(session.isRunning)")
+    R(n3 > 60, "lidar.frames.afterDepthOutput", "n=\(n3) in 3 s")
+    session.stopRunning(); P("INFO lidar.stopped running=\(session.isRunning)")
+    DispatchQueue.main.async { self.done() }
   }
 }
 UIApplicationMain(CommandLine.argc, CommandLine.unsafeArgv, nil, NSStringFromClass(AppDelegate.self))
