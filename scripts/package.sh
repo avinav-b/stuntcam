@@ -105,7 +105,9 @@ fi
 codesign --verify --strict "$HAPP" 2>$OUTD/helper-verify.log || { cat $OUTD/helper-verify.log; die "the camera helper's signature doesn't verify (an unsigned --release build? sign it, or run helper/build.sh)"; }
 HCS=$(codesign -dv --verbose=4 "$HAPP" 2>&1)
 [[ $HCS == *"Identifier=$HID"$'\n'* ]] || die "the camera helper's bundle id isn't $HID"
-[[ $HCS == *"(runtime)"* ]] || die "the camera helper isn't signed with the hardened runtime"
+# flags=0x10000(runtime) for Developer ID, 0x10002(adhoc,runtime) for the ad-hoc dev helper
+HFL=$(print -r -- $HCS | sed -n 's/^CodeDirectory .*flags=0x[0-9a-f]*(\([^)]*\)).*/\1/p')
+[[ ,$HFL, == *,runtime,* ]] || die "the camera helper isn't signed with the hardened runtime (flags: ${HFL:-none found})"
 HENT=$(codesign -d --entitlements - --xml "$HAPP" 2>/dev/null | plutil -convert json -o - - 2>/dev/null) || HENT=
 [[ $HENT == '{"com.apple.security.device.camera":true}' ]] || die "the camera helper's entitlements aren't exactly com.apple.security.device.camera: $HENT"
 if [[ $HKIND == release ]]; then
