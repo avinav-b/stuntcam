@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Plain AVFoundation checks on genuine devices. Mode via env M5APP_MODE = scan | q4
+// Plain AVFoundation checks on genuine devices. Mode via env M5APP_MODE = scan | q4 | m9 | cycle | lidar | webcam (webcam.swift) | golden (golden.swift)
 import UIKit
 import AVFoundation
 import CoreMotion
@@ -22,7 +22,7 @@ final class VC: UIViewController {
     super.viewDidAppear(animated)
     let mode = ProcessInfo.processInfo.environment["M5APP_MODE"] ?? "m9"
     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-      let run = { mode == "scan" ? self.scan() : mode == "m9" ? self.m9() : mode == "cycle" ? self.cycle() : mode == "lidar" ? self.lidar() : self.q4() }
+      let run = { mode == "webcam" ? self.webcam() : mode == "golden" ? self.golden() : mode == "scan" ? self.scan() : mode == "m9" ? self.m9() : mode == "cycle" ? self.cycle() : mode == "lidar" ? self.lidar() : self.q4() }
       if let order = ProcessInfo.processInfo.environment["M5APP_ORDER"] { self.ordering(order, then: run) } else { run() }
     }
   }

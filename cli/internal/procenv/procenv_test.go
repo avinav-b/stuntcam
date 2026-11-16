@@ -4,6 +4,7 @@ package procenv
 import (
 	"encoding/binary"
 	"os"
+	"path/filepath"
 	"reflect"
 	"runtime"
 	"strings"
@@ -88,5 +89,21 @@ func TestProcargs2Self(t *testing.T) {
 	}
 	if len(e) == 0 {
 		t.Fatal("no environment")
+	}
+}
+
+func TestExecPathSelf(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("KERN_PROCARGS2 is macOS only")
+	}
+	exe, _ := os.Executable()
+	got := ExecPath(os.Getpid())
+	if a, _ := filepath.EvalSymlinks(got); a != exe {
+		if b, _ := filepath.EvalSymlinks(exe); a != b {
+			t.Fatalf("%q, want %q", got, exe)
+		}
+	}
+	if ExecPath(-1) != "" {
+		t.Fatal()
 	}
 }

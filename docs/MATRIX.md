@@ -140,3 +140,40 @@ loaded (load average 300-600): e14's timings (first frame, Xcode frame counts) a
 **Exit test (design §10 item 2): passed on `7e62160`.** The earlier rows above are superseded by e14 wherever e14 covers
 them; rows e14 doesn't repeat keep their original run: the U-items, CI, 17.5 ordering, the 17.5 audio variants, 27.0 orientation in
 launchd mode, Flutter landscape and the eager (`SIMCAM_LAZY=0`) runs.
+
+## Webcam source (1.1, 2026-11-16)
+
+Engine + loader `cf75da88e48f`, stub `09908f5dbe40`, helper
+`5380950f5c94` (Apple Development-signed, already authorized: no prompt). Boot mode, iPhone 17 Pro (iPhone 15 Pro for
+17.5). **R** = the real camera, the MacBook Pro's built-in one, with the helper's latency stamp drawn into the frames (the
+picture itself was black); **S** = the helper's synthetic pattern. The webcam was the source of every launch
+(`SIMCAM_SOURCE`; for AVCam, `launchctl setenv` in the sim). Load average 4–20 for the timings below, 33–94 for the first
+plain S runs on 26.3.
+
+| Stack | 17.5 S / R | 26.3 S / R | 27.0 S / R |
+|---|---|---|---|
+| plain AVF, webcam mode: back 10 s + photo + 5 s movie, front + photo + movie, 6 geometry cases | 8/8, 8/8 | 8/8, 8/8 | 8/8, 8/8 |
+| plain AVF, its 14 checks | 14/14, 14/14 | 14/14, 14/14 | 14/14, 14/14 |
+| VisionCamera 5 (`vc`) | 17/17, 17/17 | 17/17, 17/17 | 17/17, 17/17 |
+| expo-camera | 7/8, 7/8 | 7/8, 7/8 | 7/8, 7/8 |
+| Flutter `camera` + `mobile_scanner` | 17/18, 17/18 | 17/18, 17/18 | 17/18, 17/18 |
+| AVCam (patched), 10 shutter presses | — (needs iOS 26) | 10/10, 10/10 | 10/10, 10/10 |
+
+The only failures are the barcode checks (`expo.barcode.qr`, Flutter `scanner.qr+ean13`): they need the scene's QR and
+EAN codes, which webcam frames don't carry. Webcam mode on every runtime and source: 30.0 fps (1080p60:
+60.0 fps, each frame exactly twice), **0 dup / 0 skip**, photo and every movie frame stamped (150–151 unique of 150–151),
+latency p50 11–16 ms S and 67–71 ms R, app CPU 6–14 %. Geometry (decoded stamp orientation/scale) as expected for every
+case: portrait back 3/0.8889, 90° 420v 0/0.8889, landscapeRight 4K 0° 2/0.5, front 90° mirrored 4/0.8889, upsideDown
+1440×1920 270° 0/0.6667, landscapeLeft 1080p60 180° 2/0.5. Preview: screenshots show the pattern, cropped to fill, on
+the front and back. The R matrix ran on all three runtimes at once, so three simulators shared one helper. Front/back:
+one camera feeds both positions; this Mac had no second ordinary camera (its others were a Continuity Camera and Desk
+View cameras, not opened).
+
+| Soak and lifecycle (27.0 unless noted) | Result |
+|---|---|
+| Soak: one app, R, 1810 s; 36 cycles of 45 s video data, a photo and a 5 s movie; webcam → scene → webcam 3×, helper stopped and restarted 3× | Cycles clear of an event: 30.0 fps, 0 dup, latency p50 68–70 ms, photo and movie stamped every time. Engine over the whole run: 51 001 ticks, 49 681 new frames, 16 dup, 30 skipped (about one per cycle, at its photo or movie), 0 torn, path gpu throughout. App footprint 51 MB at the start and the end (67 MB for a stretch in between; samples during the fixture's own movie decode read up to 475 MB); helper 179–215 MB with the camera open. Every event recovered without a relaunch |
+| Leave/re-enter, 26.3, S: 100 × (4 s webcam, 4 s scene), one process | 100/100 live, 100 left, gpu each time, no crash; footprint after leaving 31 → 24 MB. Host IOSurface count 504 → 494 (range 484–504), unchanged when the app was then terminated; a control run (same process and schedule, scene only) 504 → 495 (487–504): no growth |
+| Camera closed after the last reader | 10.0 s (S and R) |
+| Idle quit with no reader | 600 s (S and R), ring cleared and unlinked |
+| Stall scenarios with Core Image setup under the 250 ms bound (26.3, 27.0) | one stall recovers after ~605 ms; three in 30 s go to the CG canvas; a stall across leave/re-enter recovers with a new context; no crash |
+| CLI | `--front`/`--back` naming two cameras refused (exit 64, nothing started); the same camera accepted; front camera through the CLI's control file 30 fps, 0 dup / 0 skip; `source scene` stops the helper |

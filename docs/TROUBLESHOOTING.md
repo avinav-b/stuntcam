@@ -43,10 +43,21 @@ quieter.
 4K at 60 fps records at about 16–32 fps: the simulator encodes in software. Lower formats keep their frame rate, though on a heavily loaded Mac 4K30 and 1080p60 can drop a few frames. A
 hardware-encoded path is planned for v1.1.
 
+## The webcam
+
+`stuntcam source webcam` starts a small helper app, "Stuntcam Camera", that feeds your Mac's camera to the simulator.
+
+| What you see | Fix |
+|---|---|
+| `source webcam` says camera access is denied, or the picture says **webcam offline: helper denied** | Turn on Stuntcam Camera in System Settings › Privacy & Security › Camera, then run `stuntcam source webcam` again. Over ssh or in CI nobody can answer the prompt: use `video:` there |
+| **webcam offline: helper not running** | The helper isn't running: it quits on `stuntcam down`, on switching to another source, and after 10 minutes unused. Run `stuntcam source webcam` again; running apps pick it up within a second, no relaunch needed |
+| **webcam offline: no fresh frames from the helper** | The camera stopped sending: it was unplugged, or another app took it over. Plug it back in, or quit the other app (or stop its video); if the picture doesn't come back, run `stuntcam source webcam` again |
+| **update stuntcam (…)** | The running camera helper and this stuntcam are different versions (two installs, or an upgrade mid-session). Run `stuntcam source webcam` from the stuntcam you use: it replaces the old helper. If an app shows it, the app runs an older stuntcam: `stuntcam up`, then relaunch the app |
+
 ## A feature your app needs isn't there
 
-Not supported yet: a 720p format, Live Photo, depth data and a live webcam: your app sees them as unavailable, as on a
-device without them. Zoom (`videoZoomFactor`, and on iOS 27 `rampToVideoZoomFactor`) is accepted but the picture never
+Not supported yet: a 720p format, Live Photo and depth data: your app sees them as unavailable, as on a device without
+them. Zoom (`videoZoomFactor`, and on iOS 27 `rampToVideoZoomFactor`) is accepted but the picture never
 zooms; on iOS 26 a ramp is ignored (the factor doesn't move). Focus can't be locked. Expo Go and Flutter's `camera` plugin in landscape are known
 gaps.
 

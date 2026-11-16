@@ -1,6 +1,7 @@
 #!/bin/zsh
 # SPDX-License-Identifier: Apache-2.0
-# scripts/package.sh [--verdicts DIR] [--no-build] [--allow-dirty] — build the v1 packages locally. Publishes nothing.
+# scripts/package.sh [--verdicts DIR] [--no-build] [--allow-dirty] [--helper APP] — build the v1 packages locally.
+# Publishes nothing.
 #
 #   build/package/stuntcam/            the npm package directory (installed layout, artifacts.Installed):
 #     package.json  README.md  LICENSE  THIRD_PARTY_NOTICES.md
@@ -16,6 +17,9 @@
 #         stub/<sha>/libsimcamstub.dylib                   the frozen stub (FROZEN_STUB below; any other hash is refused)
 #         hook/<sha>/libsimcamrunnerhook.dylib             the XCTest runner hook (`stuntcam exec`)
 #         canary/m10canary.app                             the prebuilt canary
+#         helper/<sha>/Stuntcam Camera.app                 the camera helper (`webcam` source), as signed: inside the
+#                                                          tar, since Homebrew re-signs loose Mach-O files, which would
+#                                                          break its signature and the camera grant that follows it
 #     share/stuntcam/profiles/cfg-m10.plist  media/qr.png  the shipped profile and the scene's image
 #     share/stuntcam/restore-rules/<xcode build>.json
 #     share/stuntcam/verdicts/<key>.json                   shipped canary passes (only with --verdicts)
@@ -27,6 +31,13 @@
 #   build/package/stuntcam.rb              the Homebrew formula, sha256 of that tarball, URL a TODO placeholder
 #   build/package/setup-stuntcam/          the GitHub action (packaging/setup-stuntcam/action.template.yml, version filled in)
 #
+# The camera helper: --helper APP packages a release helper (bundle id dev.stuntcam.camera, Developer ID with the team
+# $HELPER_TEAM_ID, hardened runtime, the camera entitlement only, notarization ticket stapled), checked before it enters
+# the payload, and manifest line 2 says `helper release`. Without --helper it packages the dev helper from
+# helper/build.sh (dev.stuntcam.camera.dev, ad-hoc or $STUNTCAM_DEV_SIGN; built first unless --no-build) and says
+# `helper dev`: the release workflow's stage job refuses such a package. Line 2 also records the helper's <sha>, the
+# sha256 of its executable and its CDHash, before the trailing `xcode <build>` field.
+#
 # The version is the VERSION file (cli/build.sh stamps the same one into the CLI with the commit). By default it runs
 # ./build.sh first (normal variant) so the package is the tree's build; --no-build packages build/'s current output as is.
 # --verdicts DIR copies the plain canary passes for exactly this build (engine, stub, canary, profile) from DIR (a
@@ -36,13 +47,14 @@ set -euo pipefail
 LROOT="$(cd "$(dirname "$0")/.." && pwd -L)"; ROOT="$(cd "$LROOT" && pwd -P)"; cd "$ROOT"   # both forms are leak-checked
 FROZEN_STUB=09908f5dbe40   # the stub is frozen (design §4.1): a change needs its own review, never a package side effect
 
-VERDICTS=; BUILD=1; DIRTY=0
+VERDICTS=; BUILD=1; DIRTY=0; HELPER=
 while (( $# )); do
   case $1 in
     --verdicts) VERDICTS=${2:?--verdicts DIR}; shift;;
     --no-build) BUILD=0;;
     --allow-dirty) DIRTY=1;;
-    -h|--help) sed -n '3,34p' "$0"; exit 0;;
+    --helper) HELPER=${2:?--helper APP}; shift;;
+    -h|--help) sed -n '3,44p' "$0"; exit 0;;
     *) echo "package.sh: unknown argument $1" >&2; exit 2;;
   esac
   shift
@@ -82,20 +94,47 @@ canary/build.sh > $OUTD/canary.log 2>&1 || { cat $OUTD/canary.log; die "canary/b
 codesign --verify canary/build/m10canary.app || die "canary signature"
 C=$(git rev-parse --short=12 HEAD); clean --untracked-files=no || C=$C-dirty
 
+# 2b. the camera helper: a release bundle (--helper) or the dev build, checked as it will be launched
+if [[ -n $HELPER ]]; then
+  HKIND=release; HAPP=${HELPER:A}; HID=dev.stuntcam.camera
+else
+  HKIND=dev; HAPP="$ROOT/build/helper/Stuntcam Camera.app"; HID=dev.stuntcam.camera.dev
+  (( BUILD )) && { helper/build.sh > $OUTD/helper.log 2>&1 || { tail -20 $OUTD/helper.log; die "helper/build.sh failed"; } }
+fi
+[[ -d $HAPP && ${HAPP:t} == "Stuntcam Camera.app" ]] || die "no camera helper at $HAPP (helper/build.sh, or --helper <Stuntcam Camera.app>)"
+codesign --verify --strict "$HAPP" 2>$OUTD/helper-verify.log || { cat $OUTD/helper-verify.log; die "the camera helper's signature doesn't verify (an unsigned --release build? sign it, or run helper/build.sh)"; }
+HCS=$(codesign -dv --verbose=4 "$HAPP" 2>&1)
+[[ $HCS == *"Identifier=$HID"$'\n'* ]] || die "the camera helper's bundle id isn't $HID"
+[[ $HCS == *"(runtime)"* ]] || die "the camera helper isn't signed with the hardened runtime"
+HENT=$(codesign -d --entitlements - --xml "$HAPP" 2>/dev/null | plutil -convert json -o - - 2>/dev/null) || HENT=
+[[ $HENT == '{"com.apple.security.device.camera":true}' ]] || die "the camera helper's entitlements aren't exactly com.apple.security.device.camera: $HENT"
+if [[ $HKIND == release ]]; then
+  [[ -n ${HELPER_TEAM_ID:-} ]] || die "--helper needs HELPER_TEAM_ID (the Developer ID team it must be signed by)"
+  [[ $HCS == *"TeamIdentifier=$HELPER_TEAM_ID"$'\n'* ]] || die "the camera helper isn't signed by team $HELPER_TEAM_ID"
+  [[ $HCS == *"Authority=Developer ID Application: "* ]] || die "the camera helper isn't signed with a Developer ID Application certificate"
+  xcrun stapler validate "$HAPP" > $OUTD/helper-staple.log 2>&1 || { cat $OUTD/helper-staple.log; die "the camera helper has no valid stapled notarization ticket"; }
+fi
+if find "$HAPP" -type l | grep -q .; then die "the camera helper bundle contains a symlink (the payload tar is built from regular files only)"; fi
+for f in "$HAPP"/Contents/MacOS/*(N); do [[ -f $f && -x $f ]] || die "${f#$HAPP/} isn't an executable regular file"; done
+HS=$(cd "$HAPP" && LC_ALL=C find . -type f | LC_ALL=C sort | while IFS= read -r f; do print -r -- "${f#./} $(shasum < "$f" | cut -c1-40)"; done | shasum | cut -c1-12)
+HEXE=$(shasum -a 256 "$HAPP/Contents/MacOS/stuntcam-camera" | cut -d' ' -f1)
+HCD=$(print -r -- $HCS | sed -n 's/^CDHash=//p'); [[ $HCD =~ '^[0-9a-f]{40}$' ]] || die "can't read the camera helper's CDHash"
+
 # 3. stage the installed layout. The Mach-O files go into payload.tar (cp/ditto keep the bytes, so the linker signatures stay
 #    valid): Homebrew's keg relinking rewrites install names and re-signs loose Mach-O files under the prefix, never
 #    inside an archive.
 SH=$P/share/stuntcam; PL=$OUTD/payload
-mkdir -p $PL/builds/$H $PL/stub/$S $PL/hook/$K $PL/canary $SH/profiles $SH/media $SH/restore-rules
+mkdir -p $PL/builds/$H $PL/stub/$S $PL/hook/$K $PL/canary $PL/helper/$HS $SH/profiles $SH/media $SH/restore-rules
 cp build/$H/libsimcam.dylib build/$H/libsimcamloader.dylib $PL/builds/$H/
 cp build/$S/libsimcamstub.dylib $PL/stub/$S/; cp build/$K/libsimcamrunnerhook.dylib $PL/hook/$K/
 ditto --norsrc --noextattr canary/build/m10canary.app $PL/canary/m10canary.app
+ditto --norsrc --noextattr "$HAPP" "$PL/helper/$HS/Stuntcam Camera.app"
 cp engine/profiles/cfg-m10.plist $SH/profiles/; cp fixtures/media/qr.png $SH/media/
 cp restore-rules/[0-9]*.json $SH/restore-rules/
 cp LICENSE THIRD_PARTY_NOTICES.md $P/; cp packaging/npm/README.md $P/README.md
 (cd $PL && find . -type f -exec chmod go-w {} + && find . -exec touch -h -t 198510260000 {} +)
 # ustar, no xattrs/AppleDouble files, no owner names; members in sorted order (a stable tar for the same files)
-(cd $PL && find builds stub hook canary -type f | LC_ALL=C sort > $OUTD/payload.list \
+(cd $PL && find builds stub hook canary helper -type f | LC_ALL=C sort > $OUTD/payload.list \
   && COPYFILE_DISABLE=1 tar --format ustar --no-xattrs --no-mac-metadata --no-acls --uid 0 --gid 0 --uname root --gname wheel \
      -cf $SH/payload.tar -T $OUTD/payload.list)
 diff <(tar -tf $SH/payload.tar) $OUTD/payload.list || die "payload.tar doesn't list exactly the staged Mach-O files"
@@ -147,7 +186,7 @@ JS
 # installs only bin/ and share/). bin/stuntcam isn't listed: it is built next, with this manifest's sha256 in it (and may
 # be re-signed by Homebrew, which doesn't change the embedded values).
 [[ ! -e $P/bin/stuntcam ]] || die "bin/stuntcam exists before the manifest"
-{ print "stuntcam $V commit $C"; print "engine+loader $H stub $S hook $K canary $CSHA profile $PSHA verdicts $NV xcode $XB"
+{ print "stuntcam $V commit $C"; print "engine+loader $H stub $S hook $K canary $CSHA profile $PSHA verdicts $NV helper $HKIND $HS sha256 $HEXE cdhash $HCD xcode $XB"
   (cd $P && find . -type f ! -path ./share/stuntcam/manifest.txt | LC_ALL=C sort | sed 's|^\./||' | while read -r f; do print -r -- "$(shasum -a 256 "$f" | cut -d' ' -f1)  $f"; done)
   (cd $PL && while read -r f; do print -r -- "$(shasum -a 256 "$f" | cut -d' ' -f1)  payload/$f"; done < $OUTD/payload.list)
 } > $SH/manifest.txt
@@ -167,6 +206,8 @@ cp $OUTD/cli/stuntcam $P/bin/stuntcam && chmod 755 $P/bin/stuntcam
 CK=$OUTD/check-home; rm -rf $CK
 out=$(cd / && SIMCAM_HOME=$CK $P/bin/stuntcam version --check 2>&1) || { print -r -- "$out"; die "version --check of the staged package failed"; }
 [[ $out == *"packaged with (manifest sha256 ${MSUM[1,12]})"* ]] || { print -r -- "$out"; die "the staged CLI doesn't carry the manifest's sha256"; }
+# the helper the CLI unpacked from the tar still verifies (exec bits and every sealed file survived the round trip)
+codesign --verify --strict "$CK/helper/$HS/Stuntcam Camera.app" || die "the camera helper unpacked from payload.tar doesn't verify"
 rm -rf $CK
 
 # 4. no build-machine paths, no secrets, nothing unexpected
@@ -188,6 +229,9 @@ diff <(tar -tzf $TGZ | sed 's|^package/||' | grep -v '/$' | LC_ALL=C sort) <(cd 
   || die "tarball and staged tree differ"
 [[ $(tar -tvzf $TGZ package/bin/stuntcam) == -rwxr-xr-x* ]] || die "bin/stuntcam lost its exec bit in the tarball"
 [[ $(tar -tvf $SH/payload.tar canary/m10canary.app/m10canary) == -rwxr-xr-x* ]] || die "the canary lost its exec bit in payload.tar"
+for f in "$PL/helper/$HS/Stuntcam Camera.app"/Contents/MacOS/*(N); do
+  [[ $(tar -tvf $SH/payload.tar "${f#$PL/}") == -rwxr-xr-x* ]] || die "${f#$PL/} lost its exec bit in payload.tar"
+done
 SUM=$(shasum -a 256 $TGZ | cut -d' ' -f1)
 
 # 6. the Homebrew formula and the GitHub action (generated here, never committed; not published; the URL is a placeholder)
@@ -230,6 +274,10 @@ class Stuntcam < Formula
     # every file matches the manifest, and the payload unpacks into a private host directory
     ENV["SIMCAM_HOME"] = (testpath/"home").to_s
     assert_match "every file matches", shell_output("#{bin}/stuntcam version --check")
+    # the camera helper is unpacked from the payload with its signature intact
+    helpers = Dir[testpath/"home/helper/*/Stuntcam Camera.app"]
+    assert_equal 1, helpers.length
+    system "codesign", "--verify", "--strict", helpers.first
     dylibs = Dir[testpath/"home/builds/*/*.dylib"]
     assert_equal 4, dylibs.length
     # the unpacked dylibs are the packaged bytes: ad-hoc linker-signed on every slice
@@ -251,6 +299,7 @@ cp packaging/setup-stuntcam/README.md $OUTD/setup-stuntcam/
 print "version $V commit $C"
 print "manifest sha256 $MSUM  payload sha256 $PSUM (embedded in bin/stuntcam)"
 print "engine+loader $H  stub $S (frozen)  hook $K  canary $CSHA  profile $PSHA  shipped verdicts $NV"
+print "camera helper $HS ($HKIND, $HID, CDHash $HCD)"
 print "package dir: $P"
 print "tarball: $TGZ ($(stat -f %z $TGZ) bytes, unpacked $(du -sk $P | cut -f1) KiB, $(tar -tzf $TGZ | grep -vc '/$') files)"
 print "sha256 $SUM"

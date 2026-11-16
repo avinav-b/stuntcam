@@ -29,6 +29,7 @@ import (
 	"github.com/avinav-b/stuntcam/cli/internal/state"
 	"github.com/avinav-b/stuntcam/cli/internal/trace"
 	"github.com/avinav-b/stuntcam/cli/internal/verify"
+	"github.com/avinav-b/stuntcam/cli/internal/webcam"
 	"github.com/avinav-b/stuntcam/cli/internal/xcode"
 )
 
@@ -60,7 +61,7 @@ func cmdVersion(args []string) error {
 	} else {
 		fmt.Println("this binary carries no package hashes (a dev build): manifest.txt is checked for consistency only")
 	}
-	for _, p := range []string{set.Engine, set.Loader, set.Stub, set.Hook, set.Canary} {
+	for _, p := range []string{set.Engine, set.Loader, set.Stub, set.Hook, set.Canary, set.Helper} {
 		if p != "" {
 			fmt.Println("unpacked " + p)
 		}
@@ -96,7 +97,7 @@ func init() {
 		{"sentinel", "ls|clear [--udid U] [--bundle B]", "crash/hang records and latches per app", cmdSentinel},
 		{"trace", "[--json] [--udid U] [--pid N] BUNDLE", "an app's last 64 camera ops with host-clock times (shutter -> slot 12 -> still complete -> timestamp)", cmdTrace},
 		{"env", "[--udid U]", "print SIMCTL_CHILD_* exports for per-launch arming (Detox, scripts)", cmdEnv},
-		{"source", "[--udid U] scene|image:PATH|video:PATH", "switch the picture live, in running apps and the next ones", cmdSource},
+		{"source", "[--udid U] [--front NAME] [--back NAME] scene|image:PATH|video:PATH|webcam[:NAME]", "switch the picture live, in running apps and the next ones (webcam: the Mac camera)", cmdSource},
 		{"orient", "[--udid U] portrait|upsideDown|landscapeLeft|landscapeRight|auto", "set the virtual device orientation, live", cmdOrient},
 		{"doctor", "[--json]", "check Xcode, runtimes, the host directory, the build and each simulator", cmdDoctor},
 		{"version", "[--check]", "print the version and the commit it was built from (--check: verify the installed files and unpack the payload)", cmdVersion},
@@ -229,7 +230,7 @@ func cmdUp(args []string) error {
 	udid := fs.String("udid", "", "simulator UDID")
 	mode := fs.String("mode", "", "boot | launchd (default: boot if the sim is shut down, launchd if it is booted)")
 	reboot := fs.Bool("reboot", false, "reboot a booted simulator into boot mode (Xcode Run and tests need it)")
-	source := fs.String("source", "", "scene | image:PATH | video:PATH (default scene)")
+	source := fs.String("source", "", "scene | image:PATH | video:PATH | webcam[:NAME] (default scene)")
 	logs := fs.Bool("log", false, "log stub and engine decisions under the host directory's logs/<udid>/")
 	build := fs.String("build", "", "use this build dir (loader + engine pair) instead of the default")
 	skipVerify := fs.Bool("skip-verify", false, "arm without a canary verdict")
@@ -241,7 +242,8 @@ func cmdUp(args []string) error {
 	}
 
 	srcSpec := ""
-	if *source != "" { // checked before the self-test, which can take a minute
+	wcName, wcOn := webcamSpec(*source)
+	if *source != "" && !wcOn { // checked before the self-test, which can take a minute
 		var err error
 		if srcSpec, err = stageSource(*source); err != nil {
 			return usageError{err}
@@ -253,6 +255,9 @@ func cmdUp(args []string) error {
 	}
 	if set, err = artifacts.Stage(set); err != nil {
 		return fmt.Errorf("staging the build under %s: %w", home.Root(), err)
+	}
+	if wcOn && set.Helper == "" {
+		return usagef("--source webcam: this build has no camera helper (in a checkout: helper/build.sh)")
 	}
 	d, why, err := pickSim(*udid)
 	if err != nil {
@@ -339,6 +344,14 @@ func cmdUp(args []string) error {
 	if m != arm.Boot && m != arm.Launchd {
 		return fmt.Errorf("--mode must be boot or launchd")
 	}
+	wcID := ""
+	if wcOn { // the camera is resolved and its helper started (and allowed) before the simulator is touched
+		we := newWebcamEnv()
+		if wcID, err = startWebcam(we, set, wcName, "", ""); err != nil {
+			return err
+		}
+		srcSpec = "webcam:" + wcID
+	}
 	o := arm.Options{StubLog: *logs, Extra: map[string]string{}}
 	if srcSpec != "" {
 		o.Extra["SIMCAM_SOURCE"] = srcSpec
@@ -378,6 +391,16 @@ func cmdUp(args []string) error {
 	_ = os.Remove(home.ControlFile(d.UDID))
 	if srcSpec != "" {
 		if err := setControl(d, "source", srcSpec); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: %v\n", err)
+		}
+	}
+	// this simulator's webcam session: the camera now selected, or none (a fresh arm starts from the scene)
+	var wcIDs []string
+	if wcID != "" {
+		wcIDs = []string{wcID}
+	}
+	if we := newWebcamEnv(); wcID != "" || len(webcam.ReadSession(we.Home, d.UDID)) > 0 {
+		if err := we.Switch(d.UDID, wcIDs, webcamInUse()); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: %v\n", err)
 		}
 	}
@@ -593,7 +616,7 @@ func cmdDown(args []string) error {
 		return err
 	}
 	fmt.Printf("%s (%s): new launches no longer load stuntcam; apps already running keep it until they quit\n", d.Name, d.UDID)
-	return nil
+	return endWebcam(d.UDID) // its camera helper stops unless another simulator still uses it
 }
 
 type simStatus struct {
@@ -1363,6 +1386,7 @@ func cmdDoctor(args []string) error {
 			say(strings.Contains(s, "adhoc") && strings.Contains(s, "linker-signed"), false, filepath.Base(p)+" ad-hoc linker-signed")
 		}
 	}
+	webcamDoctor(set, err, say, func(m string) { emit("info", m) })
 	ds, err := ctl.Devices()
 	if err == nil {
 		for _, d := range ds {
@@ -2093,8 +2117,9 @@ func cmdGC(args []string) error {
 			refs[r.Build] = true
 		}
 	}
-	currentCanary := ""
+	currentCanary, currentHelper := "", ""
 	if set, err := artifacts.Find(""); err == nil {
+		currentHelper = set.HelperSHA()
 		refs[filepath.Base(filepath.Dir(set.Loader))], refs[filepath.Base(filepath.Dir(set.Stub))] = true, true
 		if set.Hook != "" {
 			refs[filepath.Base(filepath.Dir(set.Hook))] = true
@@ -2136,6 +2161,7 @@ func cmdGC(args []string) error {
 		rm("unused build", p)
 	}
 	gcCanaries(home.Canary(), currentCanary, 2, time.Now(), *dry, rm)
+	gcHelpers(currentHelper, *dry, rm)
 	gcStale(home.Rules(), time.Now(), rm) // StageRules' temp dirs
 	return nil
 }
@@ -2407,26 +2433,55 @@ func containsStr(xs []string, x string) bool {
 	return false
 }
 
+const sourceUsage = "usage: stuntcam source [--udid U] [--front NAME] [--back NAME] scene|image:PATH|video:PATH|webcam[:NAME]"
+
 func cmdSource(args []string) error {
 	fs := flag.NewFlagSet("source", flag.ContinueOnError)
 	udid := fs.String("udid", "", "simulator UDID")
+	front := fs.String("front", "", "webcam: the camera for the front position (localized name or uniqueID)")
+	back := fs.String("back", "", "webcam: the camera for the back position (localized name or uniqueID)")
 	if err := parse(fs, args, 1); err != nil {
 		return err
 	}
 	if fs.NArg() != 1 {
-		return usagef("usage: stuntcam source [--udid U] scene|image:PATH|video:PATH")
+		return usagef(sourceUsage)
 	}
-	if a := fs.Arg(0); a != "scene" && !strings.HasPrefix(a, "image:") && !strings.HasPrefix(a, "video:") {
-		return usagef("usage: stuntcam source [--udid U] scene|image:PATH|video:PATH")
+	a := fs.Arg(0)
+	wcName, wcOn := webcamSpec(a)
+	if a != "scene" && !strings.HasPrefix(a, "image:") && !strings.HasPrefix(a, "video:") && !wcOn {
+		return usagef(sourceUsage)
+	}
+	if !wcOn && (*front != "" || *back != "") {
+		return usagef("--front and --back go with the webcam source")
 	}
 	d, _, err := pickSim(*udid)
 	if err != nil {
 		return err
 	}
-	if err := controllable(d, "source"); err != nil { // before copying the file into data/
+	if err := controllable(d, "source"); err != nil { // before copying the file into data/ or starting the helper
 		return err
 	}
-	spec, err := stageSource(fs.Arg(0))
+	if wcOn {
+		set, err := artifacts.Find("")
+		if err != nil {
+			return err
+		}
+		e := newWebcamEnv()
+		id, err := startWebcam(e, set, wcName, *front, *back)
+		if err != nil {
+			return err
+		}
+		spec := "webcam:" + id
+		if err := writeControl(d, "source", spec); err != nil {
+			return err
+		}
+		if err := e.Switch(d.UDID, []string{id}, webcamInUse()); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: %v\n", err)
+		}
+		fmt.Printf("%s: source %s (running apps switch within a second; apps launched later start with it; the camera is on only while an app has a capture session running)\n", d.Name, spec)
+		return nil
+	}
+	spec, err := stageSource(a)
 	if err != nil {
 		return usageError{err}
 	}
@@ -2434,7 +2489,7 @@ func cmdSource(args []string) error {
 		return err
 	}
 	fmt.Printf("%s: source %s (running apps switch within a second; apps launched later start with it)\n", d.Name, spec)
-	return nil
+	return endWebcam(d.UDID) // this simulator's webcam session ends; the helper stops unless another simulator uses it
 }
 
 func cmdOrient(args []string) error {

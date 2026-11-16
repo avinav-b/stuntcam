@@ -98,6 +98,11 @@ simulator; a semantic change can still slip past it (design §13), and the senti
   - **Movie writer:** `AVAssetWriter` in the simulator, sized by the active format.
   - **Audio:** a tone by default; the Mac's microphone in `mic` mode.
   - **Scene:** the synthetic picture with a QR code and an EAN-13 barcode, or an image or video file.
+  - **Webcam:** the Mac camera, published by the helper app (`helper/`, "Stuntcam Camera") into a read-only
+    shared-memory ring ([webcam-ring.md](webcam-ring.md)). The pump locks its ticks to the helper's frames, and an
+    offline helper means the scene with a "webcam offline" band. Its frames go to each output in one GPU pass (Core
+    Image on the simulator's Metal device: crop to aspect, scale, turn, mirror), webcam only; scene, image and video
+    keep their CG path (`scripts/golden.sh` checks their frames stay bit-identical).
 - **Client hooks** (`client/`). A few public-API fixes where the simulator's AVFoundation differs from a phone: CoreMotion
   for orientation, photo data and rotation, writer settings, and Vision's barcode request pinned to revision 1.
 - **Control** (`core/control.inc`). Per-launch settings (`SIMCAM_SOURCE`, `SIMCAM_ORIENT`) and a control file it polls

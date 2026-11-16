@@ -6,7 +6,8 @@
 // the encode's time would be 100-480 ms later. M54_OLD_EXIF=1 stamps them at the encode (with the subseconds).
 static NSData *M5EncodePhoto(CVPixelBufferRef src, int w, int h, NSString *uti, int exifOrientation, NSDictionary **metaOut, NSDate *when) {
     CIImage *ci = [CIImage imageWithCVPixelBuffer:src];
-    if (w > 0 && h > 0) ci = [ci imageByApplyingTransform:CGAffineTransformMakeScale((double)w / kSrcW, (double)h / kSrcH)];
+    // the source is the 1920x1080 canvas, or the webcam canvas at the ring's size
+    if (w > 0 && h > 0) ci = [ci imageByApplyingTransform:CGAffineTransformMakeScale((double)w / CVPixelBufferGetWidth(src), (double)h / CVPixelBufferGetHeight(src))];
     static CIContext *ctx; if (!ctx) ctx = [CIContext contextWithOptions:nil];
     CGImageRef cg = [ctx createCGImage:ci fromRect:ci.extent];
     NSMutableData *d = [NSMutableData data];

@@ -41,6 +41,7 @@ const (
 //	    stub/<sha1-12>/libsimcamstub.dylib                the frozen stub
 //	    hook/<sha1-12>/libsimcamrunnerhook.dylib          the XCTest runner hook (exec)
 //	    canary/m10canary.app/…                            the prebuilt canary
+//	    helper/<sha>/Stuntcam Camera.app/…                the camera helper (signed; <sha>: BundleSHA of its files)
 //	share/stuntcam/profiles/cfg-m10.plist, media/qr.png, restore-rules/<xcode build>.json, verdicts/<key>.json (optional)
 //
 // The Mach-O files ship inside the tar because package managers rewrite loose ones: Homebrew's keg relinking changes
@@ -80,7 +81,7 @@ func Installed(prefix string) (Set, error) {
 	if err != nil {
 		return s, err
 	}
-	s.Loader, s.Engine, s.Stub, s.Hook, s.Canary = payload.loader, payload.engine, payload.stub, payload.hook, payload.canary
+	s.Loader, s.Engine, s.Stub, s.Hook, s.Canary, s.Helper = payload.loader, payload.engine, payload.stub, payload.hook, payload.canary, payload.helper
 	s.Profile, s.Image = dataFiles(share)
 	s.Rules = filepath.Join(share, "restore-rules")
 	if v := filepath.Join(share, "verdicts"); exists(v) {
@@ -251,7 +252,7 @@ func (m manifest) checkShare(share string) error {
 	return nil
 }
 
-type unpacked struct{ loader, engine, stub, hook, canary string }
+type unpacked struct{ loader, engine, stub, hook, canary, helper string }
 
 // member is one payload file: its bytes and whether the tar marks it executable.
 type member struct {
@@ -262,7 +263,37 @@ type member struct {
 var (
 	payloadDylib  = regexp.MustCompile(`^(builds|stub|hook)/([0-9a-f]{12})/([A-Za-z0-9_.]+\.dylib)$`)
 	payloadCanary = regexp.MustCompile(`^canary/m10canary\.app/[A-Za-z0-9_./ -]+$`)
+	payloadHelper = regexp.MustCompile(`^helper/([0-9a-f]{12})/(Stuntcam Camera\.app/[A-Za-z0-9_./ +-]+)$`)
 )
+
+// HelperApp is the camera helper bundle's name; HelperExe its executable inside it.
+const (
+	HelperApp = "Stuntcam Camera.app"
+	HelperExe = "Contents/MacOS/stuntcam-camera"
+)
+
+// BundleSHA is a bundle's <sha> as helper/build.sh computes it: the first 12 hex digits of the sha1 over one
+// "<path relative to the bundle> <sha1 hex>\n" line per file, in byte order of the paths.
+func BundleSHA(files map[string][]byte) string {
+	var rels []string
+	for r := range files {
+		rels = append(rels, r)
+	}
+	sort.Strings(rels)
+	h := sha1.New()
+	for _, r := range rels {
+		fmt.Fprintf(h, "%s %x\n", r, sha1.Sum(files[r]))
+	}
+	return hex.EncodeToString(h.Sum(nil))[:12]
+}
+
+// HelperSHA is the <sha> directory the set's camera helper sits in, or "".
+func (s Set) HelperSHA() string {
+	if s.Helper == "" {
+		return ""
+	}
+	return filepath.Base(filepath.Dir(s.Helper))
+}
 
 // unpack reads payload.tar (already checked against the manifest by checkShare), checks that its members are exactly the
 // manifest's payload/ entries with those sha256s, and puts them under the host directory: dylibs at
@@ -323,11 +354,14 @@ func (m manifest) unpack(tarPath string) (unpacked, error) {
 	// the dylibs: group by dir, check each dir's name against its bytes, write to home.Builds()/<hash>/
 	dirs := map[string][]string{} // "builds/<h>" -> member names
 	var canary []string
+	helpers := map[string][]string{} // <sha> -> member names
 	for name := range got {
 		if g := payloadDylib.FindStringSubmatch(name); g != nil {
 			dirs[g[1]+"/"+g[2]] = append(dirs[g[1]+"/"+g[2]], name)
 		} else if payloadCanary.MatchString(name) {
 			canary = append(canary, name)
+		} else if g := payloadHelper.FindStringSubmatch(name); g != nil {
+			helpers[g[1]] = append(helpers[g[1]], name)
 		} else {
 			return u, changed(fmt.Sprintf("%s has an unexpected member %s", PayloadName, name))
 		}
@@ -398,6 +432,30 @@ func (m manifest) unpack(tarPath string) (unpacked, error) {
 			return u, err
 		}
 		u.canary = filepath.Join(dir, "m10canary.app")
+	}
+	if len(helpers) > 1 {
+		return u, changed(PayloadName + " has more than one camera helper")
+	}
+	for sha, names := range helpers {
+		// the dir name is the bundle's content hash; the executable keeps its exec bit (upload-artifact and npm drop
+		// them elsewhere, a tar keeps them)
+		files, data := map[string]member{}, map[string][]byte{}
+		for _, n := range names {
+			rel := strings.TrimPrefix(n, "helper/"+sha+"/")
+			files[rel] = got[n]
+			data[strings.TrimPrefix(rel, HelperApp+"/")] = got[n].data
+		}
+		if sum := BundleSHA(data); sum != sha {
+			return u, changed(fmt.Sprintf("%s: helper/%s hashes to %s", PayloadName, sha, sum))
+		}
+		if exe, ok := files[HelperApp+"/"+HelperExe]; !ok || !exe.exec {
+			return u, changed(fmt.Sprintf("%s: helper/%s has no executable %s", PayloadName, sha, HelperExe))
+		}
+		dir := filepath.Join(home.Root(), "helper", sha)
+		if err := unpackTree(dir, files, func(rel string) string { return want["helper/"+sha+"/"+rel] }); err != nil {
+			return u, err
+		}
+		u.helper = filepath.Join(dir, HelperApp)
 	}
 	return u, nil
 }

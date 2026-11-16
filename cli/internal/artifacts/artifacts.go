@@ -36,6 +36,7 @@ type Set struct {
 	Hook                 string // the runner hook ("" if this build has none: exec then warns instead of hooking)
 	Profile, Image       string
 	Canary               string // the canary .app (verify); optional for arming
+	Helper               string // the camera helper, $SIMCAM_HOME/helper/<sha>/Stuntcam Camera.app ("" if this build has none)
 	Rules                string // a restore-rules/ dir (<xcode build>.json files); after Stage, its per-content copy ("" if none)
 	Verdicts             string // shipped verdicts (<key>.json canary passes from the release gate); installed layout only, else ""
 	From                 string // where it was found (for status/doctor)
@@ -295,6 +296,19 @@ func fromDir(dir string, pkg *Set, installed bool) (Set, error) {
 			}
 		}
 	}
+	// the camera helper: $STUNTCAM_HELPER, else the installed package's, else a checkout's (its build/current_helper.txt)
+	if h := os.Getenv("STUNTCAM_HELPER"); h != "" {
+		s.Helper = h
+	} else if pkg != nil {
+		s.Helper = pkg.Helper
+	} else if !installed {
+		for _, co := range checkouts() {
+			if co.Helper != "" {
+				s.Helper = co.Helper
+				break
+			}
+		}
+	}
 	s.Rules = os.Getenv("STUNTCAM_RULES")
 	if s.Rules == "" {
 		// a staged build ($SIMCAM_HOME/builds/<h>): $SIMCAM_HOME/restore-rules is the staging cache (only <hash>/ dirs), not
@@ -348,10 +362,12 @@ func checkoutFrom(start string) (Set, error) {
 		if b, err := os.ReadFile(filepath.Join(d, "build", "current_loader.txt")); err == nil {
 			st, _ := os.ReadFile(filepath.Join(d, "build", "current_stub.txt"))
 			hk, _ := os.ReadFile(filepath.Join(d, "build", "current_hook.txt"))
+			hp, _ := os.ReadFile(filepath.Join(d, "build", "current_helper.txt"))
 			ldr := strings.TrimSpace(string(b))
 			s := Set{Stub: strings.TrimSpace(string(st)), Hook: strings.TrimSpace(string(hk)), Loader: ldr, Engine: filepath.Join(filepath.Dir(ldr), EngineName),
 				Profile: filepath.Join(d, "engine", "profiles", "cfg-m10.plist"), Image: filepath.Join(d, "fixtures", "media", "qr.png"),
-				Canary: filepath.Join(d, "canary", "build", "m10canary.app"), Rules: filepath.Join(d, "restore-rules"), From: d}
+				Canary: filepath.Join(d, "canary", "build", "m10canary.app"), Rules: filepath.Join(d, "restore-rules"), From: d,
+				Helper: strings.TrimSpace(string(hp))}
 			return s, s.check()
 		}
 		if filepath.Dir(d) == d {

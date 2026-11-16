@@ -2,19 +2,21 @@
 // Part of simcam.m (single translation unit; included in order): frame pump, movie file sinks.
 // ---- pump ---------------------------------------------------------------------
 static void M5Tick(M5Sess *S) {
+    uint64_t wcT0 = M13WcOn() ? M13Ns() : 0;
     CVPixelBufferRef src = M12Scene2On() ? M12Render(S) : M5Render();
     if (gLatest) CVPixelBufferRelease(gLatest); gLatest = CVPixelBufferRetain(src);
-    CMTime pts = CMClockGetTime(CMClockGetHostTimeClock());
+    CMTime pts = M13WcOn() ? M13WcPts() : CMClockGetTime(CMClockGetHostTimeClock());   // webcam: the frame's capture time
     for (M5Sink *k in S.sinks) {
         if ([k.kind isEqualToString:@"vdo"] && k.queue) {
-            CVPixelBufferRef pb = M5Convert(k, src);
+            CVPixelBufferRef pb = M13WcSinkOut(k, NO); if (!pb) pb = M5Convert(k, src);   // webcam: straight from the ring frame
             CMSampleBufferRef sb = M5SBuf(pb, pts);
             M2LQMsg m = { 3, sb, {0, 0} }; OSStatus e = pFigLocalQueueEnqueue(k.queue, &m, NULL);
             if (k.frames++ < 2 || e) LOG(@"vdo %@ frame %d %dx%d '%.4s' -> %d", k.sinkID, k.frames, k.w, k.h, (char *)&(OSType){CFSwapInt32HostToBig(k.fmt)}, (int)e);
             CFRelease(sb); CVPixelBufferRelease(pb);
         } else if ([k.kind isEqualToString:@"preview"]) {
-            CVPixelBufferRef pb = M5Convert(k, src);
-            NSArray *note = M12OrientOn() ? M12PreviewNote(k.sinkID) : nil;   // mirrored preview (front camera), as on a device
+            CVPixelBufferRef pb = M13WcSinkOut(k, YES);   // webcam: straight from the ring frame, mirroring included
+            NSArray *note = !pb && M12OrientOn() ? M12PreviewNote(k.sinkID) : nil;   // mirrored preview (front camera), as on a device
+            if (!pb) pb = M5Convert(k, src);
             if ([note[1] boolValue]) { VTPixelRotationSessionRef fs = k.flipSess; int fk = k.flipKind; CVPixelBufferRef f = M12Flip(pb, [note[0] intValue], &fs, &fk); k.flipSess = fs; k.flipKind = fk; CVPixelBufferRelease(pb); pb = f; }
             M5PreviewPush(S.obj, k, pb);
             CVPixelBufferRelease(pb);
@@ -33,6 +35,7 @@ static void M5Tick(M5Sess *S) {
     NSArray *recs; @synchronized (S.recs) { recs = S.recs.allValues; }
     for (M5Rec *r in recs) @synchronized (r) { M5RecAppend(r, src, pts); }   // per-recording lock (stop races the pump)
     CVPixelBufferRelease(src);
+    if (wcT0) M13WcTickEnd(wcT0);
 }
 
 static void M5ReadActiveFormat(M5Sess *S) {

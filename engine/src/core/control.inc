@@ -2,7 +2,7 @@
 // Part of simcam.m (single translation unit; included in order): host control file, per-launch env, interruptions.
 // ============================================================================
 // Host control file + per-launch env, virtual device orientation, session interruptions.
-//   SIMCAM_SOURCE=scene|image:<path>|video:<path>      per-launch source (default scene)
+//   SIMCAM_SOURCE=scene|image:<path>|video:<path>|webcam[:<uniqueID>]   per-launch source (default scene)
 //   SIMCAM_ORIENT=portrait|upsideDown|landscapeLeft|landscapeRight|auto   per-launch virtual device orientation (UIDevice names)
 //   SIMCAM_CONTROL=<host file>   polled every 250 ms; lines key=value:
 //       source=...   orientation=...   event=<name>[@<seq>]  (interrupt[:reason] | end | runtime-error[:status] | server-died)

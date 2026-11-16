@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 set -e; cd ${0:a:h}
 SDK=$(xcrun --sdk iphonesimulator --show-sdk-path); APP=build/m5app.app; mkdir -p $APP
-xcrun swiftc -target arm64-apple-ios17.0-simulator -sdk $SDK -O main.swift -o $APP/m5app
+xcrun swiftc -target arm64-apple-ios17.0-simulator -sdk $SDK -O main.swift webcam.swift golden.swift -o $APP/m5app
 cat > $APP/Info.plist <<P
 <?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict><key>CFBundleIdentifier</key><string>dev.simcam.spike.m10plain</string><key>CFBundleExecutable</key><string>m5app</string>

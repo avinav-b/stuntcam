@@ -289,7 +289,7 @@ func writeInstalled(t *testing.T, prefix string, members [][2]string, loose map[
 	tw := tar.NewWriter(&buf)
 	for _, m := range members {
 		mode := int64(0o644)
-		if strings.HasSuffix(m[0], "/m10canary") {
+		if strings.HasSuffix(m[0], "/m10canary") || strings.HasSuffix(m[0], "/"+HelperExe) {
 			mode = 0o755
 		}
 		tw.WriteHeader(&tar.Header{Name: m[0], Mode: mode, Size: int64(len(m[1])), Typeflag: tar.TypeReg})

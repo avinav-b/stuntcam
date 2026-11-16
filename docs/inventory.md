@@ -16,11 +16,11 @@ headers (or, without `--sdk`, a name guess). Hooks marked "trap" are m11 lazy-ar
 | selectors | 18 | 10 |
 | kvc-keys | 44 | 22 |
 | strings | 149 | — |
-| env | 109 | — |
+| env | 116 | — |
 
-## env (109)
+## env (116)
 
-`M5_GRAVITY`, `M7_NO_RECFIX`, `M5_DIAG`, `M5_NO_PHOTOFIX`, `SIMCAM_TRACE`, `M7_PREVIEW_OFS`, `M7_SRC_LEGACY`, `M15_OLD_BRACKET`, `M15_OLD_MULTICAM`, `M40_FINISH_DELAY_MS`, `M40_BUSY_DELEGATEQ_MS`, `M40_NO_DELEGATEQ`, `M40_LOSE_DONE`, `M40_OLD_STOP`, `M5_NO_COORD`, `M12_NO_PREVIEWMIRROR`, `M5_PREVIEW_ROT`, `M7_VISION_REV`, `M7_NO_VISIONFIX`, `M16_SLOW_ACTIVATE_MS`, `M16_SLOW_SWAP_MS`, `M16_SLOW_START_MS`, `M16_FIG_FAULT_AT_MS`, `M16_ACTIVATE_FAIL`, `M16_PF_FAIL_REAL`, `M16_ACTIVATE_NEEDS_MAIN`, `M16_REENTER`, `M16_NO_ACTTIMEOUT`, `M16_NO_UIORIENT_AT_LOAD`, `M16_MOTION_FAULT`, `M16_ORIENT_FAULT`, `M17_TRACKER_MOTION_SCOPE`, `M17_TRACKSTART_KEEP_KEY`, `M17_ENSURE_KEEP_KEY`, `M16_TRAP_FAULT`, `M17_APP_SEND_KEEP_KEY`, `M12_NO_ORIENTNOTE`, `M13_NO_PHOTODRAIN`, `SIMCAM_CONTROL`, `M12_NO_CONTROL`, `SIMCAM_TEST_PHOTO_ERR`, `SIMCAM_SOURCE`, `SIMCAM_ORIENT`, `M12_NO_INTERRUPT`, `M5_LOG`, `M2_DUMPKEYS`, `M2_PLIST`, `M2_FAKE`, `SIMCAM_SLOT_COUNTS`, `SIMCAM_PF_NOSYMOK`, `SIMCAM`, `SIMCAM_LAZY`, `SIMCAM_ACTIVATE_TIMEOUT_MS`, `SIMCAM_PF_BREAK`, `M2_PREFLIGHT_BREAK`, `M2_PF_FAKEBREAK`, `M5_NO_MOTION`, `M17_NO_MOTION_KEY`, `TMPDIR`, `SIMCAM_SENTINEL`, `SIMCAM_STATE_DIR`, `M17_NO_HANDLER_MARKER`, `M17_MARKER_INPLACE`, `M16_SLOW_MARKER_MS`, `M16_PRUNE_PAUSE_MS`, `M17_NO_MOTION_MARKERS`, `SIMCAM_SENTINEL_LATCH`, `SIMCAM_WD_TEST`, `M54_NO_REPICK`, `M54_LATE_TRACE_DIR`, `M10_NO_FINALIZE`, `M2_SESSION_HOOK`, `M6_SESSHOOK`, `M54_OLD_FLUSH`, `M2_VERBOSE`, `M5_LOGSET`, `M5_NO_METERING`, `M8_NO_BIASNOTE`, `M8_NO_MANUALCOMPLETE`, `M8_OLD_TORCH`, `M2_NOLOGDICT`, `M2_ONE_SOURCE`, `M6_FAKE_MIC`, `M7_AUDIO_SRC`, `M6_NO_MIC`, `M7_MIC_FORCE`, `M54_OLD_EXIF`, `M8_NO_PHOTODIMS`, `M5_PHOTO_W`, `M8_NO_PREVIEWSURFACE`, `M48_OLD_PTS`, `M38_FIRST_PHOTO_STALL_MS`, `M13_PHOTO_ON_PUMP`, `M10_NO_RESPONSIVE`, `M5_PHOTO_ORIENT`, `M8_NO_FORMATDIMS`, `SIMCAM_FIRST_TICK_MS`, `M14_OLD_ENDINT`, `M54_FLUSH_RACE`, `SIMCAM_TEST_MOVIE_ERR`, `M12_NO_ORIENT`, `M12_NO_SCENE2`, `SIMCAM_QR_TEXT`, `SIMCAM_EAN13`, `M5_IMAGE`, `M7_NO_VDOROT`, `M5_PREVIEW_IQ`, `M5_IQ_A`, `M5_IQ_B`
+`M5_GRAVITY`, `M7_NO_RECFIX`, `M5_DIAG`, `M5_NO_PHOTOFIX`, `SIMCAM_TRACE`, `M7_PREVIEW_OFS`, `M7_SRC_LEGACY`, `M15_OLD_BRACKET`, `M15_OLD_MULTICAM`, `M40_FINISH_DELAY_MS`, `M40_BUSY_DELEGATEQ_MS`, `M40_NO_DELEGATEQ`, `M40_LOSE_DONE`, `M40_OLD_STOP`, `M5_NO_COORD`, `M12_NO_PREVIEWMIRROR`, `M5_PREVIEW_ROT`, `M7_VISION_REV`, `M7_NO_VISIONFIX`, `M16_SLOW_ACTIVATE_MS`, `M16_SLOW_SWAP_MS`, `M16_SLOW_START_MS`, `M16_FIG_FAULT_AT_MS`, `M16_ACTIVATE_FAIL`, `M16_PF_FAIL_REAL`, `M16_ACTIVATE_NEEDS_MAIN`, `M16_REENTER`, `M16_NO_ACTTIMEOUT`, `M16_NO_UIORIENT_AT_LOAD`, `M16_MOTION_FAULT`, `M16_ORIENT_FAULT`, `M17_TRACKER_MOTION_SCOPE`, `M17_TRACKSTART_KEEP_KEY`, `M17_ENSURE_KEEP_KEY`, `M16_TRAP_FAULT`, `M17_APP_SEND_KEEP_KEY`, `M12_NO_ORIENTNOTE`, `M13_NO_PHOTODRAIN`, `SIMCAM_CONTROL`, `M12_NO_CONTROL`, `SIMCAM_TEST_PHOTO_ERR`, `SIMCAM_SOURCE`, `SIMCAM_ORIENT`, `M12_NO_INTERRUPT`, `M5_LOG`, `M2_DUMPKEYS`, `M2_PLIST`, `M2_FAKE`, `SIMCAM_SLOT_COUNTS`, `SIMCAM_PF_NOSYMOK`, `SIMCAM`, `SIMCAM_LAZY`, `SIMCAM_ACTIVATE_TIMEOUT_MS`, `SIMCAM_PF_BREAK`, `M2_PREFLIGHT_BREAK`, `M2_PF_FAKEBREAK`, `M5_NO_MOTION`, `M17_NO_MOTION_KEY`, `TMPDIR`, `SIMCAM_SENTINEL`, `SIMCAM_STATE_DIR`, `M17_NO_HANDLER_MARKER`, `M17_MARKER_INPLACE`, `M16_SLOW_MARKER_MS`, `M16_PRUNE_PAUSE_MS`, `M17_NO_MOTION_MARKERS`, `SIMCAM_SENTINEL_LATCH`, `SIMCAM_WD_TEST`, `M54_NO_REPICK`, `M54_OLD_CRASH`, `M54_LATE_TRACE_DIR`, `M10_NO_FINALIZE`, `M2_SESSION_HOOK`, `M6_SESSHOOK`, `M54_OLD_FLUSH`, `M59_OLD_FLUSHMARK`, `M2_VERBOSE`, `M5_LOGSET`, `M5_NO_METERING`, `M8_NO_BIASNOTE`, `M8_NO_MANUALCOMPLETE`, `M8_OLD_TORCH`, `M2_NOLOGDICT`, `M2_ONE_SOURCE`, `M6_FAKE_MIC`, `M7_AUDIO_SRC`, `M6_NO_MIC`, `M7_MIC_FORCE`, `M54_OLD_EXIF`, `M8_NO_PHOTODIMS`, `M5_PHOTO_W`, `M8_NO_PREVIEWSURFACE`, `M48_OLD_PTS`, `M38_FIRST_PHOTO_STALL_MS`, `M13_PHOTO_ON_PUMP`, `M10_NO_RESPONSIVE`, `M5_PHOTO_ORIENT`, `M8_NO_FORMATDIMS`, `SIMCAM_FIRST_TICK_MS`, `M14_OLD_ENDINT`, `M54_FLUSH_RACE`, `M59_LATE_WAITER`, `SIMCAM_TEST_MOVIE_ERR`, `M12_NO_ORIENT`, `M12_NO_SCENE2`, `SIMCAM_QR_TEXT`, `SIMCAM_EAN13`, `M5_IMAGE`, `M7_NO_VDOROT`, `M5_PREVIEW_IQ`, `M5_IQ_A`, `M5_IQ_B`, `SIMCAM_HOME`, `SIMCAM_SIM_DIR`, `SIMULATOR_UDID`, `SIMCAM_WEBCAM_PHASE`
 
 ## classes (23)
 
@@ -48,7 +48,7 @@ headers (or, without `--sdk`, a name guess). Hooks marked "trap" are m11 lazy-ar
 | `AVCapturePhotoInternal` | no | engine/src/core/preflight.inc:163 | 1 |
 | `FigCaptureIrisStillImageSettings` | no | engine/src/core/preflight.inc:166 | 1 |
 | `FigCaptureMovieFileRecordingSettings` | no | engine/src/core/preflight.inc:166 | 1 |
-| `VNImageRequestHandler` | yes | engine/src/providers/scene.inc:247 | 1 |
+| `VNImageRequestHandler` | yes | engine/src/providers/scene.inc:254 | 1 |
 
 ## frameworks (6)
 
@@ -59,7 +59,7 @@ headers (or, without `--sdk`, a name guess). Hooks marked "trap" are m11 lazy-ar
 | `/System/Library/Frameworks/CoreMedia.framework/CoreMedia` | yes | engine/src/core/init.inc:57 | 2 |
 | `/System/Library/PrivateFrameworks/AVFCapture.framework/AVFCapture` | no | engine/src/core/init.inc:59 | 2 |
 | `/System/Library/Frameworks/QuartzCore.framework/QuartzCore` | yes | engine/src/fig/session_hook.inc:47 | 1 |
-| `/System/Library/Frameworks/Vision.framework/Vision` | yes | engine/src/providers/scene.inc:247 | 1 |
+| `/System/Library/Frameworks/Vision.framework/Vision` | yes | engine/src/providers/scene.inc:254 | 1 |
 
 ## selectors (18)
 
@@ -81,8 +81,8 @@ headers (or, without `--sdk`, a name guess). Hooks marked "trap" are m11 lazy-ar
 | `videoOrientation` | yes | engine/src/core/preflight.inc:168 | 1 |
 | `outputURL` | yes | engine/src/core/preflight.inc:168 | 1 |
 | `floatValue` | yes | engine/src/fig/sources.inc:116 | 1 |
-| `initWithCVPixelBuffer:options:` | yes | engine/src/providers/scene.inc:253 | 1 |
-| `performRequests:error:` | yes | engine/src/providers/scene.inc:254 | 1 |
+| `initWithCVPixelBuffer:options:` | yes | engine/src/providers/scene.inc:260 | 1 |
+| `performRequests:error:` | yes | engine/src/providers/scene.inc:261 | 1 |
 
 ## hooks (33)
 
@@ -153,7 +153,7 @@ headers (or, without `--sdk`, a name guess). Hooks marked "trap" are m11 lazy-ar
 | `outputFormat` | yes | engine/src/providers/photo.inc:64 | 2 |
 | `outputFileType` | yes | engine/src/providers/photo.inc:65 | 2 |
 | `photoManifest` | no | engine/src/providers/photo.inc:74 | 1 |
-| `outputMirroring` | no | engine/src/providers/photo.inc:121 | 1 |
+| `outputMirroring` | no | engine/src/providers/photo.inc:123 | 1 |
 | `connectionConfigurations` | no | engine/src/providers/pump.inc:43 | 2 |
 | `mediaType` | yes | engine/src/providers/pump.inc:44 | 2 |
 | `sourceConfiguration.sourceID` | no | engine/src/providers/pump.inc:45 | 1 |
@@ -162,14 +162,14 @@ headers (or, without `--sdk`, a name guess). Hooks marked "trap" are m11 lazy-ar
 | `sinkID` | no | engine/src/providers/pump.inc:70 | 1 |
 | `mirroringEnabled` | no | engine/src/providers/pump.inc:78 | 1 |
 | `rotationDegrees` | no | engine/src/providers/pump.inc:79 | 2 |
-| `outputURL` | yes | engine/src/providers/pump.inc:242 | 1 |
-| `videoSettings` | yes | engine/src/providers/pump.inc:249 | 1 |
-| `audioSettings` | yes | engine/src/providers/pump.inc:263 | 1 |
-| `results` | yes | engine/src/providers/scene.inc:255 | 1 |
-| `symbology` | yes | engine/src/providers/scene.inc:259 | 1 |
-| `payloadStringValue` | yes | engine/src/providers/scene.inc:259 | 1 |
-| `barcodeDescriptor` | yes | engine/src/providers/scene.inc:259 | 1 |
-| `boundingBox` | yes | engine/src/providers/scene.inc:261 | 1 |
+| `outputURL` | yes | engine/src/providers/pump.inc:245 | 1 |
+| `videoSettings` | yes | engine/src/providers/pump.inc:252 | 1 |
+| `audioSettings` | yes | engine/src/providers/pump.inc:266 | 1 |
+| `results` | yes | engine/src/providers/scene.inc:262 | 1 |
+| `symbology` | yes | engine/src/providers/scene.inc:266 | 1 |
+| `payloadStringValue` | yes | engine/src/providers/scene.inc:266 | 1 |
+| `barcodeDescriptor` | yes | engine/src/providers/scene.inc:266 | 1 |
+| `boundingBox` | yes | engine/src/providers/scene.inc:268 | 1 |
 
 ## ivars (7)
 
@@ -204,8 +204,8 @@ headers (or, without `--sdk`, a name guess). Hooks marked "trap" are m11 lazy-ar
 | `CAImageQueueCreate` |  | engine/src/fig/session_hook.inc:48 | 1 |
 | `CAImageQueueRegisterIOSurfaceBuffer` |  | engine/src/fig/session_hook.inc:49 | 1 |
 | `CAImageQueueInsertImage` |  | engine/src/fig/session_hook.inc:50 | 1 |
-| `MRCDescriptorCreateWithAttributes` |  | engine/src/providers/scene.inc:224 | 1 |
-| `MRCDescriptorDecodePayload` |  | engine/src/providers/scene.inc:224 | 1 |
+| `MRCDescriptorCreateWithAttributes` |  | engine/src/providers/scene.inc:231 | 1 |
+| `MRCDescriptorDecodePayload` |  | engine/src/providers/scene.inc:231 | 1 |
 
 ## local-syms (1)
 
@@ -258,11 +258,11 @@ headers (or, without `--sdk`, a name guess). Hooks marked "trap" are m11 lazy-ar
 
 | name | public | first site | sites |
 |---|---|---|---|
-| `VNBarcodeSymbologyQR` | no | engine/src/providers/scene.inc:256 | 1 |
-| `VNBarcodeSymbologyEAN13` | no | engine/src/providers/scene.inc:256 | 1 |
-| `VNBarcodeSymbologyEAN8` | no | engine/src/providers/scene.inc:256 | 1 |
-| `VNBarcodeSymbologyCode128` | no | engine/src/providers/scene.inc:256 | 1 |
-| `MRCSymbologyEAN13` | no | engine/src/providers/scene.inc:272 | 1 |
-| `MRCSymbologyEAN8` | no | engine/src/providers/scene.inc:272 | 1 |
-| `MRCSymbologyCode128` | no | engine/src/providers/scene.inc:272 | 1 |
+| `VNBarcodeSymbologyQR` | no | engine/src/providers/scene.inc:263 | 1 |
+| `VNBarcodeSymbologyEAN13` | no | engine/src/providers/scene.inc:263 | 1 |
+| `VNBarcodeSymbologyEAN8` | no | engine/src/providers/scene.inc:263 | 1 |
+| `VNBarcodeSymbologyCode128` | no | engine/src/providers/scene.inc:263 | 1 |
+| `MRCSymbologyEAN13` | no | engine/src/providers/scene.inc:279 | 1 |
+| `MRCSymbologyEAN8` | no | engine/src/providers/scene.inc:279 | 1 |
+| `MRCSymbologyCode128` | no | engine/src/providers/scene.inc:279 | 1 |
 

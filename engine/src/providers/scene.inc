@@ -15,13 +15,13 @@ static long M12DevOrient(void) { long f = atomic_load(&gDevOrientForced); return
 static BOOL M12OrientOn(void) { return getenv("M12_NO_ORIENT") == NULL; }
 static BOOL M12Scene2On(void) { return getenv("M12_NO_SCENE2") == NULL; }
 
-// ---- source spec: "scene" | "image:<path>" | "video:<path>" (env SIMCAM_SOURCE, control file `source=`) ----
+// ---- source spec: "scene" | "image:<path>" | "video:<path>" | "webcam[:<uniqueID>]" (env SIMCAM_SOURCE, control file `source=`) ----
 static NSString *gSrcSpecPending;        // guarded by @synchronized(gSrcSpecLock)
 static NSObject *gSrcSpecLock;
 static _Atomic long gSrcGen;             // bumped on every accepted change; the pump re-applies when it differs from its own copy
 static _Atomic long gScanGen;            // bumped when the picture changes enough to re-run barcode detection
 // pump-queue-only state
-static long gSrcGenApplied = -1; static int gSrcKind; static NSString *gSrcPath;
+static long gSrcGenApplied = -1; static int gSrcKind; static NSString *gSrcPath;   // kind: 0 scene, 1 image, 2 video, 3 webcam
 static CGImageRef gSrcStill;             // image source
 static AVAssetReader *gVidReader; static AVAssetReaderOutput *gVidOut; static CGImageRef gVidFrame; static double gVidT0, gVidNextPTS, gVidFirstPTS; static long gVidFrames;
 static CGImageRef gQRImg; static long gLastOrientForScan = -1;
@@ -84,11 +84,13 @@ static void M12VideoAdvance(void) {
 static void M12ApplySource(void) {   // pump queue
     long g = atomic_load(&gSrcGen); if (g == gSrcGenApplied) return; gSrcGenApplied = g;
     NSString *spec; @synchronized (gSrcSpecLock) { spec = gSrcSpecPending ?: @"scene"; }
-    if (gSrcStill) { CGImageRelease(gSrcStill); gSrcStill = NULL; } M12VideoClose(); gSrcKind = 0; gSrcPath = nil;
+    if (gSrcStill) { CGImageRelease(gSrcStill); gSrcStill = NULL; } M12VideoClose(); if (gSrcKind == 3) M13WcLeave(); gSrcKind = 0; gSrcPath = nil;
     if ([spec hasPrefix:@"image:"]) { gSrcPath = [spec substringFromIndex:6]; gSrcStill = M12LoadImage(gSrcPath); gSrcKind = gSrcStill ? 1 : 0;
         LOG(@"m12 source applied: image %@ -> %@", gSrcPath, gSrcStill ? [NSString stringWithFormat:@"%zux%zu", CGImageGetWidth(gSrcStill), CGImageGetHeight(gSrcStill)] : @"LOAD FAILED (falling back to scene)"); }
     else if ([spec hasPrefix:@"video:"]) { gSrcPath = [spec substringFromIndex:6]; gSrcKind = 2; BOOL ok = M12VideoOpen(); if (!ok) gSrcKind = 0;
         LOG(@"m12 source applied: video %@ -> %@", gSrcPath, ok ? @"decoding" : @"OPEN FAILED (falling back to scene)"); }
+    else if ([spec isEqualToString:@"webcam"] || [spec hasPrefix:@"webcam:"]) { gSrcKind = 3; M13WcApply(spec);
+        LOG(@"m12 source applied: webcam %@", spec.length > 7 ? [spec substringFromIndex:7] : @"(default camera)"); }
     else LOG(@"m12 source applied: scene");
     atomic_fetch_add(&gScanGen, 1);
 }
@@ -169,11 +171,19 @@ static CVPixelBufferRef M12Render(M5Sess *S) {
         CVPixelBufferPoolCreate(NULL, NULL, (__bridge CFDictionaryRef)a, &gSrcPool);
     }
     M12ApplySource();
+    if (gSrcKind != 3) M13WcRestorePump(S);   // no-op unless the webcam source had locked this pump
     if (gSrcKind == 2) M12VideoAdvance();
+    CGImageRef wcImg = NULL; NSString *wcBand = nil; CVPixelBufferRef wcPB = NULL;
+    if (gSrcKind == 3) { BOOL rescan = NO; wcImg = M13WcAdvance(S, &wcBand, &rescan, &wcPB); if (rescan) atomic_fetch_add(&gScanGen, 1); }
     long pos = S && S.position ? S.position : 1;
     long dev = M12OrientOn() ? M12DevOrient() : 1;
     double ang = M5AngleFor(dev, pos);
     if (dev != gLastOrientForScan) { gLastOrientForScan = dev; atomic_fetch_add(&gScanGen, 1); }
+    if (wcPB) {   // webcam frame path: the canvas comes from the ring frame (webcam_path.inc); NULL: draw it below
+        CVPixelBufferRef c = M13WcCanvas(S, wcPB, (int)ang);
+        if (c) { gFrameNo++; return c; }
+        wcImg = gWcFrame;
+    }
     BOOL portraitCanvas = ((int)ang % 180) != 0;
     double cw = portraitCanvas ? kSrcH : kSrcW, ch = portraitCanvas ? kSrcW : kSrcH;
     CVPixelBufferRef pb = NULL; CVPixelBufferPoolCreatePixelBuffer(NULL, gSrcPool, &pb);
@@ -188,7 +198,9 @@ static CVPixelBufferRef M12Render(M5Sess *S) {
     CGContextTranslateCTM(ctx, -cw / 2, ch / 2); CGContextScaleCTM(ctx, 1, -1);   // canvas: origin top-left, y down
     if (gSrcKind == 1 && gSrcStill) M12DrawFill(ctx, gSrcStill, cw, ch);
     else if (gSrcKind == 2) { if (gVidFrame) M12DrawFill(ctx, gVidFrame, cw, ch); }
-    else M12DrawScene(ctx, cw, ch);
+    else if (gSrcKind == 3 && wcImg) M12DrawFill(ctx, wcImg, cw, ch);
+    else M12DrawScene(ctx, cw, ch);   // also the webcam source while offline, under its band
+    if (wcBand) M13WcDrawBand(ctx, cw, ch, wcBand);
     CGContextRestoreGState(ctx);
     if (gSrcKind == 0) { double x = (gFrameNo * 12) % kSrcW; CGContextSetRGBFillColor(ctx, 1, 1, 0.2, 1); CGContextFillRect(ctx, CGRectMake(x, 0, 24, 40)); } // moving bar (sensor bottom edge)
     CGContextRelease(ctx); CGColorSpaceRelease(cs);

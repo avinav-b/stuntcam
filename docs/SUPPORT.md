@@ -15,6 +15,7 @@ happens outside that, how to report a problem and what to expect back. Every cla
 | **iOS Simulator runtime, smoke** | 17.5 (21F79) | A smaller run that passed in boot and launchd modes (e46): the self-test, the four app stacks' checks and plain-AVFoundation orientation. If an app can't open stuntcam's state folder, its records go to its container's `tmp/` instead (any runtime; `status` and `sentinel clear` look there) |
 | **Mac** | Apple silicon | Every measurement ran on Apple-silicon Macs. The 26 and 27 simulator runtimes are arm64-only. Intel Macs are untested |
 | **macOS** | 26.6 | The host of the measured runs; other versions untested |
+| **Webcam** (`stuntcam source webcam`) | A MacBook Pro's built-in camera, and the synthetic test pattern | iOS 17.5, 26.3 and 27.0: plain AVFoundation (photo, 5 s movie, video data, preview, front and back, portrait, landscape and upside-down, up to 4K and 1080p60), VisionCamera 5, expo-camera, Flutter `camera` + `mobile_scanner`, and Apple's AVCam sample (26.3 and 27.0). 30 fps with no dropped or repeated frames, about 70 ms from the camera to the app, 6–14 % app CPU; three simulators on one camera at once. A 30-minute run with photos, movies, source switches and helper restarts kept the app's memory flat. Barcode scanning through the webcam wasn't checked. The real-camera runs checked timing and geometry, not picture quality. Two different cameras for front and back aren't supported yet. Not measured: an external or 60 fps camera, a Continuity Camera, Mac sleep and unplugging a camera |
 | **Devices** | never | stuntcam is for the Simulator only. Nothing is linked into your app, and the libraries are built for the simulator platform, so device builds never load them |
 
 **Camera stacks:** plain AVFoundation (Swift, Objective-C), VisionCamera 5, expo-camera, Flutter `camera` and
@@ -22,7 +23,7 @@ happens outside that, how to report a problem and what to expect back. Every cla
 (docs/TROUBLESHOOTING.md). Libraries that compile their camera code out of simulator builds (for example VisionCamera 4) can't be fixed at
 runtime by stuntcam; that is a question for the library (design §12, §13).
 
-stuntcam 1.0 is on npm (`npx stuntcam up`). Until v1.1 there is no webcam source.
+stuntcam 1.0 is on npm (`npx stuntcam up`). The webcam source comes with 1.1.
 
 ## Outside what's verified
 

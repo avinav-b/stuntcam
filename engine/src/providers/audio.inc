@@ -161,7 +161,10 @@ static void M5RecAppend(M5Rec *r, CVPixelBufferRef pb, CMTime pts) {
         if (r.audioIn) { NSArray *pre; @synchronized (gMicRing) { pre = [gMicRing copy]; } for (id sb in pre) M5RecAppendAudio(r, (__bridge CMSampleBufferRef)sb); }
     }
     if (r.adaptor.assetWriterInput.readyForMoreMediaData) {
-        CVPixelBufferRef px = r.conv ? M5Convert(r.conv, pb) : CVPixelBufferRetain(pb);
+        CVPixelBufferRef px = M13WcMovieOut(r, pb);   // webcam: straight from the ring frame on the GPU when it can (NULL otherwise)
+        if (!px && !r.conv && ((int)CVPixelBufferGetWidth(pb) != r.w || (int)CVPixelBufferGetHeight(pb) != r.h)) {   // a webcam canvas at the ring's size
+            M5Sink *cv = [M5Sink new]; cv.w = r.w; cv.h = r.h; cv.fmt = '420v'; r.conv = cv; }
+        if (!px) px = r.conv ? M5Convert(r.conv, pb) : CVPixelBufferRetain(pb);
         if (r.mirror) { VTPixelRotationSessionRef fs = r.flipSess; int fk = r.flipKind; CVPixelBufferRef f = M12Flip(px, r.rot, &fs, &fk); r.flipSess = fs; r.flipKind = fk; CVPixelBufferRelease(px); px = f; }
         [r.adaptor appendPixelBuffer:px withPresentationTime:pts]; r.last = pts; CVPixelBufferRelease(px);
     }

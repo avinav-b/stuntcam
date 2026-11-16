@@ -116,3 +116,16 @@ func Armed(env map[string]string, stubName string) (armed bool, simDir string) {
 	}
 	return false, ""
 }
+
+// ExecPath is pid's executable path (the first string of KERN_PROCARGS2), or "" if it can't be read.
+func ExecPath(pid int) string {
+	b, err := procargs2(pid)
+	if err != nil || len(b) < 4 {
+		return ""
+	}
+	rest := b[4:]
+	if i := bytes.IndexByte(rest, 0); i > 0 {
+		return string(rest[:i])
+	}
+	return ""
+}

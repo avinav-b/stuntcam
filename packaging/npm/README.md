@@ -9,6 +9,8 @@ npx stuntcam up
 
 Then run your app as usual. `npx stuntcam down` turns it off; `npx stuntcam doctor` says why if there's no camera.
 
+Your Mac's camera: `npx stuntcam source webcam`.
+
 Needs an Apple silicon Mac and Xcode 27. Simulator only: nothing is linked into your app. Run it with `npx` rather than
 adding it as a dependency: the package is macOS-only, so `npm ci` on Linux would fail.
 

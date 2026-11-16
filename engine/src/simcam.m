@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // simcam.m — the iOS-Simulator virtual camera engine, one translation unit (fake capture sources + session layer
-// + audio (mic or tone), the activation gate, the objc session hook, orientation, Vision, Flutter and VisionCamera fixes, iOS 17.5 and 27.x support).
+// + audio (mic or tone), the live Mac webcam, the activation gate, the objc session hook, orientation, Vision, Flutter and VisionCamera fixes, iOS 17.5 and 27.x support).
 // Loaded by the boot stub (dlopen) or SIMCTL_CHILD_DYLD_INSERT_LIBRARIES. No __interpose; nothing linked from CMCapture
 // (every private C symbol is dlsym'd and checked by the preflight, so a missing symbol can never stop the app from launching).
 // Env (the main switches; each off switch is described where it acts):
@@ -28,6 +28,9 @@ static _Atomic(FILE *) gLogF;   // set once by ActOpenLog (activation worker, re
 #include "core/init.inc"
 #include "fig/session_state.inc"
 #include "providers/video.inc"
+#include "webcam/ring.c"          // the webcam ring (docs/webcam-ring.md): shared with the camera helper
+#include "webcam/ring_shm.c"
+#include "providers/webcam.inc"
 #include "providers/scene.inc"
 #include "providers/audio.inc"
 #include "providers/pump.inc"

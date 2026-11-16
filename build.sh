@@ -49,7 +49,7 @@ LIB_FLAGS=(-fobjc-arc -O1 -g -Wall -Wno-unused-function -Wno-unused-variable -ff
 STUB_FLAGS=(-O2)
 FRAMEWORKS=(-framework Foundation -framework CoreMedia -framework CoreVideo -framework CoreGraphics -framework ImageIO
   -framework IOSurface -framework VideoToolbox -framework AVFoundation -framework CoreImage -framework QuartzCore
-  -framework CoreMotion -framework UIKit -framework AudioToolbox -framework AVFAudio)
+  -framework CoreMotion -framework UIKit -framework AudioToolbox -framework AVFAudio -framework Metal)
 LINK_FLAGS=(-Wl,-adhoc_codesign)
 
 # build_one <name> <source> <flags...> -- <link args...>: one thin dylib per arch, then lipo

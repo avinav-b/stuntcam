@@ -59,6 +59,7 @@ static void M5DumpProps(id o) {
 @property int vdoRot; @property (assign) VTPixelRotationSessionRef rotSess; @property (assign) CVPixelBufferPoolRef rotPool; // data-output connection rotation/mirroring
 @property int photoW, photoH;
 @property (assign) VTPixelRotationSessionRef flipSess; @property int flipKind;   // mirroring flip (M12Flip)
+@property (assign) void *wcOut;   // webcam frame path: this sink's pool and last output (providers/webcam_path.inc, M13WcOutC)
 @end
 // Ledger L75: the CF objects above are `assign` and made lazily by the frame path (video.inc, M12Flip); a sink lives as long
 // as its session's wiring (M5WireSinks makes new sinks on every commit, and every new session), so it releases them here.
@@ -66,6 +67,7 @@ static void M5DumpProps(id o) {
 // pixel buffers and VT scaler state) per session; a plain app opening the camera 50 times would grow 3.1–3.2 MB per open.
 // `queue` stays the wiring's (released there). Not released here: the preview sink's CAImageQueue and the IOSurfaces it
 // registers (video.inc, only with the opt-in M5_PREVIEW_IQ path; the default posts surfaces directly) — TODO.
+static void M13WcOutFree(void *p);   // providers/webcam_path.inc
 @implementation M5Sink
 - (void)dealloc {
     if (_xfer) { VTPixelTransferSessionInvalidate(_xfer); CFRelease(_xfer); }
@@ -73,6 +75,7 @@ static void M5DumpProps(id o) {
     if (_rotSess) { VTPixelRotationSessionInvalidate(_rotSess); CFRelease(_rotSess); }
     if (_rotPool) CVPixelBufferPoolRelease(_rotPool);
     if (_flipSess) { VTPixelRotationSessionInvalidate(_flipSess); CFRelease(_flipSess); }
+    M13WcOutFree(_wcOut);
 }
 @end
 
@@ -82,9 +85,10 @@ static void M5DumpProps(id o) {
 @property (strong) AVAssetWriterInput *audioIn; @property int audioBufs; @property CMTime audioFirst; @property BOOL audioDone;
 @property (strong) M5Sink *conv;   // movie at the active format size
 @property BOOL mirror; @property int rot; @property (assign) VTPixelRotationSessionRef flipSess; @property int flipKind;   // mirroring flip (M12Flip)
+@property (assign) void *wcOut;   // webcam frame path: the movie's own pool and last frame (webcam_path.inc, M13WcMovieOut)
 @end
-@implementation M5Rec   // L75: the mirror flip session (audio.inc's append path); `conv` frees its own (M5Sink above)
-- (void)dealloc { if (_flipSess) { VTPixelRotationSessionInvalidate(_flipSess); CFRelease(_flipSess); } }
+@implementation M5Rec   // L75: the mirror flip session (audio.inc's append path) and the webcam pool; `conv` frees its own (M5Sink above)
+- (void)dealloc { if (_flipSess) { VTPixelRotationSessionInvalidate(_flipSess); CFRelease(_flipSess); } M13WcOutFree(_wcOut); }
 @end
 
 @interface M5Sess : NSObject
