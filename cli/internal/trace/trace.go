@@ -14,6 +14,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -29,16 +30,12 @@ const Schema = 1
 // PhotoStages is the order of one photo's ops in the ring (engine/src/core/trace.inc; design §4.5 "shutter -> slot 12 ->
 // still complete -> timestamp"). slot12 is Fig slot 12, IrisStillImageSinkCaptureImage. timestamp is the instant the photo
 // carries (AVCapturePhoto.timestamp), taken with its source frame, so it comes before the encode.
-var PhotoStages = []string{"shutter", "slot12", "will-capture", "timestamp", "did-capture", "encode-start", "encoded", "still-complete", "did-finish"}
-
-func stageIndex(name string) int {
-	for i, s := range PhotoStages {
-		if s == name {
-			return i
-		}
-	}
-	return -1
+var PhotoStages = []string{
+	"shutter", "slot12", "will-capture", "timestamp", "did-capture", "encode-start", "encoded", "still-complete", "did-finish",
 }
+
+// stageIndex is name's place in PhotoStages, -1 for an op that isn't a photo stage.
+func stageIndex(name string) int { return slices.Index(PhotoStages, name) }
 
 // Op is one ring entry. SettingsID is -1 for ops without one.
 type Op struct {
@@ -70,79 +67,35 @@ var (
 	ErrIncomplete = errors.New("trace file has no end line (cut short)")
 )
 
+// maxLine is the longest line Parse reads; a longer one ends the scan (the file then counts as cut short).
+const maxLine = 1 << 20
+
 // Parse reads one trace file's bytes.
 func Parse(b []byte) (File, error) {
 	var f File
 	sc := bufio.NewScanner(bytes.NewReader(b))
-	sc.Buffer(make([]byte, 64*1024), 1<<20)
+	sc.Buffer(make([]byte, 64*1024), maxLine)
 	first, end := true, false
 	for sc.Scan() {
 		l := sc.Text()
 		if first {
-			if l != "stuntcam-trace 1" {
-				if v, ok := strings.CutPrefix(l, "stuntcam-trace "); ok { // a newer engine's format
-					return f, fmt.Errorf("%w (format %s; this stuntcam reads format 1: update the CLI)", ErrNotTrace, strings.TrimSpace(v))
-				}
-				return f, ErrNotTrace
+			if err := checkFormat(l); err != nil {
+				return f, err
 			}
 			first = false
 			continue
 		}
 		fs := strings.Fields(l)
-		if len(fs) == 0 {
+		switch {
+		case len(fs) == 0:
+			continue
+		case fs[0] == "op" && len(fs) != 7:
+			return f, fmt.Errorf("bad op line %q", l)
+		case fs[0] == "end":
+			end = true
 			continue
 		}
-		var err error
-		switch fs[0] {
-		case "pid":
-			if len(fs) == 2 {
-				f.Pid, err = strconv.Atoi(fs[1])
-			}
-		case "bundle":
-			if len(fs) == 2 {
-				f.Bundle = fs[1]
-			}
-		case "build":
-			if len(fs) == 2 {
-				f.Build = fs[1]
-			}
-		case "timebase":
-			if len(fs) == 3 {
-				f.Numer, err = strconv.ParseUint(fs[1], 10, 64)
-				if err == nil {
-					f.Denom, err = strconv.ParseUint(fs[2], 10, 64)
-				}
-			}
-		case "written":
-			if len(fs) == 3 {
-				f.WrittenNs, err = strconv.ParseInt(fs[1], 10, 64)
-				if err == nil {
-					f.WrittenMach, err = strconv.ParseUint(fs[2], 10, 64)
-				}
-			}
-		case "recorded":
-			if len(fs) == 2 {
-				f.Recorded, err = strconv.ParseUint(fs[1], 10, 64)
-			}
-		case "op":
-			if len(fs) != 7 {
-				return f, fmt.Errorf("bad op line %q", l)
-			}
-			var o Op
-			o.Index, err = strconv.ParseUint(fs[1], 10, 64)
-			var e2, e3, e4, e5 error
-			o.WallNs, e2 = strconv.ParseInt(fs[2], 10, 64)
-			o.Mach, e3 = strconv.ParseUint(fs[3], 10, 64)
-			o.Name = fs[4]
-			o.SettingsID, e4 = strconv.ParseInt(fs[5], 10, 64)
-			o.Arg, e5 = strconv.ParseInt(fs[6], 10, 64)
-			if err = errors.Join(err, e2, e3, e4, e5); err == nil {
-				f.Ops = append(f.Ops, o)
-			}
-		case "end":
-			end = true
-		}
-		if err != nil {
+		if err := f.parseField(fs); err != nil {
 			return f, fmt.Errorf("bad line %q: %w", l, err)
 		}
 	}
@@ -156,6 +109,74 @@ func Parse(b []byte) (File, error) {
 		f.Numer, f.Denom = 1, 1
 	}
 	return f, nil
+}
+
+// checkFormat checks a trace file's first line: format 1.
+func checkFormat(l string) error {
+	if l == "stuntcam-trace 1" {
+		return nil
+	}
+	if v, ok := strings.CutPrefix(l, "stuntcam-trace "); ok { // a newer engine's format
+		return fmt.Errorf("%w (format %s; this stuntcam reads format 1: update the CLI)", ErrNotTrace, strings.TrimSpace(v))
+	}
+	return ErrNotTrace
+}
+
+// parseField reads one header or op line (its fields) into f. A header line with an unexpected number of fields, or an
+// unknown line, is ignored.
+func (f *File) parseField(fs []string) error {
+	var err error
+	switch fs[0] {
+	case "pid":
+		if len(fs) == 2 {
+			f.Pid, err = strconv.Atoi(fs[1])
+		}
+	case "bundle":
+		if len(fs) == 2 {
+			f.Bundle = fs[1]
+		}
+	case "build":
+		if len(fs) == 2 {
+			f.Build = fs[1]
+		}
+	case "timebase":
+		if len(fs) == 3 {
+			f.Numer, err = strconv.ParseUint(fs[1], 10, 64)
+			if err == nil {
+				f.Denom, err = strconv.ParseUint(fs[2], 10, 64)
+			}
+		}
+	case "written":
+		if len(fs) == 3 {
+			f.WrittenNs, err = strconv.ParseInt(fs[1], 10, 64)
+			if err == nil {
+				f.WrittenMach, err = strconv.ParseUint(fs[2], 10, 64)
+			}
+		}
+	case "recorded":
+		if len(fs) == 2 {
+			f.Recorded, err = strconv.ParseUint(fs[1], 10, 64)
+		}
+	case "op":
+		var o Op
+		if o, err = parseOp(fs); err == nil {
+			f.Ops = append(f.Ops, o)
+		}
+	}
+	return err
+}
+
+// parseOp reads an op line's 7 fields: op <index> <wall ns> <mach> <name> <settings id> <arg>.
+func parseOp(fs []string) (Op, error) {
+	var o Op
+	var errs [5]error
+	o.Index, errs[0] = strconv.ParseUint(fs[1], 10, 64)
+	o.WallNs, errs[1] = strconv.ParseInt(fs[2], 10, 64)
+	o.Mach, errs[2] = strconv.ParseUint(fs[3], 10, 64)
+	o.Name = fs[4]
+	o.SettingsID, errs[3] = strconv.ParseInt(fs[5], 10, 64)
+	o.Arg, errs[4] = strconv.ParseInt(fs[6], 10, 64)
+	return o, errors.Join(errs[:]...)
 }
 
 // HostNs converts mach ticks to host-clock nanoseconds (what CMClockGetHostTimeClock and AVCapturePhoto.timestamp read).
@@ -308,101 +329,148 @@ func ms(ns int64) float64 { return math.Round(float64(ns)/1e3) / 1e3 } // ns -> 
 
 // Build makes the report of f (others: the bundle's other traces, newest first).
 func Build(f File, others []File, udid, sim string, running *bool) Report {
-	r := Report{Schema: Schema, UDID: udid, Simulator: sim, Bundle: f.Bundle, Pid: f.Pid, Running: running, Build: f.Build,
-		File: f.Path, Location: f.Location, Written: rfc(f.WrittenNs), WrittenNs: f.WrittenNs, Recorded: f.Recorded,
-		RingSize: RingSize, Timebase: Timebase{f.Numer, f.Denom}, Ops: []ReportOp{}, Photos: []ReportPhoto{}, Others: []ReportOther{}}
-	type acc struct {
-		p      ReportPhoto
-		origin int64
-		hasOr  bool
-		last   int64
-		maxIdx int
+	r := Report{
+		Schema:    Schema,
+		UDID:      udid,
+		Simulator: sim,
+		Bundle:    f.Bundle,
+		Pid:       f.Pid,
+		Running:   running,
+		Build:     f.Build,
+		File:      f.Path,
+		Location:  f.Location,
+		Written:   rfc(f.WrittenNs),
+		WrittenNs: f.WrittenNs,
+		Recorded:  f.Recorded,
+		RingSize:  RingSize,
+		Timebase:  Timebase{f.Numer, f.Denom},
+		Ops:       []ReportOp{},
+		Photos:    []ReportPhoto{},
+		Others:    []ReportOther{},
 	}
-	photos := map[int64]*acc{}
-	var order []int64
-	origin := func(sid int64) (int64, bool) {
-		a := photos[sid]
-		if a == nil {
-			return 0, false
-		}
-		return a.origin, a.hasOr
+	photos, order := collectPhotos(f)
+	for _, o := range f.Ops {
+		r.Ops = append(r.Ops, reportOp(f, o, photos))
 	}
-	// first pass: the photos' stages and origins (shutter, else slot12)
+	for _, sid := range order {
+		r.Photos = append(r.Photos, photos[sid].finish())
+	}
+	for _, o := range others {
+		r.Others = append(r.Others, ReportOther{Pid: o.Pid, File: o.Path, Location: o.Location, Written: rfc(o.WrittenNs)})
+	}
+	return r
+}
+
+// photoAcc collects one photo's stages from the ring.
+type photoAcc struct {
+	p         ReportPhoto
+	origin    int64 // host ns of its shutter, else its slot12
+	hasOrigin bool
+	last      int64 // host ns of the last stage seen
+	maxStage  int   // PhotoStages index of the latest stage seen so far
+}
+
+// collectPhotos goes through f's photo ops (settings id and a PhotoStages name) once: each photo's stages, host times,
+// origin, order and error. order is the photos' settings ids in ring order.
+func collectPhotos(f File) (photos map[int64]*photoAcc, order []int64) {
+	photos = map[int64]*photoAcc{}
 	for _, o := range f.Ops {
 		if stageIndex(o.Name) < 0 || o.SettingsID < 0 {
 			continue
 		}
 		a := photos[o.SettingsID]
 		if a == nil {
-			a = &acc{p: ReportPhoto{SettingsID: o.SettingsID, InOrder: true, Monotonic: true, HostNs: map[string]int64{}, Ms: map[string]float64{}}, maxIdx: -1}
+			a = &photoAcc{
+				p: ReportPhoto{
+					SettingsID: o.SettingsID,
+					InOrder:    true,
+					Monotonic:  true,
+					HostNs:     map[string]int64{},
+					Ms:         map[string]float64{},
+				},
+				maxStage: -1,
+			}
 			photos[o.SettingsID] = a
 			order = append(order, o.SettingsID)
 		}
-		h := f.HostNs(o.Mach)
-		if !a.hasOr && (o.Name == "shutter" || o.Name == "slot12") {
-			a.origin, a.hasOr = h, true
-		}
-		if _, dup := a.p.HostNs[o.Name]; dup {
-			a.p.InOrder = false
-		}
-		if i := stageIndex(o.Name); i <= a.maxIdx {
-			a.p.InOrder = false
-		} else {
-			a.maxIdx = i
-		}
-		if len(a.p.Stages) > 0 && h < a.last {
-			a.p.Monotonic = false
-		}
-		a.last = h
-		a.p.Stages = append(a.p.Stages, o.Name)
-		a.p.HostNs[o.Name] = h
-		if o.Name == "still-complete" {
-			a.p.Error = o.Arg
-		}
-		if o.Name == "timestamp" {
-			s := float64(o.Arg) / 1e9
-			a.p.TimestampS = &s
+		a.add(o, f.HostNs(o.Mach))
+	}
+	return photos, order
+}
+
+// add records one stage of the photo, at host time h.
+func (a *photoAcc) add(o Op, h int64) {
+	if !a.hasOrigin && (o.Name == "shutter" || o.Name == "slot12") {
+		a.origin, a.hasOrigin = h, true
+	}
+	if _, dup := a.p.HostNs[o.Name]; dup {
+		a.p.InOrder = false
+	}
+	if i := stageIndex(o.Name); i <= a.maxStage {
+		a.p.InOrder = false
+	} else {
+		a.maxStage = i
+	}
+	if len(a.p.Stages) > 0 && h < a.last {
+		a.p.Monotonic = false
+	}
+	a.last = h
+	a.p.Stages = append(a.p.Stages, o.Name)
+	a.p.HostNs[o.Name] = h
+	if o.Name == "still-complete" {
+		a.p.Error = o.Arg
+	}
+	if o.Name == "timestamp" {
+		s := float64(o.Arg) / 1e9
+		a.p.TimestampS = &s
+	}
+}
+
+// reportOp is one op's report line; a photo op's DeltaMs counts from its photo's origin.
+func reportOp(f File, o Op, photos map[int64]*photoAcc) ReportOp {
+	ro := ReportOp{
+		Index:  o.Index,
+		Op:     o.Name,
+		Wall:   rfc(o.WallNs),
+		WallNs: o.WallNs,
+		Mach:   o.Mach,
+		HostNs: f.HostNs(o.Mach),
+		Arg:    o.Arg,
+	}
+	if o.SettingsID < 0 {
+		return ro
+	}
+	sid := o.SettingsID
+	ro.SettingsID = &sid
+	if stageIndex(o.Name) >= 0 {
+		if a := photos[sid]; a != nil && a.hasOrigin {
+			d := ms(ro.HostNs - a.origin)
+			ro.DeltaMs = &d
 		}
 	}
-	for _, o := range f.Ops {
-		ro := ReportOp{Index: o.Index, Op: o.Name, Wall: rfc(o.WallNs), WallNs: o.WallNs, Mach: o.Mach, HostNs: f.HostNs(o.Mach), Arg: o.Arg}
-		if o.SettingsID >= 0 {
-			sid := o.SettingsID
-			ro.SettingsID = &sid
-			if stageIndex(o.Name) >= 0 {
-				if or, ok := origin(sid); ok {
-					d := ms(ro.HostNs - or)
-					ro.DeltaMs = &d
-				}
-			}
+	return ro
+}
+
+// finish completes the photo's report: whether it is complete, its stages in ms from the origin, timestamp - slot12.
+func (a *photoAcc) finish() ReportPhoto {
+	p := a.p
+	_, hasShutter := p.HostNs["shutter"]
+	_, hasSlot12 := p.HostNs["slot12"]
+	_, hasComplete := p.HostNs["still-complete"]
+	_, hasTimestamp := p.HostNs["timestamp"]
+	p.Complete = hasShutter && hasSlot12 && hasComplete && (hasTimestamp || p.Error != 0)
+	if a.hasOrigin {
+		for k, v := range p.HostNs {
+			p.Ms[k] = ms(v - a.origin)
 		}
-		r.Ops = append(r.Ops, ro)
 	}
-	for _, sid := range order {
-		a := photos[sid]
-		p := a.p
-		_, sh := p.HostNs["shutter"]
-		_, s12 := p.HostNs["slot12"]
-		_, sc := p.HostNs["still-complete"]
-		_, ts := p.HostNs["timestamp"]
-		p.Complete = sh && s12 && sc && (ts || p.Error != 0)
-		if a.hasOr {
-			for k, v := range p.HostNs {
-				p.Ms[k] = ms(v - a.origin)
-			}
-		}
-		if p.Error != 0 { // the engine stamps the grab before the photo queue fails it: nothing was delivered
-			p.TimestampS = nil
-		} else if ts && s12 {
-			d := ms(p.HostNs["timestamp"] - p.HostNs["slot12"])
-			p.TimestampMinusSlot12Ms = &d
-		}
-		r.Photos = append(r.Photos, p)
+	if p.Error != 0 { // the engine stamps the grab before the photo queue fails it: nothing was delivered
+		p.TimestampS = nil
+	} else if hasTimestamp && hasSlot12 {
+		d := ms(p.HostNs["timestamp"] - p.HostNs["slot12"])
+		p.TimestampMinusSlot12Ms = &d
 	}
-	for _, o := range others {
-		r.Others = append(r.Others, ReportOther{Pid: o.Pid, File: o.Path, Location: o.Location, Written: rfc(o.WrittenNs)})
-	}
-	return r
+	return p
 }
 
 // info is the table's last column: what an op's arg means
@@ -451,7 +519,8 @@ func Human(w io.Writer, r Report, now time.Time, loc *time.Location) {
 	written := time.Unix(0, r.WrittenNs).In(loc)
 	fmt.Fprintf(w, "%s pid %d (%s) on %s (%s), build %s\n", r.Bundle, r.Pid, state, r.Simulator, r.UDID, r.Build)
 	shown := len(r.Ops)
-	fmt.Fprintf(w, "%s (%s), written %s (%s); %d ops recorded, the last %d shown\n", r.File, where, written.Format("2006-01-02 15:04:05.000"), ago(now.Sub(written)), r.Recorded, shown)
+	fmt.Fprintf(w, "%s (%s), written %s (%s); %d ops recorded, the last %d shown\n",
+		r.File, where, written.Format("2006-01-02 15:04:05.000"), ago(now.Sub(written)), r.Recorded, shown)
 	fmt.Fprintf(w, "%5s  %-15s %-12s %10s %9s  %s\n", "#", "op", "host time", "Δ ms", "settings", "")
 	for _, o := range r.Ops {
 		d, sid := "", "-"
@@ -461,7 +530,8 @@ func Human(w io.Writer, r Report, now time.Time, loc *time.Location) {
 		if o.SettingsID != nil {
 			sid = strconv.FormatInt(*o.SettingsID, 10)
 		}
-		fmt.Fprintf(w, "%5d  %-15s %-12s %10s %9s  %s\n", o.Index, o.Op, time.Unix(0, o.WallNs).In(loc).Format("15:04:05.000"), d, sid, info(o))
+		wall := time.Unix(0, o.WallNs).In(loc).Format("15:04:05.000")
+		fmt.Fprintf(w, "%5d  %-15s %-12s %10s %9s  %s\n", o.Index, o.Op, wall, d, sid, info(o))
 	}
 	if len(r.Photos) > 0 {
 		ok := 0

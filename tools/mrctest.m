@@ -1,4 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
+// mrctest <image> — runs in a simulator (tools/build.sh mrctest): decodes the QR code in <image> with CoreImage, then
+// builds a descriptor from its error-corrected payload with Quagga's private MRCDescriptor functions (three sets of
+// attributes). Prints one "CI: msg=… ver=…" line for what CoreImage decoded, then for each set of attributes the
+// descriptor, the attributes it reports, what it decodes to and any errors.
 #import <Foundation/Foundation.h>
 #import <CoreImage/CoreImage.h>
 #import <ImageIO/ImageIO.h>

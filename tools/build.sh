@@ -5,7 +5,7 @@
 #   macOS host tools (run on the Mac):  avaudio avinfo mkqr mkvideo upright (Swift), pstart (C)
 #   iOS Simulator CLIs (run inside a sim with `xcrun simctl spawn <udid> tools/bin/<name>`):  audiosrc dumpkeys mrctest (ObjC)
 #
-# Build settings (matching the original helper binaries):
+# Build settings:
 # platform, minimum OS, ARC, linked frameworks, no debug info, ad-hoc linker signature. Host tools use the SDK's default
 # deployment target (plain `swiftc` / `clang`). audiosrc targets iOS 17.0, dumpkeys and mrctest 26.0.
 set -euo pipefail

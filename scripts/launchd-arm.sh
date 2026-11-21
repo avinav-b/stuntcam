@@ -30,7 +30,8 @@ lset() {
   for i in 1 2 3; do
     xcrun simctl spawn $UDID launchctl setenv $1 "$2" 2>$ERR || echo "$0: setenv $1 (try $i): $(cat $ERR)" >&2
     got=$(lget $1) && [[ $got == "$2" ]] && return 0
-    if [[ -z $got ]]; then echo "$0: $1 read back as '' (try $i); it may already be in the sim's boot environment (set at boot: simctl boot passes SIMCTL_CHILD_$1 on, and launchd then ignores setenv of it; w3 e13, w4 e46)" >&2
+    if [[ -z $got ]]
+    then echo "$0: $1 read back as '' (try $i); it may already be in the sim's boot environment (set at boot: simctl boot passes SIMCTL_CHILD_$1 on, and launchd then ignores setenv of it; w3 e13, w4 e46)" >&2
     else echo "$0: $1 read back as '$got' (try $i)" >&2; fi; sleep 0.5
   done
   return 1
@@ -50,7 +51,8 @@ without_ours() {
   local e; local -a out; out=()
   for e in ${(s.:.)1}; do
     [[ -z $e || ${e:t} == libsimcam* ]] && continue
-    [[ -n ${STUB:-} && ( $e == $STUB || ( ${e:h:h:t} == builds && ${e:h:t} == ${STUB:h:t} ) ) ]] && continue   # a stuntcam builds/<hash>/ copy of the same stub
+    [[ -n ${STUB:-} && ( $e == $STUB || ( ${e:h:h:t} == builds && ${e:h:t} == ${STUB:h:t} ) ) ]] &&
+      continue   # a stuntcam builds/<hash>/ copy of the same stub
     (( ${out[(Ie)$e]} )) || out+=($e)
   done
   print -r -- ${(j.:.)out}
@@ -86,19 +88,21 @@ NEW=$(without_ours "$OLD"); NEW=${NEW:+$NEW:}$STUB
 # remember every variable we ever set (re-arming must not forget earlier ones for --off)
 touch $STATE/launchd-vars.txt
 # DYLD_INSERT_LIBRARIES last: apps launched meanwhile must not get the stub without its settings
-typeset -a ORDERED; ORDERED=(); for kv in $ARMV; do [[ ${kv%%=*} == DYLD_INSERT_LIBRARIES ]] || ORDERED+=($kv); done; ORDERED+=("DYLD_INSERT_LIBRARIES=$NEW")
+typeset -a ORDERED; ORDERED=(); for kv in $ARMV; do [[ ${kv%%=*} == DYLD_INSERT_LIBRARIES ]] || ORDERED+=($kv); done
+ORDERED+=("DYLD_INSERT_LIBRARIES=$NEW")
 typeset -a SETNOW; SETNOW=()
 for kv in $ORDERED; do
   k=${kv%%=*}; v=${kv#*=}
   grep -qx $k $STATE/launchd-vars.txt || echo $k >> $STATE/launchd-vars.txt
   if ! lset $k "$v"; then
     echo "$0: could not set $k; rolling back" >&2; fail=1
-    # put DYLD_INSERT_LIBRARIES back as found minus stuntcam's own entries (other tools' loaders kept), unset what this run set
-    # (minus stuntcam's own entries, so a failed re-arm leaves the sim cleanly disarmed rather than half on an old stub)
+    # roll back: DYLD_INSERT_LIBRARIES as found minus stuntcam's own entries (other tools' loaders kept; a failed re-arm leaves
+    # the sim cleanly disarmed, not half on an old stub), restore `current`, and unset what this run set
     REST=$(without_ours "$OLD")
     if [[ -n $REST ]]; then lset DYLD_INSERT_LIBRARIES "$REST" || echo "$0: could not restore DYLD_INSERT_LIBRARIES=$REST" >&2
     else lunset DYLD_INSERT_LIBRARIES; fi
-    [[ -n ${PREV_CURRENT:-} ]] && print -r -- "$PREV_CURRENT" > "$SIMCAM_HOME/sims/$UDID/current.tmp" && mv "$SIMCAM_HOME/sims/$UDID/current.tmp" "$SIMCAM_HOME/sims/$UDID/current"
+    [[ -n ${PREV_CURRENT:-} ]] && print -r -- "$PREV_CURRENT" > "$SIMCAM_HOME/sims/$UDID/current.tmp" &&
+      mv "$SIMCAM_HOME/sims/$UDID/current.tmp" "$SIMCAM_HOME/sims/$UDID/current"
     for s in $SETNOW; do [[ $s != DYLD_INSERT_LIBRARIES ]] && lunset $s; done
     break
   fi

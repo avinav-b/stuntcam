@@ -40,9 +40,9 @@ func TestAcquireWaitsForAShutdown(t *testing.T) {
 	go func() { time.Sleep(600 * time.Millisecond); os.RemoveAll(d) }() // the child releases it
 	var said []string
 	t0 := time.Now()
-	ok, why := acquireWait(d, 10*time.Second, func(s string) { said = append(said, s) })
-	if !ok || time.Since(t0) < 500*time.Millisecond {
-		t.Fatalf("ok=%v why=%q after %s", ok, why, time.Since(t0))
+	err := acquireWait(d, 10*time.Second, func(s string) { said = append(said, s) })
+	if err != nil || time.Since(t0) < 500*time.Millisecond {
+		t.Fatalf("err=%v after %s", err, time.Since(t0))
 	}
 	if len(said) != 1 || !strings.Contains(said[0], "UDID-1") {
 		t.Fatalf("progress: %q", said)
@@ -52,24 +52,26 @@ func TestAcquireWaitsForAShutdown(t *testing.T) {
 	}
 	release(d)
 
-	// a live verify (no marker) is not waited for: inconclusive at once, as before
+	// a live verify (no marker) is not waited for: inconclusive at once
 	holdLock(t, d, h.Process.Pid, false)
 	t0 = time.Now()
-	if ok, why := acquireWait(d, 10*time.Second, func(string) {}); ok || time.Since(t0) > 2*time.Second || !strings.Contains(why, "another verify") {
-		t.Fatalf("live verify: ok=%v why=%q after %s", ok, why, time.Since(t0))
+	err = acquireWait(d, 10*time.Second, func(string) {})
+	if err == nil || time.Since(t0) > 2*time.Second || !strings.Contains(err.Error(), "another verify") {
+		t.Fatalf("live verify: err=%v after %s", err, time.Since(t0))
 	}
 	os.RemoveAll(d)
 
 	// a shutdown that takes too long: bounded
 	holdLock(t, d, h.Process.Pid, true)
-	if ok, why := acquireWait(d, 500*time.Millisecond, func(string) {}); ok || !strings.Contains(why, "still shutting down") {
-		t.Fatalf("bounded: ok=%v why=%q", ok, why)
+	err = acquireWait(d, 500*time.Millisecond, func(string) {})
+	if err == nil || !strings.Contains(err.Error(), "still shutting down") {
+		t.Fatalf("bounded: err=%v", err)
 	}
 	// its child died: the dead owner's lock is taken over at once
 	h.Process.Kill()
 	h.Wait()
-	if ok, why := acquireWait(d, 10*time.Second, func(string) {}); !ok {
-		t.Fatal("dead shutdown child's lock not taken over: " + why)
+	if err := acquireWait(d, 10*time.Second, func(string) {}); err != nil {
+		t.Fatal("dead shutdown child's lock not taken over: ", err)
 	}
 	if _, err := os.Stat(filepath.Join(d, shutdownMarker)); err == nil {
 		t.Fatal("taken-over lock kept the old marker")
@@ -80,8 +82,8 @@ func TestHandoffShutdown(t *testing.T) {
 	t.Setenv("SIMCAM_HOME", t.TempDir())
 	os.MkdirAll(home.Root(), 0o755)
 	d := lockDir("23D8133")
-	if ok, why := acquire(d); !ok {
-		t.Fatal(why)
+	if err := acquire(d); err != nil {
+		t.Fatal(err)
 	}
 	h := holder(t)
 	var gotUDID, gotLock string

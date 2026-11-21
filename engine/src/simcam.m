@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
-// simcam.m — the iOS-Simulator virtual camera engine, one translation unit (fake capture sources + session layer
-// + audio (mic or tone), the live Mac webcam, the activation gate, the objc session hook, orientation, Vision, Flutter and VisionCamera fixes, iOS 17.5 and 27.x support).
+// simcam.m — the iOS-Simulator virtual camera engine, one translation unit: fake capture sources, the session layer,
+// audio (mic or tone), the Mac webcam, the activation gate, client fixes (orientation, Vision, Flutter, VisionCamera).
 // Loaded by the boot stub (dlopen) or SIMCTL_CHILD_DYLD_INSERT_LIBRARIES. No __interpose; nothing linked from CMCapture
-// (every private C symbol is dlsym'd and checked by the preflight, so a missing symbol can never stop the app from launching).
-// Env (the main switches; each off switch is described where it acts):
-//   SIMCAM=0 nothing at all · M2_FAKE=1 fake sources · M2_SESSION_HOOK=1 session layer · M2_PLIST profile · M5_LOG log (%p -> pid)
+// (every private C symbol is dlsym'd and checked by the preflight, so a missing symbol can never stop the app from
+// launching).
+// Env: core/env.inc lists every variable the engine reads. The main ones:
+//   SIMCAM=0 nothing at all · SIMCAM_FIG_SOURCES=1 fake sources · SIMCAM_FIG_SESSION=1 session layer ·
+//   SIMCAM_PROFILE profile · SIMCAM_ENGINE_LOG log (%p -> pid)
 #import <Foundation/Foundation.h>
 #import <CoreMedia/CoreMedia.h>
 #import <CoreVideo/CoreVideo.h>
@@ -15,15 +17,32 @@
 #import <sys/mman.h>
 #import <stdatomic.h>
 
-static _Atomic(FILE *) gLogF;   // set once by ActOpenLog (activation worker, record queue, or inline with SIMCAM_LAZY=0 / M16_NO_ACTTIMEOUT), read by LOG on any thread (atomic: a plain pointer is a data race under TSan)
-#define LOG(fmt, ...) do { NSString *_s = [NSString stringWithFormat:@"[simcam %d] " fmt, getpid(), ##__VA_ARGS__]; fprintf(stderr, "%s\n", _s.UTF8String); FILE *_lf = atomic_load_explicit(&gLogF, memory_order_acquire); if (_lf) { fprintf(_lf, "%.3f %s\n", CFAbsoluteTimeGetCurrent(), _s.UTF8String); fflush(_lf); } } while (0)
+// set once by ActOpenLog, read by LOG on any thread (atomic: a plain pointer is a data race under TSan)
+static _Atomic(FILE *) gLogF;
+// LOG(fmt, ...): one line "[simcam <pid>] <message>" to stderr and, once ActOpenLog has opened it, to the per-pid log
+// file (SIMCAM_ENGINE_LOG), there prefixed with the CFAbsoluteTime.
+#define LOG(fmt, ...)                                                                           \
+    do {                                                                                        \
+        NSString *_s = [NSString stringWithFormat:@"[simcam %d] " fmt, getpid(), ##__VA_ARGS__]; \
+        fprintf(stderr, "%s\n", _s.UTF8String);                                                 \
+        FILE *_lf = atomic_load_explicit(&gLogF, memory_order_acquire);                         \
+        if (_lf) {                                                                              \
+            fprintf(_lf, "%.3f %s\n", CFAbsoluteTimeGetCurrent(), _s.UTF8String);               \
+            fflush(_lf);                                                                        \
+        }                                                                                       \
+    } while (0)
 
 
 // The engine is one translation unit split into fragments by concern; order matters (statics, constructors).
+#include "core/env.inc"           // names of the environment variables read below
 #include "fig/sources.inc"
 #include "core/act.inc"
 #include "core/preflight.inc"
 #include "core/safety.inc"
+#include "core/crash_handler.inc"
+#include "core/markers.inc"
+#include "core/events_file.inc"
+#include "core/sentinel_activate.inc"
 #include "core/trace.inc"
 #include "core/init.inc"
 #include "fig/session_state.inc"
@@ -32,6 +51,8 @@ static _Atomic(FILE *) gLogF;   // set once by ActOpenLog (activation worker, re
 #include "webcam/ring_shm.c"
 #include "providers/webcam.inc"
 #include "providers/scene.inc"
+#include "providers/mirror.inc"
+#include "providers/barcodes.inc"
 #include "providers/audio.inc"
 #include "providers/pump.inc"
 #include "providers/photo.inc"

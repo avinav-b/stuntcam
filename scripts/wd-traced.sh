@@ -10,9 +10,9 @@
 #   control  x reps: the same hang launch with no debugger: 2 'hang photo' (n=1, n=2) and an in-process latch; the next
 #            launch is latched with a latched-<build> marker. A SIMCAM_SENTINEL=clear launch after each rep.
 #   Prints "PASS|FAIL <step> — evidence"; exits 1 if any step failed. Results: $SIMCAM_RESULTS/plain-<rt>-boot-<tag>-<step>/
-set -u; ROOT="$(cd "$(dirname "$0")/.." && pwd)"; source $ROOT/scripts/env.sh
+set -u; ROOT="$(cd "$(dirname "$0")/.." && pwd)"; source $ROOT/scripts/env.sh; source $ROOT/scripts/common.sh
 RT=${1:?usage: $0 <rt> [reps]}; N=${2:-3}
-V=SIMCAM_UDID_$RT; U=${(P)V:-}; [[ -n $U ]] || { echo "$0: set $V" >&2; exit 2; }
+need_udid "$0" "$RT" U short
 BP=dev.simcam.spike.m10plain; ST=$SIMCAM_HOME/sims/$U/state/$BP; EV=$ST/events.log
 BUILD=$(<$ROOT/build/current_dylib.txt); BUILD=${BUILD:h:t}
 PY=/Applications/Xcode.app/Contents/Developer/usr/bin/python3; LP=$(xcrun lldb -P)
@@ -36,9 +36,13 @@ for i in {1..$N}; do
   # --- traced: lldb attached and running through the whole activation ---
   n0=$(nl $EV); d=$(res tr$i); att=$SIMCAM_RESULTS/wd-traced-$RT-$TAG-attach$i.txt
   ( XENV="SIMCAM_WD_TEST=hang"$'\n' SIMCAM_NO_RETRY=1 WAIT_DEBUGGER=1 $ROOT/scripts/run.sh plain $RT boot $TAG-tr$i >/dev/null 2>&1 ) & rp=$!
-  pid=; for _ in {1..200}; do pid=$(pgrep -f "Devices/$U/data/Containers/Bundle/Application/.*/m5app.app/m5app" | head -1); [[ -n $pid ]] && break; sleep 0.05; done
+  # the app's pid from the host's process list (its path names this sim's UDID): up to 10 s (200 polls of 0.05 s)
+  pid=; for _ in {1..200}; do
+    pid=$(pgrep -f "Devices/$U/data/Containers/Bundle/Application/.*/m5app.app/m5app" | head -1); [[ -n $pid ]] && break; sleep 0.05
+  done
   el="$(cat $ROOT/build/bootlogdir-$RT.txt)/dylib-$pid.log"   # this pid's engine log (boot mode)
-  if [[ -n $pid ]]; then PYTHONPATH=$LP $PY $ROOT/scripts/lldb-attach.py $pid $el '(?s)over its deadline while a debugger.*over its deadline while a debugger' 40 > $att 2>&1
+  if [[ -n $pid ]]
+  then PYTHONPATH=$LP $PY $ROOT/scripts/lldb-attach.py $pid $el '(?s)over its deadline while a debugger.*over its deadline while a debugger' 40 > $att 2>&1
   else echo "ATTACH| no pid" > $att; fi
   wait $rp; left=$(dbgleft $pid)
   since $n0 > $d/events.txt
@@ -46,14 +50,20 @@ for i in {1..$N}; do
   wl=$(cnt 'photo op over its deadline while a debugger is attached \(not counted\)' $d/dylib.log); lt=$(cnt 'latched' $d/dylib.log)
   mk=$(markers | grep -c .); ps=$(cnt '\| PASS' $d/app.log); at=$(grep -m1 -oE 'attached pid [0-9]+ in [0-9.]+ s|attach FAILED.*|no pid' $att)
   wd=$(cnt 'watchdog: debugger detached' $d/dylib.log); dt=$(cnt 'ATTACH\| .* detached' $att)
-  if [[ $at == attached* && $tr1 == 1 && $uh == 2 && $hg == 0 && $wl == 2 && $lt == 0 && $mk == 0 && $ps == 14 && $left == no && $wd == 1 && $dt == 1 ]]
+  # at: lldb-attach.py's attach line; tr1: 'activate ... traced=1' events; uh / hg: 'unknown-hang photo' / 'hang' events;
+  # wl: the engine's "over its deadline while a debugger is attached" lines; lt / mk: latched lines / markers; ps: PASS
+  # lines; left: a debugserver still running; wd / dt: the watchdog's and lldb-attach.py's "detached" lines
+  if [[ $at == attached* && $tr1 == 1 && $uh == 2 && $hg == 0 && $wl == 2 &&
+        $lt == 0 && $mk == 0 && $ps == 14 && $left == no && $wd == 1 && $dt == 1 ]]
   then ok traced-$i "$at, activate traced=1, 2 unknown-hang photo, 0 hang, 0 latched lines, 0 markers, lldb detached (watchdog saw it), 14/14, no debugserver left"
-  else bad traced-$i "attach='$at' traced=1:$tr1 unknown-hang=$uh hang=$hg watchdog-lines=$wl latched=$lt markers=$mk pass=$ps lldb-detached=$dt watchdog-detached=$wd debugserver-left=$left (see $d)"; fi
+  else bad traced-$i "attach='$at' traced=1:$tr1 unknown-hang=$uh hang=$hg watchdog-lines=$wl latched=$lt markers=$mk pass=$ps lldb-detached=$dt watchdog-detached=$wd debugserver-left=$left (see $d)"
+  fi
   # --- the next launch, no debugger, no test hook: still armed ---
   n0=$(nl $EV); run nx$i; d=$(res nx$i); since $n0 > $d/events.txt
   ar=$(cnt 'LAZY armed by' $d/dylib.log); lt=$(cnt 'latched' $d/dylib.log); mk=$(markers | grep -c .); ps=$(cnt '\| PASS' $d/app.log)
   tr0=$(cnt ' activate .*traced=0' $d/events.txt); ld=$(cnt 'last debug run ended inside photo op' $d/dylib.log)
-  if [[ $ar == 1 && $lt == 0 && $mk == 0 && $ps == 14 && $tr0 == 1 ]]; then ok next-$i "armed (activate traced=0), 14/14, no latch, 0 markers; 'last debug run ended inside photo op': $ld"
+  if [[ $ar == 1 && $lt == 0 && $mk == 0 && $ps == 14 && $tr0 == 1 ]]
+  then ok next-$i "armed (activate traced=0), 14/14, no latch, 0 markers; 'last debug run ended inside photo op': $ld"
   else bad next-$i "armed=$ar latched=$lt markers=$mk pass=$ps traced=0:$tr0 (see $d)"; fi
 done
 for i in {1..$N}; do
@@ -61,11 +71,13 @@ for i in {1..$N}; do
   n0=$(nl $EV); run c$i SIMCAM_WD_TEST=hang; d=$(res c$i); since $n0 > $d/events.txt
   h1=$(cnt ' hang photo .* n=1' $d/events.txt); h2=$(cnt ' hang photo .* n=2' $d/events.txt); uh=$(cnt 'unknown-hang' $d/events.txt)
   la=$(cnt 'photo latched after 2 hangs' $d/dylib.log)
-  if [[ $h1 == 1 && $h2 == 1 && $uh == 0 && $la == 1 ]]; then ok control-$i "hang photo n=1 and n=2 counted, 0 unknown-hang, 'photo latched after 2 hangs' in-process"
+  if [[ $h1 == 1 && $h2 == 1 && $uh == 0 && $la == 1 ]]
+  then ok control-$i "hang photo n=1 and n=2 counted, 0 unknown-hang, 'photo latched after 2 hangs' in-process"
   else bad control-$i "hang n=1:$h1 n=2:$h2 unknown-hang=$uh in-process-latch=$la (see $d)"; fi
   n0=$(nl $EV); run cn$i; d=$(res cn$i); since $n0 > $d/events.txt
   ml=$(markers); sl=$(cnt 'sentinel: photo latched' $d/dylib.log); al=$(cnt ' activate .*latched=1' $d/events.txt)
-  if [[ $sl == 1 && $al == 1 && $(print -r -- $ml | grep -c "latched-$BUILD") == 1 ]]; then ok control-next-$i "next launch latched: 'sentinel: photo latched', activate latched=1, marker ${ml##*/}"
+  if [[ $sl == 1 && $al == 1 && $(print -r -- $ml | grep -c "latched-$BUILD") == 1 ]]
+  then ok control-next-$i "next launch latched: 'sentinel: photo latched', activate latched=1, marker ${ml##*/}"
   else bad control-next-$i "sentinel-latched=$sl activate-latched=$al markers='$ml' (see $d)"; fi
   print -r -- "$ml" > $d/markers.txt
   clear_engine cc$i; mk=$(markers | grep -c .)

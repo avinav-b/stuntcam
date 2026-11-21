@@ -178,7 +178,7 @@ func TestStatusFromBootEnv(t *testing.T) {
 	if dir := foreignBootArm(d); dir != "" {
 		t.Fatalf("own home: %q", dir)
 	}
-	// unreadable boot env: the record decides, as before
+	// unreadable boot env: the record decides
 	bootEnv = func(string) (map[string]string, error) { return nil, os.ErrPermission }
 	home.WriteCurrent("U1", "/h/builds/c253a7ced041/libsimcamloader.dylib")
 	if s := statusOf(d); s.Mode != "boot" || !strings.HasPrefix(s.BootEnv, "unreadable") {
@@ -209,7 +209,7 @@ func TestXcodeWarnings(t *testing.T) {
 		t.Fatalf("real mismatch: %+v", w)
 	}
 	two := append(one, xcode.Info{Version: "27.1", Build: "27A9275", DeveloperDir: "/Users/x/xcodes/Xcode-27.1.app/Contents/Developer"})
-	// L11: several Xcodes alone is information
+	// several Xcodes alone is information
 	if w := xcodeWarnings(act, nil, two, "", []string{"/Applications/Xcode.app"}); len(w) != 1 || w[0].Warn || !strings.Contains(w[0].Msg, "several Xcodes") {
 		t.Fatalf("two, no mismatch: %+v", w)
 	}
@@ -520,8 +520,8 @@ func TestRetriedLine(t *testing.T) {
 	if l := retriedLine(rl); !strings.Contains(l, "a second canary launch (the first: RESULT core=INCONCLUSIVE (y))") {
 		t.Fatalf("relaunched pass: %q", l)
 	}
-	ff.NoCache = "SIMCTL_CHILD_M40_OLD_STOP" // with the cache bypassed, the line doesn't claim an hour
-	if l := retriedLine(ff); strings.Contains(l, "cached for") || !strings.Contains(l, "not cached (SIMCTL_CHILD_M40_OLD_STOP)") {
+	ff.NoCache = "SIMCTL_CHILD_SIMCAM_OFF_STOP_WAIT" // with the cache bypassed, the line doesn't claim an hour
+	if l := retriedLine(ff); strings.Contains(l, "cached for") || !strings.Contains(l, "not cached (SIMCTL_CHILD_SIMCAM_OFF_STOP_WAIT)") {
 		t.Fatalf("pass after a fail, cache bypassed: %q", l)
 	}
 	rt := verify.Result{State: verify.Pass, Verdict: "pass", Retried: "photo-jpeg: gap 103 ms -> retry ok"}

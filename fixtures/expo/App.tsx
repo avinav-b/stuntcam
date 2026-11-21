@@ -349,13 +349,16 @@ function VcOrient() {
   const photoOutput = usePhotoOutput({});
   const videoOutput = useVideoOutput({ enableAudio: false });
   const started = useRef<(() => void) | null>(null);
-  const startedP = useRef(new Promise<void>((r) => (started.current = r)));
+  // made once: `useRef(new Promise(…))` would run the executor at every render and leave `started` holding the resolver
+  // of a promise nobody awaits (the component renders twice when the device list arrives after the first render)
+  const startedP = useRef<Promise<void> | null>(null);
+  if (startedP.current == null) startedP.current = new Promise<void>((r) => (started.current = r));
   const deviceRef = useRef(device); deviceRef.current = device;
   useEffect(() => {
     (async () => {
       L(`BEGIN vcorient cam=${CAM}`);
       if (VisionCamera.cameraPermissionStatus !== 'authorized') await VisionCamera.requestCameraPermission();
-      await step('vco.onStarted', () => startedP.current, 15000);
+      await step('vco.onStarted', () => startedP.current!, 15000);
       await sleep(2500);
       L('SCREENSHOT preview'); await sleep(1500);
       await step('vco.photo', async () => {

@@ -11,7 +11,7 @@ import (
 func TestHookMode(t *testing.T) {
 	for in, want := range map[string]string{"boot": "boot", "launchd": "launchd", "booted-unarmed": "unarmed", "env": "unarmed",
 		"armed": "unarmed", "booting": "", "unarmed": ""} {
-		if got := hookMode(in); got != want {
+		if got := hookMode(statusMode(in)); got != want {
 			t.Errorf("hookMode(%q) = %q, want %q", in, got, want)
 		}
 	}
@@ -69,7 +69,7 @@ func TestHookReport(t *testing.T) {
 	if r["U1"].Armed != 2 || len(r["U1"].Failures) != 1 || r["U2"].Armed != 0 || len(r) != 2 {
 		t.Fatalf("%+v", r)
 	}
-	if k := sortedHookUDIDs(r); !reflect.DeepEqual(k, []string{"U1", "U2"}) {
+	if k := sortedKeys(r); !reflect.DeepEqual(k, []string{"U1", "U2"}) {
 		t.Fatal(k)
 	}
 }

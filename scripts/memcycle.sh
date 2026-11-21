@@ -13,13 +13,15 @@
 #   +3.1–3.2 MB per cycle (26 → 189 MB over 50 on 26.3). UDID: $SIMCAM_UDID_<rt>. One line on stdout:
 #     memcycle <rt> <variant> PASS|FAIL ok=<ok>/<n> fp1=<KB> fp10=<KB> fpN=<KB> growth=<KB, medians> slope=<KB/cycle>
 #   (exit 1 on FAIL). The app's output: results/memcycle-<rt>-<variant>.txt.
-set -u; ROOT="$(cd "$(dirname "$0")/.." && pwd)"; source $ROOT/scripts/env.sh; RT=$1; N=${2:-50}; VAR=${3:-plain}
-V=SIMCAM_UDID_$RT; UDID=${(P)V:-}; [[ -n $UDID ]] || { echo "$0: set $V to the UDID of your iOS $RT simulator" >&2; exit 2; }
-B=dev.simcam.spike.m10plain; OUT=$SIMCAM_RESULTS/memcycle-$RT-$VAR.txt; (( N >= 25 )) || { echo "$0: need >= 25 cycles (two disjoint 10-cycle windows after cycle 5)" >&2; exit 2; }
+set -u; ROOT="$(cd "$(dirname "$0")/.." && pwd)"; source $ROOT/scripts/env.sh; source $ROOT/scripts/common.sh; RT=$1; N=${2:-50}; VAR=${3:-plain}
+need_udid "$0" "$RT" UDID long
+B=dev.simcam.spike.m10plain; OUT=$SIMCAM_RESULTS/memcycle-$RT-$VAR.txt; (( N >= 25 )) ||
+  { echo "$0: need >= 25 cycles (two disjoint 10-cycle windows after cycle 5)" >&2; exit 2; }
 typeset -a E; E=(SIMCTL_CHILD_M5APP_MODE=cycle SIMCTL_CHILD_M5APP_CYCLES=$N)
 [[ $VAR == (photo|both) ]] && E+=(SIMCTL_CHILD_M5APP_CYCLE_PHOTO=1); [[ $VAR == (movie|both) ]] && E+=(SIMCTL_CHILD_M5APP_CYCLE_MOVIE=1)
 [[ $VAR == plain ]] || E+=(SIMCTL_CHILD_M5APP_CYCLE_IDLE=1.5)
-xcrun simctl terminate $UDID $B 2>/dev/null; xcrun simctl privacy $UDID grant camera $B 2>/dev/null; xcrun simctl privacy $UDID grant microphone $B 2>/dev/null
+xcrun simctl terminate $UDID $B 2>/dev/null; xcrun simctl privacy $UDID grant camera $B 2>/dev/null
+xcrun simctl privacy $UDID grant microphone $B 2>/dev/null
 env $E xcrun simctl launch --console-pty $UDID $B > $OUT 2>&1 &
 LP=$!
 for i in {1..$(( 60 + N * 8 ))}; do sleep 1; grep -q "M5APP| DONE" $OUT && break; done

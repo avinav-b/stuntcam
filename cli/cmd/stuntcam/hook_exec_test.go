@@ -10,11 +10,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/avinav-b/stuntcam/cli/internal/arm"
 	"github.com/avinav-b/stuntcam/cli/internal/scheme"
 	"github.com/avinav-b/stuntcam/cli/internal/simctl"
 )
 
-func TestXcodebuildTest(t *testing.T) {
+func TestRunsTests(t *testing.T) {
 	yes := [][]string{
 		{"xcodebuild", "test", "-scheme", "S"},
 		{"/usr/bin/xcodebuild", "-scheme", "S", "-destination", "id=X", "test-without-building"},
@@ -37,12 +38,12 @@ func TestXcodebuildTest(t *testing.T) {
 		{"env", "./run-tests.sh", "test"},
 	}
 	for _, c := range yes {
-		if !xcodebuildTest(c) {
+		if !parseXcodebuild(c).runsTests() {
 			t.Errorf("%q: not taken for xcodebuild test", c)
 		}
 	}
 	for _, c := range no {
-		if xcodebuildTest(c) {
+		if parseXcodebuild(c).runsTests() {
 			t.Errorf("%q: taken for xcodebuild test", c)
 		}
 	}
@@ -195,7 +196,7 @@ func TestTestConfigs(t *testing.T) {
 		append([]string{"test", "-scheme", "Plans", "-testPlan", "Unlisted"}, P...),
 		append([]string{"test", "-scheme", "Plain", "-testPlan", "X"}, P...),
 		{"test-without-building", "-xctestrun", "missing.xctestrun"},
-		{"test", "-scheme", "Nowhere"}, // r2 M-1: unknown sanitizers decline instead of exporting the hook
+		{"test", "-scheme", "Nowhere"}, // unknown sanitizers decline instead of exporting the hook
 		{"test-without-building", "-testProductsPath", "none.xctestproducts"},
 	} {
 		if _, _, err := testConfigs(args, d); err == nil {
@@ -258,14 +259,14 @@ func TestPlanRunnerHook(t *testing.T) {
 		get(p, "TEST_RUNNER_SIMCAM_MTC") != "<unset>" || len(p.Notes) != 0 {
 		t.Fatalf("plain: %+v", p)
 	}
-	// r2 L-1: a wrapper running another Xcode declines; the same Xcode named as the .app doesn't
-	inL1 := base("-scheme", "Plain")
-	inL1.WrapEnv = map[string]string{"DEVELOPER_DIR": "/Applications/Xcode-26.app/Contents/Developer"}
-	if p := planRunnerHook(inL1); p.Export || !noted(p, "DEVELOPER_DIR") {
+	// a wrapper running another Xcode declines; the same Xcode named as the .app doesn't
+	otherXcode := base("-scheme", "Plain")
+	otherXcode.WrapEnv = map[string]string{"DEVELOPER_DIR": "/Applications/Xcode-26.app/Contents/Developer"}
+	if p := planRunnerHook(otherXcode); p.Export || !noted(p, "DEVELOPER_DIR") {
 		t.Fatalf("other Xcode: %+v", p)
 	}
-	inL1.WrapEnv = map[string]string{"DEVELOPER_DIR": strings.TrimSuffix(dev, "/Contents/Developer")}
-	if p := planRunnerHook(inL1); strings.HasSuffix(dev, "/Contents/Developer") && !p.Export {
+	otherXcode.WrapEnv = map[string]string{"DEVELOPER_DIR": strings.TrimSuffix(dev, "/Contents/Developer")}
+	if p := planRunnerHook(otherXcode); strings.HasSuffix(dev, "/Contents/Developer") && !p.Export {
 		t.Fatalf("same Xcode as .app: %+v", p)
 	}
 	// ASan through a test plan: the toolchain runtime first
@@ -328,6 +329,20 @@ func TestPlanRunnerHook(t *testing.T) {
 	}
 	if p = planRunnerHook(with(base("-scheme", "Plain"), func(i *hookInputs) { i.Hook = "" })); p.Export {
 		t.Fatalf("no hook in this build: %+v", p)
+	}
+}
+
+// the caller's SIMCAM_* settings reach the runner as TEST_RUNNER_*, but not a sim's camera settings (arm.LegacyNames):
+// those come from each destination's .env file, as the old M*_ names did (they never matched SIMCAM_*)
+func TestRunnerSettingsSkipSimCameraSettings(t *testing.T) {
+	env := []string{"SIMCAM_SOURCE=scene", "SIMCAM_OFF_STOP_WAIT=1", "M2_PLIST=/p", "SIMCAM_HOME=/h"}
+	for k := range arm.LegacyNames {
+		env = append(env, k+"=/caller")
+	}
+	pl := &hookPlanner{in: hookInputs{Environ: env}}
+	got := strings.Join(pl.runnerSettings(false), " ")
+	if want := "TEST_RUNNER_SIMCAM_OFF_STOP_WAIT=1 TEST_RUNNER_SIMCAM_SOURCE=scene"; got != want {
+		t.Fatalf("forwarded %q, want %q", got, want)
 	}
 }
 

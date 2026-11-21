@@ -33,6 +33,14 @@ func ShmOwner(name string) (int, error) {
 	return int(st.Uid), nil
 }
 
+// The ring header fields ShmProducer reads: docs/webcam-ring.md §3 (version 1; magic is at offset 0 in every version).
+const (
+	ringMagic          = 0x52574353 // "SCWR" in memory; 0 while the ring is still being created
+	ringHeaderBytes    = 4096       // the header's size: the part of the object ShmProducer maps
+	ringMagicOffset    = 0
+	ringProducerOffset = 76 // producerPid: the helper's pid
+)
+
 // ShmProducer reads the producerPid of the ring at name (owned by this user, a ring header with the magic set), or 0.
 func ShmProducer(name string) int {
 	fd, err := shmOpen(name, syscall.O_RDONLY)
@@ -41,18 +49,18 @@ func ShmProducer(name string) int {
 	}
 	defer syscall.Close(fd)
 	var st syscall.Stat_t
-	if syscall.Fstat(fd, &st) != nil || int(st.Uid) != syscall.Getuid() || st.Size < 4096 {
+	if syscall.Fstat(fd, &st) != nil || int(st.Uid) != syscall.Getuid() || st.Size < ringHeaderBytes {
 		return 0
 	}
-	b, err := syscall.Mmap(fd, 0, 4096, syscall.PROT_READ, syscall.MAP_SHARED)
+	b, err := syscall.Mmap(fd, 0, ringHeaderBytes, syscall.PROT_READ, syscall.MAP_SHARED)
 	if err != nil {
 		return 0
 	}
 	defer syscall.Munmap(b)
-	if binary.LittleEndian.Uint32(b[0:4]) != 0x52574353 {
+	if binary.LittleEndian.Uint32(b[ringMagicOffset:ringMagicOffset+4]) != ringMagic {
 		return 0
 	}
-	return int(binary.LittleEndian.Uint32(b[76:80]))
+	return int(binary.LittleEndian.Uint32(b[ringProducerOffset : ringProducerOffset+4]))
 }
 
 // ShmUnlink removes the shm name.

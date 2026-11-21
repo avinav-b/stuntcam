@@ -3,7 +3,7 @@
 # drive.sh <rt: 263|27> <mode> <tag> <inj: boot|none> — one bgfg-probe run
 #   mode: stopInBackground | keepRunning | stopWhileInterrupted (the probe's -mode argument; README.md)
 #   inj=boot: the sim was booted by scripts/boot.sh <rt> stub (engine log copied from the boot log dir); none: booted plainly
-#   XENV="VAR=val ..." adds SIMCTL_CHILD_VAR=val to the launch (e.g. XENV=M12_NO_INTERRUPT=1); BGS = seconds in the background (3)
+#   XENV="VAR=val ..." adds SIMCTL_CHILD_VAR=val to the launch (e.g. XENV=SIMCAM_OFF_INTERRUPTIONS=1); BGS = seconds in the background (3)
 #   UDID: $SIMCAM_UDID_<rt>. Writes $SIMCAM_RESULTS/bgfg-<rt>-<inj>-<mode>-<tag>/: app.log, host.log, dylib.log, timeline.txt
 # Backgrounding: `simctl launch <udid> com.apple.Preferences`, then after BGS s `simctl launch <udid> <probe>` (as run.sh does
 # for the canary's BG-REQUEST); the second launch brings the running probe back to the foreground, it doesn't relaunch it.
@@ -35,7 +35,7 @@ if [[ -n $PID ]] && kill -0 $PID 2>/dev/null; then
   cpu() { ps -o time= -p $PID | awk -F'[:.]' '{print ($1*60+$2)+("0."$3)}'; }
   C1=$(cpu); sleep 3; C2=$(cpu); hlog "after END: probe CPU $(( C2 - C1 )) s in 3 s"
   /usr/bin/sample $PID 2 -file $OUT/sample.txt >/dev/null 2>&1
-  hlog "after END: sample: $(grep -c 'libsimcam.dylib' $OUT/sample.txt 2>/dev/null) stack lines in libsimcam.dylib, $(grep -E "M5StartPump|M5Pump" $OUT/sample.txt 2>/dev/null | grep -c .) naming the pump"
+  hlog "after END: sample: $(grep -c 'libsimcam.dylib' $OUT/sample.txt 2>/dev/null) stack lines in libsimcam.dylib, $(grep -E "PumpStart|PumpTick" $OUT/sample.txt 2>/dev/null | grep -c .) naming the pump"
 fi
 sleep 0.1; kill $LP 2>/dev/null; xcrun simctl terminate $UDID $B 2>/dev/null; xcrun simctl terminate $UDID com.apple.Preferences 2>/dev/null; hlog "terminated"
 if [[ $INJ == boot ]]; then BL=$(cat $ROOT/build/bootlogdir-$RT.txt 2>/dev/null)

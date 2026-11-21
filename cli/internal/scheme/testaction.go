@@ -12,11 +12,11 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
-	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -61,21 +61,7 @@ type testActionXML struct {
 // FindScheme is the first <name>.xcscheme under root (bounded depth, same skips as Scan), or "".
 func FindScheme(root, name string, maxDepth int) string {
 	found := ""
-	base := strings.Count(filepath.Clean(root), string(filepath.Separator))
-	filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
-		if err != nil || found != "" {
-			return nil
-		}
-		if d.IsDir() {
-			switch d.Name() {
-			case "node_modules", "Pods", "build", "DerivedData", ".git", ".dart_tool", ".build":
-				return filepath.SkipDir
-			}
-			if strings.Count(p, string(filepath.Separator))-base > maxDepth {
-				return filepath.SkipDir
-			}
-			return nil
-		}
+	walkFiles(root, maxDepth, func(p string) error {
 		if filepath.Base(p) == name+".xcscheme" {
 			found = p
 			return filepath.SkipAll
@@ -180,7 +166,7 @@ func resolveRef(ref, container string) string {
 	return filepath.Join(container, path)
 }
 
-// Locate finds the .xcscheme xcodebuild would use for -scheme name (r2 M-1): with -project, that project's shared then user
+// Locate finds the .xcscheme xcodebuild would use for -scheme name: with -project, that project's shared then user
 // schemes; with -workspace, the workspace's own schemes, then those of the projects its contents.xcworkspacedata lists; with
 // neither, the .xcworkspace or .xcodeproj in wd (as xcodebuild picks it), then a bounded walk under wd. "" if not found.
 func Locate(wd, workspace, project, name string) string {
@@ -265,7 +251,7 @@ func readPlan(pf string, only, skip []string) ([]TestConfig, error) {
 	}
 	var out []TestConfig
 	for _, c := range plan.Configurations {
-		if (len(only) > 0 && !contains(only, c.Name)) || contains(skip, c.Name) {
+		if (len(only) > 0 && !slices.Contains(only, c.Name)) || slices.Contains(skip, c.Name) {
 			continue
 		}
 		o := map[string]json.RawMessage{}
@@ -273,7 +259,7 @@ func readPlan(pf string, only, skip []string) ([]TestConfig, error) {
 			o[k] = v
 		}
 		for k, v := range c.Options {
-			o[k] = mergeObject(o[k], v) // a configuration's {"addressSanitizer":{…}} overrides key by key (r2 L-3)
+			o[k] = mergeObject(o[k], v) // a configuration's {"addressSanitizer":{…}} overrides key by key
 		}
 		tc := TestConfig{Name: c.Name}
 		if enabled(o["addressSanitizer"]) || isTrue(o["addressSanitizerEnabled"]) {
@@ -345,14 +331,14 @@ func (c *TestConfig) addInserts(list string) {
 			c.addSanitizer("thread")
 		case b == "libgmalloc.dylib":
 			c.GuardMalloc = true
-		case !contains(c.Inserts, l):
+		case !slices.Contains(c.Inserts, l):
 			c.Inserts = append(c.Inserts, l)
 		}
 	}
 }
 
 func (c *TestConfig) addSanitizer(s string) {
-	if !contains(c.Sanitizers, s) {
+	if !slices.Contains(c.Sanitizers, s) {
 		c.Sanitizers = append(c.Sanitizers, s)
 		sort.Strings(c.Sanitizers)
 	}
@@ -379,7 +365,7 @@ func XCTestRun(path string, only, skip, onlyTargets []string) ([]TestConfig, err
 		for _, c := range cs {
 			cd, _ := c.(map[string]any)
 			cn, _ := cd["Name"].(string)
-			if (len(only) > 0 && !contains(only, cn)) || contains(skip, cn) {
+			if (len(only) > 0 && !slices.Contains(only, cn)) || slices.Contains(skip, cn) {
 				continue
 			}
 			ts, _ := cd["TestTargets"].([]any)
@@ -405,10 +391,11 @@ func XCTestRun(path string, only, skip, onlyTargets []string) ([]TestConfig, err
 	}
 	var out []TestConfig
 	for _, t := range tgts {
-		if len(onlyTargets) > 0 && !contains(onlyTargets, t.name) {
+		if len(onlyTargets) > 0 && !slices.Contains(onlyTargets, t.name) {
 			continue
 		}
-		tc := TestConfig{Name: strings.TrimPrefix(t.config+"/"+t.name, "/")} // (an .xctestrun doesn't say whether the Main Thread Checker is on: xcodebuild adds it)
+		// an .xctestrun doesn't say whether the Main Thread Checker is on: xcodebuild adds it
+		tc := TestConfig{Name: strings.TrimPrefix(t.config+"/"+t.name, "/")}
 		for _, k := range []string{"TestingEnvironmentVariables", "EnvironmentVariables"} {
 			env, _ := t.d[k].(map[string]any)
 			if l, _ := env["DYLD_INSERT_LIBRARIES"].(string); l != "" {
@@ -419,7 +406,8 @@ func XCTestRun(path string, only, skip, onlyTargets []string) ([]TestConfig, err
 		var other []string
 		for _, l := range tc.Inserts {
 			switch filepath.Base(l) {
-			case "libXCTestBundleInject.dylib", "libMainThreadChecker.dylib", "libRPAC.dylib", "libXCTestSwiftSupport.dylib", "libViewDebuggerSupport.dylib", "libLogRedirect.dylib", "libBacktraceRecording.dylib":
+			case "libXCTestBundleInject.dylib", "libMainThreadChecker.dylib", "libRPAC.dylib", "libXCTestSwiftSupport.dylib",
+				"libViewDebuggerSupport.dylib", "libLogRedirect.dylib", "libBacktraceRecording.dylib":
 			default:
 				other = append(other, l)
 			}

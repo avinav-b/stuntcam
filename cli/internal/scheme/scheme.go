@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -36,21 +37,7 @@ type xcscheme struct {
 // Scan walks root (bounded depth, skipping dependency and build folders) for .xcscheme files that insert libraries.
 func Scan(root string, maxDepth int) []Insert {
 	var out []Insert
-	base := strings.Count(filepath.Clean(root), string(filepath.Separator))
-	filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return nil
-		}
-		if d.IsDir() {
-			switch d.Name() {
-			case "node_modules", "Pods", "build", "DerivedData", ".git", ".dart_tool", ".build":
-				return filepath.SkipDir
-			}
-			if strings.Count(p, string(filepath.Separator))-base > maxDepth {
-				return filepath.SkipDir
-			}
-			return nil
-		}
+	walkFiles(root, maxDepth, func(p string) error {
 		if !strings.HasSuffix(p, ".xcscheme") {
 			return nil
 		}
@@ -60,6 +47,30 @@ func Scan(root string, maxDepth int) []Insert {
 		return nil
 	})
 	return out
+}
+
+// skippedDirs are the folders Scan and FindScheme never walk into: dependencies and build output.
+var skippedDirs = []string{"node_modules", "Pods", "build", "DerivedData", ".git", ".dart_tool", ".build"}
+
+// walkFiles calls visit for each file under root, at most maxDepth directory levels down, skipping skippedDirs and
+// whatever can't be read. visit returns filepath.SkipAll to stop the walk.
+func walkFiles(root string, maxDepth int, visit func(p string) error) {
+	base := strings.Count(filepath.Clean(root), string(filepath.Separator))
+	filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			if slices.Contains(skippedDirs, d.Name()) {
+				return filepath.SkipDir
+			}
+			if strings.Count(p, string(filepath.Separator))-base > maxDepth {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		return visit(p)
+	})
 }
 
 func parse(p string) (Insert, bool) {
@@ -77,19 +88,10 @@ func parse(p string) (Insert, bool) {
 			continue
 		}
 		for _, l := range strings.Split(v.Value, ":") {
-			if l = strings.TrimSpace(l); l != "" && !contains(in.Libs, l) {
+			if l = strings.TrimSpace(l); l != "" && !slices.Contains(in.Libs, l) {
 				in.Libs = append(in.Libs, l)
 			}
 		}
 	}
 	return in, len(in.Libs) > 0
-}
-
-func contains(s []string, x string) bool {
-	for _, v := range s {
-		if v == x {
-			return true
-		}
-	}
-	return false
 }

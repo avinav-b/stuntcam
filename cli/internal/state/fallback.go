@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// Fallback is the engine's container-tmp location for one app (engine/src/core/safety.inc, SCTmpRoot and SCLoadInit). When the
+// Fallback is the engine's container-tmp location for one app (engine/src/core/markers.inc, SCTmpRoot and SCLoadInit). When the
 // app can't open events.log in its state dir (SIMCAM_STATE_DIR/<bundle>, normally $SIMCAM_HOME/sims/<udid>/state; on 17.5 when
 // the sim can't write there), it keeps events.log, latched-<build> and latched-motion-<build> in
 // <data container>/tmp/simcam-state/<bundle>/, and preflight-fail-<build> in <data container>/tmp/simcam-state/. The data
@@ -128,13 +128,15 @@ func (s FallbackState) Latches(build string, now time.Time) (desc string, feats 
 	}
 	for _, m := range s.Markers {
 		if m.Build == build && m.Valid(now) {
-			parts = append(parts, fmt.Sprintf("marker %s: %s until %s", m.Name(), strings.ReplaceAll(m.Features, " ", ","), m.Until.Format("2006-01-02 15:04")))
+			features := strings.ReplaceAll(m.Features, " ", ",")
+			parts = append(parts, fmt.Sprintf("marker %s: %s until %s", m.Name(), features, m.Until.Format("2006-01-02 15:04")))
 			feats = append(feats, strings.Fields(m.Features)...)
 		}
 	}
 	for _, p := range s.PreflightFails {
 		if p.Build == build && p.Valid(now) {
-			parts = append(parts, fmt.Sprintf("marker preflight-fail-%s: %s until %s (stock CoreMotion)", p.Build, p.What, p.Until.Format("2006-01-02 15:04")))
+			until := p.Until.Format("2006-01-02 15:04")
+			parts = append(parts, fmt.Sprintf("marker preflight-fail-%s: %s until %s (stock CoreMotion)", p.Build, p.What, until))
 		}
 	}
 	return strings.Join(parts, "; "), feats

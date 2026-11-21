@@ -117,8 +117,8 @@ func TestHandoffKillsChildOnPidWriteFailure(t *testing.T) {
 	t.Setenv("SIMCAM_HOME", t.TempDir())
 	os.MkdirAll(home.Root(), 0o755)
 	d := lockDir("23D8133")
-	if ok, why := acquire(d); !ok {
-		t.Fatal(why)
+	if err := acquire(d); err != nil {
+		t.Fatal(err)
 	}
 	var child *exec.Cmd
 	oldSpawn, oldWrite := spawnShutdown, writeLockPid
@@ -168,14 +168,14 @@ func TestStaleShutdownMarker(t *testing.T) {
 		t.Fatal("a stale marker counts as a running shutdown")
 	}
 	t0 := time.Now()
-	if ok, why := acquireWait(d, 10*time.Second, func(string) {}); !ok || time.Since(t0) > 3*time.Second {
-		t.Fatalf("stale lock not taken over: %v %q after %s", ok, why, time.Since(t0))
+	if err := acquireWait(d, 10*time.Second, func(string) {}); err != nil || time.Since(t0) > 3*time.Second {
+		t.Fatalf("stale lock not taken over: %v after %s", err, time.Since(t0))
 	}
 	release(d)
 	// a fresh marker with the same live pid is waited for (TestAcquireWaitsForAShutdown), and a live verify's lock without a
 	// marker is still refused
 	holdLock(t, d, h.Process.Pid, false)
-	if ok, _ := acquire(d); ok {
+	if acquire(d) == nil {
 		t.Fatal("a live verify's lock was taken over")
 	}
 	if ShutdownWait < ShutdownLife {
@@ -247,19 +247,19 @@ func TestRetriedPassCache(t *testing.T) {
 	put("fail-old", "fail(x)", rl, "", 48*time.Hour)
 	put("sh-old", "pass", "", "RESULT core=PASS ext=PASS t=19.2s retried:["+rl+"]", 2*time.Hour)
 
-	if r, ok, _, _ := cached("fresh", now); !ok || !r.RetriedPass() || r.Retried != rl {
-		t.Fatalf("fresh retried pass: ok=%v %+v", ok, r)
+	if c := cached("fresh", now); !c.usable || !c.result.RetriedPass() || c.result.Retried != rl {
+		t.Fatalf("fresh retried pass: usable=%v %+v", c.usable, c.result)
 	}
-	if _, ok, why, _ := cached("old", now); ok || !strings.Contains(why, "canary retry") {
-		t.Fatalf("old retried pass used: ok=%v why=%q", ok, why)
+	if c := cached("old", now); c.usable || !strings.Contains(c.why, "canary retry") {
+		t.Fatalf("old retried pass used: usable=%v why=%q", c.usable, c.why)
 	}
-	if r, ok, _, _ := cached("plain-old", now); !ok || r.RetriedPass() {
-		t.Fatalf("plain pass: ok=%v %+v", ok, r)
+	if c := cached("plain-old", now); !c.usable || c.result.RetriedPass() {
+		t.Fatalf("plain pass: usable=%v %+v", c.usable, c.result)
 	}
-	if r, ok, _, _ := cached("fail-old", now); !ok || r.State != Fail {
-		t.Fatalf("retried fail: ok=%v %+v", ok, r)
+	if c := cached("fail-old", now); !c.usable || c.result.State != Fail {
+		t.Fatalf("retried fail: usable=%v %+v", c.usable, c.result)
 	}
-	if _, ok, _, _ := cached("sh-old", now); ok {
+	if c := cached("sh-old", now); c.usable {
 		t.Fatal("an old retried pass without the field (scripts/verify.sh) was used")
 	}
 	if _, ok := Cached("old"); ok {
@@ -302,13 +302,13 @@ func TestRelaunchedPassCache(t *testing.T) {
 	if err := store(r); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok, why, _ := cached("rl", now); ok || !strings.Contains(why, "canary retry") {
-		t.Fatalf("old relaunched pass used: ok=%v why=%q", ok, why)
+	if c := cached("rl", now); c.usable || !strings.Contains(c.why, "canary retry") {
+		t.Fatalf("old relaunched pass used: usable=%v why=%q", c.usable, c.why)
 	}
 	r.Key, r.At = "rl2", now.Add(-10*time.Minute).Unix()
 	store(r)
-	if got, ok, _, _ := cached("rl2", now); !ok || !got.RetriedPass() || got.Relaunched == "" {
-		t.Fatalf("fresh relaunched pass: ok=%v %+v", ok, got)
+	if c := cached("rl2", now); !c.usable || !c.result.RetriedPass() || c.result.Relaunched == "" {
+		t.Fatalf("fresh relaunched pass: usable=%v %+v", c.usable, c.result)
 	}
 }
 
@@ -316,7 +316,8 @@ func TestRelaunchedPassCache(t *testing.T) {
 func TestAcquireWaitNoHome(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "missing", "verify-X.lock")
 	start := time.Now()
-	if ok, why := acquireWait(dir, 5*time.Second, func(string) {}); ok || time.Since(start) > time.Second || !strings.HasPrefix(why, "mkdir ") {
-		t.Fatalf("ok=%v why=%q after %s", ok, why, time.Since(start))
+	err := acquireWait(dir, 5*time.Second, func(string) {})
+	if err == nil || time.Since(start) > time.Second || !strings.HasPrefix(err.Error(), "mkdir ") {
+		t.Fatalf("err=%v after %s", err, time.Since(start))
 	}
 }

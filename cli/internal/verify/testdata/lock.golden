@@ -1,0 +1,5 @@
+live owner: false another verify is using this runtime's device, pid PID; lock HOME/verify-24A434.lock
+no pid: false another verify is using this runtime's device; lock HOME/verify-24A434.lock
+say: waiting for the previous verify's device UDID-1 to finish shutting down
+shutting down: false the previous verify's device UDID-1 is still shutting down after 1s; lock HOME/verify-24A434.lock
+no home: false mkdir HOME/missing/verify-X.lock: no such file or directory

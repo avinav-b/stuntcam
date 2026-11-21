@@ -89,13 +89,16 @@ func find(dir, prefix, wd string) (Set, error) {
 			switch {
 			case os.Getenv(UseCheckoutEnv) != "1":
 				if stuntcamRoot(s.From) == nil {
-					note(fmt.Sprintf("ignoring the stuntcam checkout in %s (an installed stuntcam uses a checkout's build only with %s=1 or --build <dir>); using the installed package's build", s.From, UseCheckoutEnv))
+					note(fmt.Sprintf("ignoring the stuntcam checkout in %s (an installed stuntcam uses a checkout's build only "+
+						"with %s=1 or --build <dir>); using the installed package's build", s.From, UseCheckoutEnv))
 				}
 			default:
 				if terr := trustedCheckout(s, err); terr != nil {
-					note(fmt.Sprintf("ignoring the build pointers in %s: %v; using the installed package's build", filepath.Join(s.From, "build"), terr))
+					pointers := filepath.Join(s.From, "build")
+					note(fmt.Sprintf("ignoring the build pointers in %s: %v; using the installed package's build", pointers, terr))
 				} else {
-					note(fmt.Sprintf("using the stuntcam checkout in %s (%s=1), not the installed package: %s", s.From, UseCheckoutEnv, s.Describe()))
+					note(fmt.Sprintf("using the stuntcam checkout in %s (%s=1), not the installed package: %s",
+						s.From, UseCheckoutEnv, s.Describe()))
 					return s, nil
 				}
 			}
@@ -121,7 +124,8 @@ func InstalledHere() (Set, error) {
 	prefix := installedPrefix()
 	if prefix == "" {
 		exe, _ := os.Executable()
-		return Set{}, fmt.Errorf("not an installed stuntcam: no share/stuntcam/%s next to %s (a dev build: `stuntcam doctor` shows its build)", ManifestName, exe)
+		return Set{}, fmt.Errorf("not an installed stuntcam: no share/stuntcam/%s next to %s "+
+			"(a dev build: `stuntcam doctor` shows its build)", ManifestName, exe)
 	}
 	return Installed(prefix)
 }
@@ -188,7 +192,8 @@ func trustedCheckout(s Set, cerr error) error {
 	if err != nil {
 		return fmt.Errorf("they don't point into %s", home.Builds())
 	}
-	if b, err := os.ReadFile(filepath.Join(s.From, "build", "current_dylib.txt")); err == nil && strings.TrimSpace(string(b)) != s.Engine {
+	dylibPointer, err := os.ReadFile(filepath.Join(s.From, "build", "current_dylib.txt"))
+	if err == nil && strings.TrimSpace(string(dylibPointer)) != s.Engine {
 		return fmt.Errorf("current_dylib.txt and current_loader.txt name different builds")
 	}
 	type want struct {
@@ -244,94 +249,118 @@ func stuntcamRoot(d string) error {
 func fromDir(dir string, pkg *Set, installed bool) (Set, error) {
 	dir, _ = filepath.Abs(dir)
 	s := Set{Loader: filepath.Join(dir, LoaderName), Engine: filepath.Join(dir, EngineName), From: dir}
-	stub := os.Getenv("STUNTCAM_STUB")
-	if stub == "" {
-		stub = newest(filepath.Join(filepath.Dir(dir), "*", StubName))
+	if s.Stub = os.Getenv("STUNTCAM_STUB"); s.Stub == "" {
+		s.Stub = newest(filepath.Join(filepath.Dir(dir), "*", StubName))
 	}
-	s.Stub = stub
-	s.Hook = os.Getenv("STUNTCAM_HOOK")
-	if s.Hook == "" {
+	if s.Hook = os.Getenv("STUNTCAM_HOOK"); s.Hook == "" {
 		s.Hook = newest(filepath.Join(filepath.Dir(dir), "*", HookName))
 	}
-	// a staged build ($SIMCAM_HOME/builds/<hash>) has its profile and image in $SIMCAM_HOME/dev; a release or checkout layout
-	// has them two levels up
-	s.Profile, s.Image = dataFiles(filepath.Dir(filepath.Dir(dir)))
-	if p := os.Getenv("STUNTCAM_PROFILE"); p != "" {
-		s.Profile = p
-	}
-	if p := os.Getenv("STUNTCAM_IMAGE"); p != "" {
-		s.Image = p
-	}
-	if pkg != nil {
-		if s.Profile == "" {
-			s.Profile = pkg.Profile
-		}
-		if s.Image == "" {
-			s.Image = pkg.Image
-		}
-	}
-	if s.Profile == "" || s.Image == "" {
-		p, i := dataFiles(home.Dev())
-		if s.Profile == "" {
-			s.Profile = p
-		}
-		if s.Image == "" {
-			s.Image = i
-		}
-	}
-	// the canary: $STUNTCAM_CANARY, else the release layout's (share/stuntcam/canary next to builds/), else the installed
-	// package's (an installed binary), else a checkout's whose current build is this one (another checkout's canary may
-	// check things this engine predates)
-	if c := os.Getenv("STUNTCAM_CANARY"); c != "" {
-		s.Canary = c
-	} else if c := filepath.Join(filepath.Dir(filepath.Dir(dir)), "canary", "m10canary.app"); !inHome(dir) && exists(c) {
-		s.Canary = c
-	} else if pkg != nil {
-		s.Canary = pkg.Canary
-	} else if !installed {
-		for _, co := range checkouts() {
-			if filepath.Base(filepath.Dir(co.Loader)) == filepath.Base(dir) {
-				s.Canary = co.Canary
-				break
-			}
-		}
-	}
-	// the camera helper: $STUNTCAM_HELPER, else the installed package's, else a checkout's (its build/current_helper.txt)
-	if h := os.Getenv("STUNTCAM_HELPER"); h != "" {
-		s.Helper = h
-	} else if pkg != nil {
-		s.Helper = pkg.Helper
-	} else if !installed {
-		for _, co := range checkouts() {
-			if co.Helper != "" {
-				s.Helper = co.Helper
-				break
-			}
-		}
-	}
-	s.Rules = os.Getenv("STUNTCAM_RULES")
-	if s.Rules == "" {
-		// a staged build ($SIMCAM_HOME/builds/<h>): $SIMCAM_HOME/restore-rules is the staging cache (only <hash>/ dirs), not
-		// a rules dir — take the package's or a checkout's
-		if r := filepath.Join(filepath.Dir(filepath.Dir(dir)), "restore-rules"); !inHome(dir) && exists(r) {
-			s.Rules = r
-		} else if pkg != nil {
-			s.Rules = pkg.Rules
-		} else if !installed {
-			for _, co := range checkouts() {
-				s.Rules = co.Rules
-				break
-			}
-		}
-	}
+	s.Profile, s.Image = dataFor(dir, pkg)
+	s.Canary = canaryFor(dir, pkg, installed)
+	s.Helper = helperFor(pkg, installed)
+	s.Rules = rulesFor(dir, pkg, installed)
 	if err := s.check(); err != nil {
 		return s, err
 	}
-	// without M2_PLIST the engine throws in m2_newFigCaptureSources and every app crashes at device discovery
+	// without SIMCAM_PROFILE the engine throws in hook_videoNewFigCaptureSources and every app crashes at device discovery
 	if s.Profile == "" || !exists(s.Profile) {
-		return s, fmt.Errorf("no camera profile for the build in %s: expected profiles/cfg-m10.plist two levels up or in $SIMCAM_HOME/dev; set STUNTCAM_PROFILE", dir)
+		return s, fmt.Errorf("no camera profile for the build in %s: expected profiles/cfg-m10.plist two levels up or in "+
+			"$SIMCAM_HOME/dev; set STUNTCAM_PROFILE", dir)
 	}
 	return s, nil
+}
+
+// dataFor finds a build dir's profile and image: $STUNTCAM_PROFILE / $STUNTCAM_IMAGE, else the ones two levels up (a
+// release or checkout layout), else the package's, else $SIMCAM_HOME/dev's (where a staged build's are).
+func dataFor(dir string, pkg *Set) (profile, image string) {
+	profile, image = dataFiles(filepath.Dir(filepath.Dir(dir)))
+	if p := os.Getenv("STUNTCAM_PROFILE"); p != "" {
+		profile = p
+	}
+	if p := os.Getenv("STUNTCAM_IMAGE"); p != "" {
+		image = p
+	}
+	if pkg != nil {
+		if profile == "" {
+			profile = pkg.Profile
+		}
+		if image == "" {
+			image = pkg.Image
+		}
+	}
+	if profile == "" || image == "" {
+		p, i := dataFiles(home.Dev())
+		if profile == "" {
+			profile = p
+		}
+		if image == "" {
+			image = i
+		}
+	}
+	return profile, image
+}
+
+// canaryFor finds a build dir's canary: $STUNTCAM_CANARY, else the release layout's (share/stuntcam/canary next to
+// builds/), else the installed package's (an installed binary), else a checkout's whose current build is this one
+// (another checkout's canary may check things this engine predates).
+func canaryFor(dir string, pkg *Set, installed bool) string {
+	if c := os.Getenv("STUNTCAM_CANARY"); c != "" {
+		return c
+	}
+	if c := filepath.Join(filepath.Dir(filepath.Dir(dir)), "canary", "m10canary.app"); !inHome(dir) && exists(c) {
+		return c
+	}
+	if pkg != nil {
+		return pkg.Canary
+	}
+	if !installed {
+		for _, co := range checkouts() {
+			if filepath.Base(filepath.Dir(co.Loader)) == filepath.Base(dir) {
+				return co.Canary
+			}
+		}
+	}
+	return ""
+}
+
+// helperFor finds the camera helper for a --build dir: $STUNTCAM_HELPER, else the installed package's, else a checkout's
+// (its build/current_helper.txt).
+func helperFor(pkg *Set, installed bool) string {
+	if h := os.Getenv("STUNTCAM_HELPER"); h != "" {
+		return h
+	}
+	if pkg != nil {
+		return pkg.Helper
+	}
+	if !installed {
+		for _, co := range checkouts() {
+			if co.Helper != "" {
+				return co.Helper
+			}
+		}
+	}
+	return ""
+}
+
+// rulesFor finds a build dir's restore-rules dir: $STUNTCAM_RULES, else the one two levels up, else the package's, else
+// the first checkout's. A staged build's ($SIMCAM_HOME/builds/<h>) two-up $SIMCAM_HOME/restore-rules is the staging
+// cache (only <hash>/ dirs), not a rules dir.
+func rulesFor(dir string, pkg *Set, installed bool) string {
+	if r := os.Getenv("STUNTCAM_RULES"); r != "" {
+		return r
+	}
+	if r := filepath.Join(filepath.Dir(filepath.Dir(dir)), "restore-rules"); !inHome(dir) && exists(r) {
+		return r
+	}
+	if pkg != nil {
+		return pkg.Rules
+	}
+	if !installed {
+		if cos := checkouts(); len(cos) > 0 {
+			return cos[0].Rules
+		}
+	}
+	return ""
 }
 
 func fromCheckout() (Set, error) {
@@ -344,8 +373,11 @@ func fromCheckout() (Set, error) {
 
 var errNoCheckout = errors.New("not in a stuntcam checkout")
 
+// executable is where this binary is. A var for tests (a test binary is built outside any checkout).
+var executable = os.Executable
+
 func exeCheckout() (Set, error) {
-	exe, err := os.Executable()
+	exe, err := executable()
 	if err == nil {
 		exe, err = filepath.EvalSymlinks(exe)
 	}
@@ -360,14 +392,22 @@ func exeCheckout() (Set, error) {
 func checkoutFrom(start string) (Set, error) {
 	for d := start; ; d = filepath.Dir(d) {
 		if b, err := os.ReadFile(filepath.Join(d, "build", "current_loader.txt")); err == nil {
-			st, _ := os.ReadFile(filepath.Join(d, "build", "current_stub.txt"))
-			hk, _ := os.ReadFile(filepath.Join(d, "build", "current_hook.txt"))
-			hp, _ := os.ReadFile(filepath.Join(d, "build", "current_helper.txt"))
-			ldr := strings.TrimSpace(string(b))
-			s := Set{Stub: strings.TrimSpace(string(st)), Hook: strings.TrimSpace(string(hk)), Loader: ldr, Engine: filepath.Join(filepath.Dir(ldr), EngineName),
-				Profile: filepath.Join(d, "engine", "profiles", "cfg-m10.plist"), Image: filepath.Join(d, "fixtures", "media", "qr.png"),
-				Canary: filepath.Join(d, "canary", "build", "m10canary.app"), Rules: filepath.Join(d, "restore-rules"), From: d,
-				Helper: strings.TrimSpace(string(hp))}
+			stub, _ := os.ReadFile(filepath.Join(d, "build", "current_stub.txt"))
+			hook, _ := os.ReadFile(filepath.Join(d, "build", "current_hook.txt"))
+			helper, _ := os.ReadFile(filepath.Join(d, "build", "current_helper.txt"))
+			loader := strings.TrimSpace(string(b))
+			s := Set{
+				Stub:    strings.TrimSpace(string(stub)),
+				Hook:    strings.TrimSpace(string(hook)),
+				Loader:  loader,
+				Engine:  filepath.Join(filepath.Dir(loader), EngineName),
+				Profile: filepath.Join(d, "engine", "profiles", "cfg-m10.plist"),
+				Image:   filepath.Join(d, "fixtures", "media", "qr.png"),
+				Canary:  filepath.Join(d, "canary", "build", "m10canary.app"),
+				Rules:   filepath.Join(d, "restore-rules"),
+				From:    d,
+				Helper:  strings.TrimSpace(string(helper)),
+			}
 			return s, s.check()
 		}
 		if filepath.Dir(d) == d {
@@ -378,7 +418,10 @@ func checkoutFrom(start string) (Set, error) {
 
 // dataFiles looks for profiles/cfg-m10.plist and media/qr.png under root, or the checkout layout (engine/profiles, fixtures/media).
 func dataFiles(root string) (profile, image string) {
-	for _, p := range []string{filepath.Join(root, "profiles", "cfg-m10.plist"), filepath.Join(root, "engine", "profiles", "cfg-m10.plist")} {
+	for _, p := range []string{
+		filepath.Join(root, "profiles", "cfg-m10.plist"),
+		filepath.Join(root, "engine", "profiles", "cfg-m10.plist"),
+	} {
 		if exists(p) {
 			profile = p
 			break
@@ -424,18 +467,13 @@ var hexDir = regexp.MustCompile(`^[0-9a-f]{12}$`)
 // bytes, as ./build.sh computes it (`cat libsimcam.dylib libsimcamloader.dylib | shasum`). Returns the staged set.
 func Stage(s Set) (Set, error) {
 	out := s
-	var err error
-	pairHash := filepath.Base(filepath.Dir(s.Loader))
-	if !hexDir.MatchString(pairHash) {
-		if pairHash, err = hashFiles(s.Engine, s.Loader); err != nil {
-			return s, err
-		}
+	pairHash, err := contentName(s.Loader, s.Engine, s.Loader)
+	if err != nil {
+		return s, err
 	}
-	stubHash := filepath.Base(filepath.Dir(s.Stub))
-	if !hexDir.MatchString(stubHash) {
-		if stubHash, err = hashFiles(s.Stub); err != nil {
-			return s, err
-		}
+	stubHash, err := contentName(s.Stub, s.Stub)
+	if err != nil {
+		return s, err
 	}
 	if out.Loader, err = copyInto(s.Loader, filepath.Join(home.Builds(), pairHash)); err != nil {
 		return s, err
@@ -447,11 +485,9 @@ func Stage(s Set) (Set, error) {
 		return s, err
 	}
 	if s.Hook != "" && exists(s.Hook) { // its own content-hash dir, like the stub
-		hookHash := filepath.Base(filepath.Dir(s.Hook))
-		if !hexDir.MatchString(hookHash) {
-			if hookHash, err = hashFiles(s.Hook); err != nil {
-				return s, err
-			}
+		hookHash, err := contentName(s.Hook, s.Hook)
+		if err != nil {
+			return s, err
 		}
 		if out.Hook, err = copyInto(s.Hook, filepath.Join(home.Builds(), hookHash)); err != nil {
 			return s, err
@@ -469,6 +505,15 @@ func Stage(s Set) (Set, error) {
 		return s, err
 	}
 	return out, nil
+}
+
+// contentName is the content-hash dir name a staged file goes into: the name of the dir it is in when that already is
+// one (12 hex), else hashFiles of files (for the pair: engine, then loader).
+func contentName(file string, files ...string) (string, error) {
+	if dir := filepath.Base(filepath.Dir(file)); hexDir.MatchString(dir) {
+		return dir, nil
+	}
+	return hashFiles(files...)
 }
 
 // RulesHash is the content hash of a restore-rules dir: sha1 over one "<file name> <sha1 hex of its bytes>\n" line per
@@ -582,19 +627,33 @@ func copyInto(src, dir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if have, err := os.ReadFile(dst); err == nil && bytes.Equal(have, want) {
-		return dst, nil
-	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := putIdentical(dst, want); err != nil {
+		if errors.Is(err, errNotIdentical) {
+			return "", fmt.Errorf("copy of %s is not identical", src)
+		}
 		return "", err
-	}
-	if err := home.WriteAtomic(dst, want); err != nil {
-		return "", err
-	}
-	if have, err := os.ReadFile(dst); err != nil || !bytes.Equal(have, want) {
-		return "", fmt.Errorf("copy of %s is not identical", src)
 	}
 	return dst, nil
+}
+
+// errNotIdentical: a file written by putIdentical reads back different.
+var errNotIdentical = errors.New("not identical")
+
+// putIdentical makes dst hold data (0644, atomically, its dir created), unless it already does, and reads it back.
+func putIdentical(dst string, data []byte) error {
+	if have, err := os.ReadFile(dst); err == nil && bytes.Equal(have, data) {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+	if err := home.WriteAtomic(dst, data); err != nil {
+		return err
+	}
+	if have, err := os.ReadFile(dst); err != nil || !bytes.Equal(have, data) {
+		return errNotIdentical
+	}
+	return nil
 }
 
 // checkouts: the checkout around the working directory and the one the executable was built in, where found and built

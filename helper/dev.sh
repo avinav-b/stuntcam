@@ -43,5 +43,5 @@ case ${1:-} in
     done;;
   status)
     for f in $W/*.pid(N); do p=$(pidof_file $f); echo "${f:t}: pid $p $(alive $p && echo alive || echo dead) $(grep -E '^(auth|state|camera)=' $f | tr '\n' ' ')"; done;;
-  *) sed -n '3,16p' $0; exit 2;;
+  *) awk 'NR >= 3 && !/^#/ { exit } NR >= 3' $0; exit 2;;   # the header comment, from line 3 to its end
 esac

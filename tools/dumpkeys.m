@@ -1,4 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
+// dumpkeys <names file> — runs in a simulator (`xcrun simctl spawn <udid> tools/bin/dumpkeys <file>`; build it with
+// tools/build.sh dumpkeys): loads the capture frameworks, then prints "<name> = <value>" for each CFString constant named
+// in the file, one name per line ("(nosym)": no such symbol, "(nonstring)": not a CFString, or its address
+// could not be resolved).
 #import <Foundation/Foundation.h>
 #import <dlfcn.h>
 int main(int argc, char **argv) { @autoreleasepool {

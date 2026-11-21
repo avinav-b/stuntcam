@@ -1,0 +1,40 @@
+== ok
+err: <nil>
+engine HOME/builds/4a9934863a90/libsimcam.dylib
+loader HOME/builds/4a9934863a90/libsimcamloader.dylib
+stub HOME/builds/58801e339195/libsimcamstub.dylib
+hook HOME/builds/6bab147e478a/libsimcamrunnerhook.dylib
+canary HOME/canary/462b2f3f100e/m10canary.app
+helper 
+== ok with a helper
+err: <nil>
+engine HOME/builds/4a9934863a90/libsimcam.dylib
+loader HOME/builds/4a9934863a90/libsimcamloader.dylib
+stub HOME/builds/58801e339195/libsimcamstub.dylib
+hook HOME/builds/6bab147e478a/libsimcamrunnerhook.dylib
+canary HOME/canary/462b2f3f100e/m10canary.app
+helper HOME/helper/b6d1dc212de8/Stuntcam Camera.app
+== no canary
+err: installed stuntcam is incomplete: no canary in payload.tar; reinstall stuntcam
+== unexpected member
+err: installed stuntcam files changed after packaging: payload.tar has an unexpected member bin/other (something rewrote or added files after install, e.g. relinking or re-signing); reinstall stuntcam
+== bad dylib dir name
+err: installed stuntcam files changed after packaging: payload.tar has an unexpected member builds/zz/libsimcam.dylib (something rewrote or added files after install, e.g. relinking or re-signing); reinstall stuntcam
+== engine without its loader
+err: installed stuntcam files changed after packaging: payload.tar: builds/92d91a8d9bf4 holds [builds/92d91a8d9bf4/libsimcam.dylib] (something rewrote or added files after install, e.g. relinking or re-signing); reinstall stuntcam
+== two engines
+err: installed stuntcam files changed after packaging: payload.tar has more than one engine (something rewrote or added files after install, e.g. relinking or re-signing); reinstall stuntcam
+== two stubs
+err: installed stuntcam files changed after packaging: payload.tar has more than one stub (something rewrote or added files after install, e.g. relinking or re-signing); reinstall stuntcam
+== two hooks
+err: installed stuntcam files changed after packaging: payload.tar has more than one runner hook (something rewrote or added files after install, e.g. relinking or re-signing); reinstall stuntcam
+== dylib dir hash
+err: installed stuntcam files changed after packaging: stub/0123456789ab hashes to a35ec77f8755, not 0123456789ab (something rewrote or added files after install, e.g. relinking or re-signing); reinstall stuntcam
+== helper hash
+err: installed stuntcam files changed after packaging: payload.tar: helper/0123456789ab hashes to b6d1dc212de8 (something rewrote or added files after install, e.g. relinking or re-signing); reinstall stuntcam
+== helper without its executable
+err: installed stuntcam files changed after packaging: payload.tar: helper/74730811cb06 has no executable Contents/MacOS/stuntcam-camera (something rewrote or added files after install, e.g. relinking or re-signing); reinstall stuntcam
+== two helpers
+err: installed stuntcam files changed after packaging: payload.tar has more than one camera helper (something rewrote or added files after install, e.g. relinking or re-signing); reinstall stuntcam
+== helper of another name
+err: installed stuntcam files changed after packaging: payload.tar has an unexpected member helper/b6d1dc212de8/Other.app/Contents/MacOS/stuntcam-camera (something rewrote or added files after install, e.g. relinking or re-signing); reinstall stuntcam

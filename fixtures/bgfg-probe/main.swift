@@ -134,7 +134,7 @@ final class Probe: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     log("SCENE didEnterBackground | \(st())")
     if mode == "stopInBackground" { stop("sceneDidEnterBackground") }
     if mode == "stopWhileInterrupted" {
-      // fallback when no WasInterrupted arrives (M12_NO_INTERRUPT, unarmed): stop 1.5 s after didEnterBackground
+      // fallback when no WasInterrupted arrives (SIMCAM_OFF_INTERRUPTIONS, unarmed): stop 1.5 s after didEnterBackground
       after(1.5) { if !self.stopDoneInBg && self.inBackground { self.stopDoneInBg = true; log("no WasInterrupted within 1.5 s of didEnterBackground; stopping anyway"); self.stop("bg+1.5s, not interrupted") } }
     }
   }

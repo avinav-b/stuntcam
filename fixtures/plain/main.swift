@@ -291,10 +291,10 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
 //   M5APP_ORDER=session : an AVCaptureSession exists before discovery
 //   M5APP_ORDER=threads : three threads make their first capture call at once (U13), then the camera steps
 //   M5APP_ORDER=motion-main-camera-bg : the first motion call on main; a background thread makes the first camera call
-//                         0.3 s later (M16_ORIENT_FAULT=start|runmain wait in that main-thread call until it arms)
+//                         0.3 s later (SIMCAM_TEST_ORIENT_FAULT=start|runmain wait in that main-thread call until it arms)
 //   M5APP_ORDER=motion-subclass-camera : a CMMotionManager subclass whose accelerometerUpdateInterval getter makes the
 //                         app's first camera call (on main): the stand-in reads that getter inside its motion scope, the
-//                         dynamic send from inside the stand-in (with M16_TRAP_FAULT the trap faults there)
+//                         dynamic send from inside the stand-in (with SIMCAM_TEST_TRAP_FAULT the trap faults there)
 final class CamIntervalManager: CMMotionManager {
   var camCalled = false
   override var accelerometerUpdateInterval: TimeInterval {

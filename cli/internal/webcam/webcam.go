@@ -69,7 +69,10 @@ type PidFile struct {
 var (
 	shaRe   = regexp.MustCompile(`^[0-9a-f]{12}$`)
 	authOK  = map[string]bool{"notDetermined": true, "prompting": true, "authorized": true, "denied": true}
-	stateOK = map[string]bool{"init": true, "starting": true, "prompting": true, "running": true, "idle": true, "denied": true, "stopped": true, "superseded": true}
+	stateOK = map[string]bool{
+		"init": true, "starting": true, "prompting": true, "running": true,
+		"idle": true, "denied": true, "stopped": true, "superseded": true,
+	}
 )
 
 // ParsePid parses a pid file: the first line exactly "stuntcam-webcam 1", then key=value lines. A known key twice, a
@@ -265,7 +268,7 @@ func listText(cs []Camera) string {
 	return b.String()
 }
 
-// Session is what a simulator's webcam session names: the cameras whose helpers it relies on.
+// ReadSession lists the cameras a simulator's webcam session names (the helpers it relies on).
 func ReadSession(home, udid string) []string {
 	b, err := os.ReadFile(SessionPath(home, udid))
 	if err != nil {

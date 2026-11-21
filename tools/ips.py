@@ -1,4 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
+# ips.py <report.ips> ...: for each crash report, its app, launch time, exception type and signal and termination
+# indicator, the first loaded images whose name has simcam or fig in it, and the faulting thread's first 18 frames
+# (image, symbol, offset in the image)
 import json,sys
 for f in sys.argv[1:]:
     t=open(f).read().split('\n',1); h=json.loads(t[0]); b=json.loads(t[1])

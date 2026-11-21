@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
-# arm-env.sh — sourced by boot.sh and launchd-arm.sh (after env.sh). The one list of variables that arms a sim, so the two
-# modes stay in step:
+# arm-env.sh — sourced by boot.sh, launchd-arm.sh, swap.sh and verify.sh (after env.sh). The one list of variables that
+# arms a sim, so the two modes stay in step:
 #   boot mode     passes each as SIMCTL_CHILD_<VAR> to `simctl boot` (the boot env every process inherits)
 #   launchd mode  sets each with `launchctl setenv` inside the booted sim (every process launched afterwards inherits it)
 # simcam_arm_vars <rt> <udid> sets:
@@ -67,13 +67,19 @@ simcam_arm_vars() {
   # swappable loader (design §4.1, U14): the boot env names only the stub and the sim dir; the stub reads SIMDIR/current
   # ("<proto> <loader path>") at every launch, so scripts/swap.sh can change the build without a reboot
   SIMDIR=$SIMCAM_HOME/sims/$udid; mkdir -p "$SIMDIR"
-  STUB=$(cat $ROOT/build/current_stub.txt); LDR=$(cat $ROOT/build/current_loader.txt); print -r -- "1 $LDR" > "$SIMDIR/current.tmp" && mv "$SIMDIR/current.tmp" "$SIMDIR/current"; PL=${PLIST:-$SIMCAM_DEV/profiles/cfg-m10.plist}; IMG=$SIMCAM_DEV/media/qr.png
+  STUB=$(cat $ROOT/build/current_stub.txt); LDR=$(cat $ROOT/build/current_loader.txt)
+  print -r -- "1 $LDR" > "$SIMDIR/current.tmp" && mv "$SIMDIR/current.tmp" "$SIMDIR/current"
+  PL=${PLIST:-$SIMCAM_DEV/profiles/cfg-m10.plist}; IMG=$SIMCAM_DEV/media/qr.png
   simcam_record_xcode "$SIMDIR"
-  # sentinel/watchdog events (engine core/safety.inc): <state>/<bundle id>/events.log
+  # sentinel/watchdog events (engine core/safety.inc; the path: core/markers.inc): <state>/<bundle id>/events.log
   STATE=${SIMCAM_STATE_DIR:-$SIMCAM_HOME/sims/$udid/state}; mkdir -p "$STATE"
   simcam_guard $CHAIN $STUB $LDR $PL $IMG $BL $STATE
+  # the six engine settings go under their stuntcam 1.1.0 names too, as the CLI sets them (cli/internal/arm
+  # LegacyNames): an older engine (swap.sh or golden.sh with another loader, DYLIB=<older engine>) reads only those
   ARMV=("SIMCAM_STATE_DIR=$STATE" "SIMCAM_CHAIN=$CHAIN" "DYLD_INSERT_LIBRARIES=$STUB" "SIMCAM_SIM_DIR=$SIMDIR" "SIMCAM_STUB_LOG=$BL/stub.log"
-        M2_FAKE=1 M2_SESSION_HOOK=1 M2_NOLOGDICT=1 "M2_PLIST=$PL" "M5_IMAGE=$IMG" "M5_LOG=$BL/dylib-%p.log")
+        SIMCAM_FIG_SOURCES=1 M2_FAKE=1 SIMCAM_FIG_SESSION=1 M2_SESSION_HOOK=1 SIMCAM_OFF_KEY_LOG=1 M2_NOLOGDICT=1
+        "SIMCAM_PROFILE=$PL" "M2_PLIST=$PL" "SIMCAM_FIXTURE_IMAGE=$IMG" "M5_IMAGE=$IMG"
+        "SIMCAM_ENGINE_LOG=$BL/dylib-%p.log" "M5_LOG=$BL/dylib-%p.log")
   # DYLIB=<engine> pins an engine for this boot (e.g. a sanitizer build); otherwise the loader uses the engine next to it
   [[ -n ${DYLIB:-} ]] && ARMV+=("SIMCAM_DYLIB=$DYLIB")
   for kv in ${(f)"$(env | grep '^SIMCTL_CHILD_')"}; do

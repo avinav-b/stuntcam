@@ -1,0 +1,84 @@
+== release
+err: <nil>
+from ROOT/release/builds/aaaaaaaaaaaa
+loader ROOT/release/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+engine ROOT/release/builds/aaaaaaaaaaaa/libsimcam.dylib
+stub ROOT/release/builds/s1/libsimcamstub.dylib
+hook ROOT/release/builds/h1/libsimcamrunnerhook.dylib
+profile ROOT/release/profiles/cfg-m10.plist
+image ROOT/release/media/qr.png
+canary ROOT/release/canary/m10canary.app
+helper 
+rules ROOT/release/restore-rules
+== release, installed with package
+err: <nil>
+from ROOT/release/builds/aaaaaaaaaaaa
+loader ROOT/release/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+engine ROOT/release/builds/aaaaaaaaaaaa/libsimcam.dylib
+stub ROOT/release/builds/s1/libsimcamstub.dylib
+hook ROOT/release/builds/h1/libsimcamrunnerhook.dylib
+profile ROOT/release/profiles/cfg-m10.plist
+image ROOT/release/media/qr.png
+canary ROOT/release/canary/m10canary.app
+helper /pkg/helper
+rules ROOT/release/restore-rules
+== staged, installed with package
+err: no camera profile for the build in ROOT/home/builds/bbbbbbbbbbbb: expected profiles/cfg-m10.plist two levels up or in $SIMCAM_HOME/dev; set STUNTCAM_PROFILE
+from ROOT/home/builds/bbbbbbbbbbbb
+loader ROOT/home/builds/bbbbbbbbbbbb/libsimcamloader.dylib
+engine ROOT/home/builds/bbbbbbbbbbbb/libsimcam.dylib
+stub ROOT/home/builds/cccccccccccc/libsimcamstub.dylib
+hook 
+profile /pkg/profile
+image /pkg/image
+canary /pkg/canary
+helper /pkg/helper
+rules /pkg/rules
+== staged, installed without package
+err: <nil>
+from ROOT/home/builds/bbbbbbbbbbbb
+loader ROOT/home/builds/bbbbbbbbbbbb/libsimcamloader.dylib
+engine ROOT/home/builds/bbbbbbbbbbbb/libsimcam.dylib
+stub ROOT/home/builds/cccccccccccc/libsimcamstub.dylib
+hook 
+profile ROOT/home/dev/profiles/cfg-m10.plist
+image ROOT/home/dev/media/qr.png
+canary 
+helper 
+rules 
+== staged, every variable
+err: missing build product "/e/stub" (found under ROOT/home/builds/bbbbbbbbbbbb)
+from ROOT/home/builds/bbbbbbbbbbbb
+loader ROOT/home/builds/bbbbbbbbbbbb/libsimcamloader.dylib
+engine ROOT/home/builds/bbbbbbbbbbbb/libsimcam.dylib
+stub /e/stub
+hook /e/hook
+profile ROOT/home/dev/profiles/cfg-m10.plist
+image /e/image
+canary /e/canary
+helper /e/helper
+rules /e/rules
+== staged, profile variable names a missing file
+err: no camera profile for the build in ROOT/home/builds/bbbbbbbbbbbb: expected profiles/cfg-m10.plist two levels up or in $SIMCAM_HOME/dev; set STUNTCAM_PROFILE
+from ROOT/home/builds/bbbbbbbbbbbb
+loader ROOT/home/builds/bbbbbbbbbbbb/libsimcamloader.dylib
+engine ROOT/home/builds/bbbbbbbbbbbb/libsimcam.dylib
+stub ROOT/home/builds/cccccccccccc/libsimcamstub.dylib
+hook 
+profile /e/none
+image ROOT/home/dev/media/qr.png
+canary 
+helper 
+rules 
+== bare
+err: missing build product "" (found under ROOT/bare/x/b)
+from ROOT/bare/x/b
+loader ROOT/bare/x/b/libsimcamloader.dylib
+engine ROOT/bare/x/b/libsimcam.dylib
+stub 
+hook 
+profile ROOT/home/dev/profiles/cfg-m10.plist
+image ROOT/home/dev/media/qr.png
+canary 
+helper 
+rules 

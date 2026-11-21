@@ -1,14 +1,15 @@
 #!/bin/zsh
 # SPDX-License-Identifier: Apache-2.0
 # cycle.sh <rt> vccycle|expocycle <cycles> <tag> — one launch of the RN fixture's open/close cycle mode on a boot-armed sim
-#   (scripts/boot.sh <rt> stub first; for a sanitizer run, copy build/{tsan,asan}_loader.txt over build/current_loader.txt before booting, or scripts/swap.sh <udid> <that loader>).
+#   (scripts/boot.sh <rt> stub first; for a sanitizer run, copy build/{tsan,asan}_loader.txt over
+#   build/current_loader.txt before booting, or scripts/swap.sh <udid> <that loader>).
 #   Metro: fixtures/expo on :$EXPO_PORT (default 8099). UDID: $SIMCAM_UDID_<rt>.
 # Writes results/<mode>-<rt>-<tag>/: app.log (m1b.log), console.txt (the app's stdout/stderr, where sanitizer reports go),
 #   dylib.log (this pid's dylib-<pid>.log from the boot log dir), summary.txt:
 #   cycles=<ok>/<n> sessions=<adopted>/<finalized> tsan=<WARNING: ThreadSanitizer count> asan=<ERROR: AddressSanitizer count> end=<0|1>
 set -u
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"; source $ROOT/scripts/env.sh; RT=$1; MODE=$2; N=$3; TAG=$4
-V=SIMCAM_UDID_$RT; UDID=${(P)V:-}; [[ -n $UDID ]] || { echo "$0: set $V to the UDID of your iOS $RT simulator" >&2; exit 2; }
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"; source $ROOT/scripts/env.sh; source $ROOT/scripts/common.sh; RT=$1; MODE=$2; N=$3; TAG=$4
+need_udid "$0" "$RT" UDID long
 B=dev.spike.m1bcam; LOGN=m1b.log; LIB=${MODE%cycle}; MAXW=${MAXW:-$(( 60 + N * 15 ))}
 OUT=$SIMCAM_RESULTS/$MODE-$RT-$TAG; rm -rf $OUT; mkdir -p $OUT
 xcrun simctl terminate $UDID $B 2>/dev/null
@@ -18,10 +19,12 @@ typeset -a ENVS; ENVS=(); for kv in ${=XENV:-}; do ENVS+=(SIMCTL_CHILD_$kv); don
 T0=$(date +%s)
 env $ENVS xcrun simctl launch --console-pty $UDID $B -CAMTEST $MODE -CYCLES $N -RCT_jsLocation localhost:${EXPO_PORT:-8099} > $OUT/console.txt 2>&1 &
 LP=$!; GONE=0
+# not wait_for_line: 1 s polls of the app's log file, and "APP GONE" once the app is no longer running
 for i in {1..$MAXW}; do sleep 1
   [[ -f $DATA/Documents/$LOGN ]] && cp $DATA/Documents/$LOGN $OUT/app.log
   grep -q "END cycle-$LIB" $OUT/app.log 2>/dev/null && break
-  if (( i > 8 )) && ! xcrun simctl spawn $UDID launchctl list 2>/dev/null | grep -q "UIKitApplication:$B"; then GONE=1; echo "APP GONE after ${i}s" >> $OUT/app.log; break; fi
+  if (( i > 8 )) && ! xcrun simctl spawn $UDID launchctl list 2>/dev/null | grep -q "UIKitApplication:$B"; then GONE=1
+    echo "APP GONE after ${i}s" >> $OUT/app.log; break; fi
 done
 sleep 1; xcrun simctl io $UDID screenshot $OUT/final.png >/dev/null 2>&1
 xcrun simctl terminate $UDID $B 2>/dev/null; sleep 1; kill $LP 2>/dev/null

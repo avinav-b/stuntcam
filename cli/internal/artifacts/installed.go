@@ -4,7 +4,6 @@ package artifacts
 import (
 	"archive/tar"
 	"bufio"
-	"bytes"
 	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/hex"
@@ -41,7 +40,7 @@ const (
 //	    stub/<sha1-12>/libsimcamstub.dylib                the frozen stub
 //	    hook/<sha1-12>/libsimcamrunnerhook.dylib          the XCTest runner hook (exec)
 //	    canary/m10canary.app/…                            the prebuilt canary
-//	    helper/<sha>/Stuntcam Camera.app/…                the camera helper (signed; <sha>: BundleSHA of its files)
+//	    helper/<sha>/Stuntcam Camera.app/…                the camera helper (signed; <sha>: helperBundleSHA1 of its files)
 //	share/stuntcam/profiles/cfg-m10.plist, media/qr.png, restore-rules/<xcode build>.json, verdicts/<key>.json (optional)
 //
 // The Mach-O files ship inside the tar because package managers rewrite loose ones: Homebrew's keg relinking changes
@@ -56,7 +55,7 @@ const (
 // manifest.txt to match is refused too. That makes the check integrity plus authenticity relative to the binary: share/
 // is exactly what was packaged with this bin/stuntcam. Whoever can replace bin/stuntcam itself can replace everything;
 // the binary's own authenticity comes from how it was installed (the npm registry, the formula's sha256). A binary
-// without the values (a dev build, `go build`) checks the manifest's internal consistency only, as before.
+// without the values (a dev build, `go build`) checks the manifest's internal consistency only.
 func Installed(prefix string) (Set, error) {
 	share := filepath.Join(prefix, "share", "stuntcam")
 	if !exists(share) {
@@ -72,7 +71,8 @@ func Installed(prefix string) (Set, error) {
 	}
 	s.Version = m.version
 	if packagedPayload != "" && m.files[sharePre+PayloadName] != packagedPayload {
-		return s, notPackaged(fmt.Sprintf("%s lists %s with sha256 %s", ManifestName, PayloadName, short(m.files[sharePre+PayloadName])), packagedPayload)
+		listed := ShortHash(m.files[sharePre+PayloadName])
+		return s, notPackaged(fmt.Sprintf("%s lists %s with sha256 %s", ManifestName, PayloadName, listed), packagedPayload)
 	}
 	if err := m.checkShare(share); err != nil {
 		return s, err
@@ -81,7 +81,8 @@ func Installed(prefix string) (Set, error) {
 	if err != nil {
 		return s, err
 	}
-	s.Loader, s.Engine, s.Stub, s.Hook, s.Canary, s.Helper = payload.loader, payload.engine, payload.stub, payload.hook, payload.canary, payload.helper
+	s.Loader, s.Engine, s.Stub, s.Hook = payload.loader, payload.engine, payload.stub, payload.hook
+	s.Canary, s.Helper = payload.canary, payload.helper
 	s.Profile, s.Image = dataFiles(share)
 	s.Rules = filepath.Join(share, "restore-rules")
 	if v := filepath.Join(share, "verdicts"); exists(v) {
@@ -94,7 +95,8 @@ func Installed(prefix string) (Set, error) {
 		return s, fmt.Errorf("installed stuntcam is incomplete: no canary in %s; reinstall stuntcam", PayloadName)
 	}
 	if s.Profile == "" || s.Image == "" {
-		return s, fmt.Errorf("installed stuntcam is incomplete: no profiles/cfg-m10.plist or media/qr.png in %s; reinstall stuntcam", share)
+		return s, fmt.Errorf("installed stuntcam is incomplete: no profiles/cfg-m10.plist or media/qr.png in %s; "+
+			"reinstall stuntcam", share)
 	}
 	return s, nil
 }
@@ -108,7 +110,8 @@ var packagedManifest, packagedPayload string
 // Anchored reports whether this binary carries the package's hashes (a packaged build), and the manifest's.
 func Anchored() (bool, string) { return packagedManifest != "", packagedManifest }
 
-func short(h string) string {
+// ShortHash is a hash as messages quote it: its first 12 hex digits.
+func ShortHash(h string) string {
 	if len(h) > 12 {
 		return h[:12]
 	}
@@ -116,7 +119,9 @@ func short(h string) string {
 }
 
 func notPackaged(what, want string) error {
-	return fmt.Errorf("installed stuntcam doesn't match its binary: %s, but bin/stuntcam was packaged with %s (share/stuntcam was replaced after packaging, or bin/stuntcam comes from another package); reinstall stuntcam", what, short(want))
+	return fmt.Errorf("installed stuntcam doesn't match its binary: %s, but bin/stuntcam was packaged with %s "+
+		"(share/stuntcam was replaced after packaging, or bin/stuntcam comes from another package); reinstall stuntcam",
+		what, ShortHash(want))
 }
 
 // checkAnchor: manifest.txt is the one this binary was packaged with (no-op in a dev build).
@@ -129,7 +134,7 @@ func checkAnchor(manifestPath string) error {
 		return fmt.Errorf("installed stuntcam is incomplete: no %s; reinstall stuntcam", ManifestName)
 	}
 	if have != packagedManifest {
-		return notPackaged(fmt.Sprintf("%s has sha256 %s", ManifestName, short(have)), packagedManifest)
+		return notPackaged(fmt.Sprintf("%s has sha256 %s", ManifestName, ShortHash(have)), packagedManifest)
 	}
 	return nil
 }
@@ -188,7 +193,8 @@ func readManifest(p string) (manifest, error) {
 
 // safeRel: a clean relative slash path without "..".
 func safeRel(p string) bool {
-	return p != "" && !strings.HasPrefix(p, "/") && path.Clean(p) == p && p != "." && !strings.HasPrefix(p, "../") && !strings.Contains(p, "/../") && p != ".."
+	return p != "" && p != "." && p != ".." && path.Clean(p) == p &&
+		!strings.HasPrefix(p, "/") && !strings.HasPrefix(p, "../") && !strings.Contains(p, "/../")
 }
 
 func sha256File(p string) (string, error) {
@@ -205,7 +211,8 @@ func sha256File(p string) (string, error) {
 }
 
 func changed(what string) error {
-	return fmt.Errorf("installed stuntcam files changed after packaging: %s (something rewrote or added files after install, e.g. relinking or re-signing); reinstall stuntcam", what)
+	return fmt.Errorf("installed stuntcam files changed after packaging: %s (something rewrote or added files after "+
+		"install, e.g. relinking or re-signing); reinstall stuntcam", what)
 }
 
 // checkShare: every regular file under share (but the manifest, and Finder's .DS_Store files) is listed with its sha256,
@@ -272,9 +279,9 @@ const (
 	HelperExe = "Contents/MacOS/stuntcam-camera"
 )
 
-// BundleSHA is a bundle's <sha> as helper/build.sh computes it: the first 12 hex digits of the sha1 over one
+// helperBundleSHA1 is a bundle's <sha> as helper/build.sh computes it: the first 12 hex digits of the sha1 over one
 // "<path relative to the bundle> <sha1 hex>\n" line per file, in byte order of the paths.
-func BundleSHA(files map[string][]byte) string {
+func helperBundleSHA1(files map[string][]byte) string {
 	var rels []string
 	for r := range files {
 		rels = append(rels, r)
@@ -295,21 +302,63 @@ func (s Set) HelperSHA() string {
 	return filepath.Base(filepath.Dir(s.Helper))
 }
 
+// maxPayloadMember bounds how much of one payload member is read: far above any file stuntcam ships (a bigger member is
+// cut short and then fails its sha256 check).
+const maxPayloadMember = 64 << 20
+
 // unpack reads payload.tar (already checked against the manifest by checkShare), checks that its members are exactly the
 // manifest's payload/ entries with those sha256s, and puts them under the host directory: dylibs at
 // home.Builds()/<hash>/<name> (their dir names checked against their bytes, as ./build.sh names them), the canary at
-// home.Canary()/<id>/m10canary.app. Copies already there are re-checked and rewritten if they differ.
+// home.Canary()/<id>/m10canary.app, the camera helper at home.Root()/helper/<sha>/. Copies already there are re-checked
+// and rewritten if they differ.
 func (m manifest) unpack(tarPath string) (unpacked, error) {
 	var u unpacked
+	want := m.payloadSums()
+	got, err := readPayload(tarPath, want)
+	if err != nil {
+		return u, err
+	}
+	groups, err := groupPayload(got)
+	if err != nil {
+		return u, err
+	}
+	for dir, names := range groups.dylibDirs {
+		if err := u.unpackDylibDir(dir, names, got); err != nil {
+			return u, err
+		}
+	}
+	if len(groups.canary) > 0 {
+		if u.canary, err = unpackCanary(groups.canary, got, want); err != nil {
+			return u, err
+		}
+	}
+	if len(groups.helpers) > 1 {
+		return u, changed(PayloadName + " has more than one camera helper")
+	}
+	for sha, names := range groups.helpers {
+		if u.helper, err = unpackHelper(sha, names, got, want); err != nil {
+			return u, err
+		}
+	}
+	return u, nil
+}
+
+// payloadSums is the manifest's payload/ entries: member name -> sha256.
+func (m manifest) payloadSums() map[string]string {
 	want := map[string]string{}
 	for p, h := range m.files {
 		if strings.HasPrefix(p, payloadPre) {
 			want[strings.TrimPrefix(p, payloadPre)] = h
 		}
 	}
+	return want
+}
+
+// readPayload reads every member of the payload tar and checks the members are exactly want's, with those sha256s.
+func readPayload(tarPath string, want map[string]string) (map[string]member, error) {
 	f, err := os.Open(tarPath)
 	if err != nil {
-		return u, err
+		return nil, err
 	}
 	defer f.Close()
 	got := map[string]member{}
@@ -320,159 +369,176 @@ func (m manifest) unpack(tarPath string) (unpacked, error) {
 			break
 		}
 		if err != nil {
-			return u, changed(PayloadName + " is not a readable tar: " + err.Error())
+			return nil, changed(PayloadName + " is not a readable tar: " + err.Error())
 		}
 		name := strings.TrimPrefix(hd.Name, "./")
 		if hd.Typeflag == tar.TypeDir {
 			continue
 		}
 		if hd.Typeflag != tar.TypeReg || !safeRel(name) {
-			return u, changed(fmt.Sprintf("%s has an unexpected member %q", PayloadName, hd.Name))
+			return nil, changed(fmt.Sprintf("%s has an unexpected member %q", PayloadName, hd.Name))
 		}
 		h, ok := want[name]
 		if !ok {
-			return u, changed(fmt.Sprintf("%s member %s is not in %s", PayloadName, name, ManifestName))
+			return nil, changed(fmt.Sprintf("%s member %s is not in %s", PayloadName, name, ManifestName))
 		}
 		if _, dup := got[name]; dup {
-			return u, changed(fmt.Sprintf("%s has %s twice", PayloadName, name))
+			return nil, changed(fmt.Sprintf("%s has %s twice", PayloadName, name))
 		}
-		b, err := io.ReadAll(io.LimitReader(tr, 64<<20))
+		b, err := io.ReadAll(io.LimitReader(tr, maxPayloadMember))
 		if err != nil {
-			return u, err
+			return nil, err
 		}
 		if s := sha256.Sum256(b); hex.EncodeToString(s[:]) != h {
-			return u, changed(fmt.Sprintf("%s member %s doesn't match %s", PayloadName, name, ManifestName))
+			return nil, changed(fmt.Sprintf("%s member %s doesn't match %s", PayloadName, name, ManifestName))
 		}
 		got[name] = member{b, hd.Mode&0o111 != 0}
 	}
 	for name := range want {
 		if _, ok := got[name]; !ok {
-			return u, changed(fmt.Sprintf("%s has no %s", PayloadName, name))
+			return nil, changed(fmt.Sprintf("%s has no %s", PayloadName, name))
 		}
 	}
+	return got, nil
+}
 
-	// the dylibs: group by dir, check each dir's name against its bytes, write to home.Builds()/<hash>/
-	dirs := map[string][]string{} // "builds/<h>" -> member names
-	var canary []string
-	helpers := map[string][]string{} // <sha> -> member names
+// payloadGroups is the payload's members by what they are.
+type payloadGroups struct {
+	dylibDirs map[string][]string // "builds/<h>", "stub/<h>", "hook/<h>" -> member names
+	canary    []string            // canary/m10canary.app/…
+	helpers   map[string][]string // <sha> -> member names under helper/<sha>/
+}
+
+// groupPayload sorts the members into dylib dirs, the canary and camera helpers; any other member is an error.
+func groupPayload(got map[string]member) (payloadGroups, error) {
+	g := payloadGroups{dylibDirs: map[string][]string{}, helpers: map[string][]string{}}
 	for name := range got {
-		if g := payloadDylib.FindStringSubmatch(name); g != nil {
-			dirs[g[1]+"/"+g[2]] = append(dirs[g[1]+"/"+g[2]], name)
+		if d := payloadDylib.FindStringSubmatch(name); d != nil {
+			dir := d[1] + "/" + d[2]
+			g.dylibDirs[dir] = append(g.dylibDirs[dir], name)
 		} else if payloadCanary.MatchString(name) {
-			canary = append(canary, name)
-		} else if g := payloadHelper.FindStringSubmatch(name); g != nil {
-			helpers[g[1]] = append(helpers[g[1]], name)
+			g.canary = append(g.canary, name)
+		} else if h := payloadHelper.FindStringSubmatch(name); h != nil {
+			g.helpers[h[1]] = append(g.helpers[h[1]], name)
 		} else {
-			return u, changed(fmt.Sprintf("%s has an unexpected member %s", PayloadName, name))
+			return g, changed(fmt.Sprintf("%s has an unexpected member %s", PayloadName, name))
 		}
 	}
-	for dir, names := range dirs {
-		kind, h := path.Dir(dir), path.Base(dir)
-		var order []string // the hash order ./build.sh uses: engine, then loader
-		switch kind {
-		case "builds":
-			order = []string{dir + "/" + EngineName, dir + "/" + LoaderName}
-		case "stub":
-			order = []string{dir + "/" + StubName}
-		case "hook":
-			order = []string{dir + "/" + HookName}
+	return g, nil
+}
+
+// unpackDylibDir checks a dylib dir's name against its members' bytes (in the order ./build.sh hashes them: engine, then
+// loader) and writes them to home.Builds()/<hash>/, recording each in u.
+func (u *unpacked) unpackDylibDir(dir string, names []string, got map[string]member) error {
+	kind, h := path.Dir(dir), path.Base(dir)
+	var order []string
+	switch kind {
+	case "builds":
+		order = []string{dir + "/" + EngineName, dir + "/" + LoaderName}
+	case "stub":
+		order = []string{dir + "/" + StubName}
+	case "hook":
+		order = []string{dir + "/" + HookName}
+	}
+	if len(names) != len(order) {
+		return changed(fmt.Sprintf("%s: %s holds %v", PayloadName, dir, names))
+	}
+	hs := sha1.New()
+	for _, n := range order {
+		mb, ok := got[n]
+		if !ok {
+			return changed(fmt.Sprintf("%s has no %s", PayloadName, n))
 		}
-		if len(names) != len(order) {
-			return u, changed(fmt.Sprintf("%s: %s holds %v", PayloadName, dir, names))
+		hs.Write(mb.data)
+	}
+	if sum := hex.EncodeToString(hs.Sum(nil))[:12]; sum != h {
+		return changed(fmt.Sprintf("%s hashes to %s, not %s", dir, sum, h))
+	}
+	for _, n := range order {
+		dst := filepath.Join(home.Builds(), h, path.Base(n))
+		if err := writeVerified(dst, got[n].data); err != nil {
+			return err
 		}
-		hs := sha1.New()
-		for _, n := range order {
-			mb, ok := got[n]
-			if !ok {
-				return u, changed(fmt.Sprintf("%s has no %s", PayloadName, n))
-			}
-			hs.Write(mb.data)
-		}
-		if sum := hex.EncodeToString(hs.Sum(nil))[:12]; sum != h {
-			return u, changed(fmt.Sprintf("%s hashes to %s, not %s", dir, sum, h))
-		}
-		for _, n := range order {
-			dst := filepath.Join(home.Builds(), h, path.Base(n))
-			if err := writeVerified(dst, got[n].data); err != nil {
-				return u, err
-			}
-			switch path.Base(n) {
-			case EngineName:
-				if u.engine != "" {
-					return u, changed(PayloadName + " has more than one engine")
-				}
-				u.engine = dst
-			case LoaderName:
-				u.loader = dst
-			case StubName:
-				if u.stub != "" {
-					return u, changed(PayloadName + " has more than one stub")
-				}
-				u.stub = dst
-			case HookName:
-				if u.hook != "" {
-					return u, changed(PayloadName + " has more than one runner hook")
-				}
-				u.hook = dst
-			}
+		if err := u.record(path.Base(n), dst); err != nil {
+			return err
 		}
 	}
-	if len(canary) > 0 {
-		sort.Strings(canary)
-		id := sha256.New()
-		for _, n := range canary {
-			fmt.Fprintf(id, "%s  %s\n", want[n], n)
+	return nil
+}
+
+// record notes where a dylib was unpacked; a second engine, stub or runner hook is an error.
+func (u *unpacked) record(name, dst string) error {
+	switch name {
+	case EngineName:
+		if u.engine != "" {
+			return changed(PayloadName + " has more than one engine")
 		}
-		files := map[string]member{}
-		for _, n := range canary {
-			files[strings.TrimPrefix(n, "canary/")] = got[n]
+		u.engine = dst
+	case LoaderName:
+		u.loader = dst
+	case StubName:
+		if u.stub != "" {
+			return changed(PayloadName + " has more than one stub")
 		}
-		dir := filepath.Join(home.Canary(), hex.EncodeToString(id.Sum(nil))[:12])
-		if err := unpackTree(dir, files, func(rel string) string { return want["canary/"+rel] }); err != nil {
-			return u, err
+		u.stub = dst
+	case HookName:
+		if u.hook != "" {
+			return changed(PayloadName + " has more than one runner hook")
 		}
-		u.canary = filepath.Join(dir, "m10canary.app")
+		u.hook = dst
 	}
-	if len(helpers) > 1 {
-		return u, changed(PayloadName + " has more than one camera helper")
+	return nil
+}
+
+// unpackCanary puts the canary's members into home.Canary()/<id>/, id the first 12 hex digits of the sha256 over their
+// manifest lines, and returns the unpacked m10canary.app.
+func unpackCanary(names []string, got map[string]member, want map[string]string) (string, error) {
+	sort.Strings(names)
+	id := sha256.New()
+	for _, n := range names {
+		fmt.Fprintf(id, "%s  %s\n", want[n], n)
 	}
-	for sha, names := range helpers {
-		// the dir name is the bundle's content hash; the executable keeps its exec bit (upload-artifact and npm drop
-		// them elsewhere, a tar keeps them)
-		files, data := map[string]member{}, map[string][]byte{}
-		for _, n := range names {
-			rel := strings.TrimPrefix(n, "helper/"+sha+"/")
-			files[rel] = got[n]
-			data[strings.TrimPrefix(rel, HelperApp+"/")] = got[n].data
-		}
-		if sum := BundleSHA(data); sum != sha {
-			return u, changed(fmt.Sprintf("%s: helper/%s hashes to %s", PayloadName, sha, sum))
-		}
-		if exe, ok := files[HelperApp+"/"+HelperExe]; !ok || !exe.exec {
-			return u, changed(fmt.Sprintf("%s: helper/%s has no executable %s", PayloadName, sha, HelperExe))
-		}
-		dir := filepath.Join(home.Root(), "helper", sha)
-		if err := unpackTree(dir, files, func(rel string) string { return want["helper/"+sha+"/"+rel] }); err != nil {
-			return u, err
-		}
-		u.helper = filepath.Join(dir, HelperApp)
+	files := map[string]member{}
+	for _, n := range names {
+		files[strings.TrimPrefix(n, "canary/")] = got[n]
 	}
-	return u, nil
+	dir := filepath.Join(home.Canary(), hex.EncodeToString(id.Sum(nil))[:12])
+	if err := unpackTree(dir, files, func(rel string) string { return want["canary/"+rel] }); err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "m10canary.app"), nil
+}
+
+// unpackHelper checks the camera helper's dir name against its bundle's content hash (helperBundleSHA1) and its
+// executable's exec bit (upload-artifact and npm drop exec bits elsewhere, a tar keeps them), puts it into
+// home.Root()/helper/<sha>/ and returns the unpacked app.
+func unpackHelper(sha string, names []string, got map[string]member, want map[string]string) (string, error) {
+	files, data := map[string]member{}, map[string][]byte{}
+	for _, n := range names {
+		rel := strings.TrimPrefix(n, "helper/"+sha+"/")
+		files[rel] = got[n]
+		data[strings.TrimPrefix(rel, HelperApp+"/")] = got[n].data
+	}
+	if sum := helperBundleSHA1(data); sum != sha {
+		return "", changed(fmt.Sprintf("%s: helper/%s hashes to %s", PayloadName, sha, sum))
+	}
+	if exe, ok := files[HelperApp+"/"+HelperExe]; !ok || !exe.exec {
+		return "", changed(fmt.Sprintf("%s: helper/%s has no executable %s", PayloadName, sha, HelperExe))
+	}
+	dir := filepath.Join(home.Root(), "helper", sha)
+	if err := unpackTree(dir, files, func(rel string) string { return want["helper/"+sha+"/"+rel] }); err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, HelperApp), nil
 }
 
 // writeVerified makes dst hold data (0644, atomically), unless it already does.
 func writeVerified(dst string, data []byte) error {
-	if have, err := os.ReadFile(dst); err == nil && bytes.Equal(have, data) {
-		return nil
-	}
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+	if err := putIdentical(dst, data); err != nil {
+		if errors.Is(err, errNotIdentical) {
+			return fmt.Errorf("unpacked %s is not identical", dst)
+		}
 		return err
-	}
-	if err := home.WriteAtomic(dst, data); err != nil {
-		return err
-	}
-	if have, err := os.ReadFile(dst); err != nil || !bytes.Equal(have, data) {
-		return fmt.Errorf("unpacked %s is not identical", dst)
 	}
 	return nil
 }
@@ -543,7 +609,8 @@ func LockDir(dir string) (func(), error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
 	}
-	f, err := os.OpenFile(filepath.Join(dir, ".lock"), os.O_CREATE|os.O_RDONLY, 0o644) // flock works read-only; another user's .lock stays usable
+	// read-only: flock works on it, and another user's .lock stays usable
+	f, err := os.OpenFile(filepath.Join(dir, ".lock"), os.O_CREATE|os.O_RDONLY, 0o644)
 	if err != nil {
 		return nil, err
 	}
@@ -554,7 +621,7 @@ func LockDir(dir string) (func(), error) {
 		}
 	}
 	if err == syscall.ENOTSUP || err == syscall.EOPNOTSUPP || err == syscall.ENOLCK { // a filesystem without locks: go on
-		f.Close() // go on unlocked
+		f.Close()
 		return func() {}, nil
 	}
 	if err != nil {

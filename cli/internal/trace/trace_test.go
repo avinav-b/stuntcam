@@ -124,7 +124,7 @@ func TestBuildOrderAndGaps(t *testing.T) {
 		}
 		return f
 	}
-	// the old engine (before L68): the timestamp after the encode
+	// an engine before the ledger L68 fix: the timestamp after the encode
 	old := Build(mk("shutter", "slot12", "will-capture", "did-capture", "encode-start", "encoded", "timestamp", "still-complete", "did-finish"), nil, "", "", nil)
 	if p := old.Photos[0]; p.InOrder || !p.Complete {
 		t.Errorf("old order: %+v", p)

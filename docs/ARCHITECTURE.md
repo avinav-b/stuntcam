@@ -107,12 +107,13 @@ simulator; a semantic change can still slip past it (design §13), and the senti
   for orientation, photo data and rotation, writer settings, and Vision's barcode request pinned to revision 1.
 - **Control** (`core/control.inc`). Per-launch settings (`SIMCAM_SOURCE`, `SIMCAM_ORIENT`) and a control file it polls
   every 250 ms: source and orientation changes, interruptions, runtime errors, photo and movie errors for tests.
-- **Safety** (`core/safety.inc`). A pause-aware watchdog times the session and photo operations the engine owns (movie
-  operations aren't timed yet): a debugger pause or the Mac sleeping doesn't count. A signal handler attributes crashes
-  to the engine. Both write the app's `state/<bundle>/events.log`. Two hangs of a feature in one launch latch it in that
-  process: photos error-complete, sessions get at most one runtime error per 5 s. Two hangs or crashes within an app's
-  last 20 activations (and 24 hours) of a build keep its next launches stock, until they age out or a new build
-  arrives. Crashes under a debugger never count. `stuntcam sentinel clear` resets an app.
+- **Safety** (`core/safety.inc`, then `crash_handler.inc`, `markers.inc`, `events_file.inc`, `sentinel_activate.inc`). A
+  pause-aware watchdog times the session and photo operations the engine owns (movie operations aren't timed yet): a
+  debugger pause or the Mac sleeping doesn't count. A signal handler attributes crashes to the engine. Both write the
+  app's `state/<bundle>/events.log`. Two hangs of a feature in one launch latch it in that process: photos
+  error-complete, sessions get at most one runtime error per 5 s. Two hangs or crashes within an app's last 20
+  activations (and 24 hours) of a build keep its next launches stock, until they age out or a new build arrives. Crashes
+  under a debugger never count. `stuntcam sentinel clear` resets an app.
 
 ## On the Mac
 

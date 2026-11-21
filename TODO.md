@@ -16,11 +16,11 @@ Follow-ups from importing the prototype (spikes m1b–m12) into this repo.
       measured internally, W4 e62
 - [ ] (W4 e57) The canary's trace-stage check `timestamp - slot12 (0..50 ms)` missed once in the 200-launch loop under load
       (27.0 L200-41: 98.4 ms). Always the first traced photo (photo 3); photos 4/5 stay ~0.2 ms; 4 of 88 first photos were
-      over 10 ms. Between the slot-12 mark and the frame grab, `sess_IrisCapture` logs `M5Desc(settings, 2500)`, runs
-      `M5DumpProps` and several KVC reads, then queues on the busy pump queue. Measure where the time goes, and move the long
+      over 10 ms. Between the slot-12 mark and the frame grab, `sess_IrisCapture` logs `DescribeShort(settings, 2500)`, runs
+      `DiagDumpProps` and several KVC reads, then queues on the busy pump queue. Measure where the time goes, and move the long
       log/dump after the grab or the mark later, or the check will flake under load (design §9 asks ≤ 50 ms).
-- [ ] (review r2, harness only) `late-waiter`/`mutation-L74` (activation.sh ~1108) assume the flush starts within
-      ~150 ms of dispatch; under starvation they fail loudly (false FAIL / "not caught"): raise `M59_LATE_WAITER` (~1200) or log
+- [ ] (review r2, harness only) `late-waiter`/`mutation-L74` (scripts/activation/trace.sh) assume the flush starts within
+      ~150 ms of dispatch; under starvation they fail loudly (false FAIL / "not caught"): raise `SIMCAM_TEST_LATE_WAITER_MS` (~1200) or log
       the flush start and check the gap. Its `*"still due"*` match also passes on "0 photo(s) still due": match `[1-9]`.
       santally.py: take the expected launch count and fail on fewer dirs or an empty console.txt (e57's first TSAN pass
       tallied 0, rc 0); the lane drivers print `santally rc=` but don't fail on it. Commit the zsh exit-path test (130/143)
@@ -28,7 +28,7 @@ Follow-ups from importing the prototype (spikes m1b–m12) into this repo.
 - [ ] (W4 e49 release gate) Follow-ups: `vcfull`'s `1080p60.fps` missed 1–2 times in 50 (44.4 fps at load ~96; one 53.8 fps
       miss without a load sample; 20/20 exact at load ~20; W4 e57: also `1080p30.fps` 25.7 and `4k30.fps` 17.3 once each, and `1080p60.fps` 46.3, all at load 260–740, 20/20 exact at load ~15) — watch it, and move it to the known-timing list if it keeps missing; expo-camera
       touches UIKit off the main thread in `takePicture` (`SceneGeometry.windowScene`), so `MTC_CRASH_ON_REPORT=1` aborts expo
-      apps (not stuntcam's code; reporting it upstream is an outward-facing action — ask the owner first); a rare rsync race
+      apps (not stuntcam's code; reported upstream as expo/expo#53522, fixed on expo's main by expo/expo#53641, not in a release as of expo-camera 58.0.14); a rare rsync race
       in scripts/env.sh when ~5 scripts start at once.
 - [x] **Before publishing the package (review)**, done in w4 e53 (measured internally): the canary
       unpack runs under an flock on `$SIMCAM_HOME/canary/.lock` and never renames away a matching dir; `bin/stuntcam` is
@@ -65,7 +65,27 @@ Follow-ups from importing the prototype (spikes m1b–m12) into this repo.
 - [ ] **Rename env vars `SIMCAM_*` → `STUNTCAM_*`** (`SIMCAM`, `SIMCAM_DYLIB`, `SIMCAM_STUB_LOG`, `SIMCAM_PF_BREAK`,
       `SIMCAM_SLOT_COUNTS`, `SIMCAM_PF_NOSYMOK`, `SIMCAM_ORIENT`, `SIMCAM_CONTROL`, `SIMCAM_SOURCE`, and the scripts'
       `SIMCAM_UDID`, `SIMCAM_UDID_<rt>`). This covers the engine, the stub, scripts/ and tools/. Keep the old names as
-      fallbacks for one release. Decide separately what happens to the per-spike off switches (`M2_*` … `M12_*`).
+      fallbacks for one release. Decide separately what happens to the off switches and test faults (`SIMCAM_OFF_*`,
+      `SIMCAM_TEST_*`).
+- [ ] **Drop the 1.1.0 names of the six arming settings** (`M2_FAKE`, `M2_SESSION_HOOK`, `M2_NOLOGDICT`, `M2_PLIST`,
+      `M5_IMAGE`, `M5_LOG`; docs/renames.md "Upgrading from 1.1.0"): not before 2.0, and everywhere at once: the engine's
+      `ENV_LEGACY_*` / `EnvConfig` (core/env.inc), the CLI's `arm.LegacyNames` emission, the runner hook's forwarding
+      list, scripts/arm-env.sh and scripts/common.sh. `exec` uses `LegacyNames`' keys as the list of camera settings it
+      never forwards from the caller's shell: keep that list. A `SIMCAM_*` → `STUNTCAM_*` rename (above) before then
+      would give the six a third name.
+- [ ] `arm.ArmLaunchd` unsets the variables a re-arm drops (names in the previous launchd record that this arm doesn't
+      set) before it sets the new values. Today the order makes no difference an app can see: on a re-arm the stub is
+      already inserted and `current` already names the new build, and the settings are set one by one, so an app
+      launched mid-way sees some mix of old and new values whatever the order. Every arm sets the settings the stub and
+      engine need (the profile among them: every build has one, so it is never dropped), so a re-arm drops only optional
+      ones (`SIMCAM_SOURCE` from `up --source`, `SIMCAM_STUB_LOG`, `SIMCAM_ENGINE_LOG`/`M5_LOG`,
+      `SIMCAM_FIXTURE_IMAGE`/`M5_IMAGE`), whose absence is their final value: unsetting first only gets them there
+      sooner, unsetting last would keep the old value through the window. Each of the six arming settings has both names
+      set to the same value, so no engine sees one missing. It starts to matter when the 1.1.0 names are dropped
+      (above): a re-arm over a record that lists them unsets all six legacy names before the new settings are verified,
+      so over a sim armed by 1.1.0 (old names only) an engine that still reads the old names sees neither name until
+      each new one is set. Then unset the dropped names after the settings are verified, and have the rollback unset
+      them too (they would still be set when a setting fails).
 - [x] Split `engine/src/simcam.m` into fragments by concern (`fig/`, `core/`, `providers/`, `client/`), still one
       translation unit (unity build), so the compiled code is unchanged. Checked against `a5a7716`: every `__TEXT`,
       `__DATA_CONST` and `__DATA` section and `nm -m` are identical for arm64 and x86_64, normal and `--tsan` builds.
@@ -149,10 +169,10 @@ Follow-ups from importing the prototype (spikes m1b–m12) into this repo.
 - [x] **Background/foreground left AVFoundation and the engine out of step** (w2 e15; measured in w3 e20). The trigger is
       an app stop that lands while the engine has the session interrupted (a stop from `UIApplication` notifications, as
       plugins and the canary do; Apple's `sceneDidEnterBackground` stop arrives before the interruption and was fine).
-      `M12EndInterrupt` then restarted the stopped session and AVF forwarded none of its later calls. Fixed: a stop or start
+      `InterruptEnd` then restarted the stopped session and AVF forwarded none of its later calls. Fixed: a stop or start
       during an interruption ends it for that session (sess_StopRunning / sess_StartRunning), so EndInterrupt restarts only
-      sessions still interrupted; `M14_OLD_ENDINT` brings the bug back. Guard: `scripts/bgfg.sh` (L52; w3 e21).
-- [ ] `M12EndInterrupt` doesn't check the session latch: a start, then an interruption before the latch's stop runs, leaves
+      sessions still interrupted; `SIMCAM_OFF_INTERRUPTION_RESET` brings the bug back. Guard: `scripts/bgfg.sh` (L52; w3 e21).
+- [ ] `InterruptEnd` doesn't check the session latch: a start, then an interruption before the latch's stop runs, leaves
       a latched session that the end of the interruption restarts (predates L52's fix; PR review).
 - [ ] The canary's `fgSeen` is set at launch and never reset before BG-REQUEST, so "foreground notification after
       background" passes without a real foreground (9/11 runs in e15) and bgfg's `startRunning` races the relaunch. The
@@ -160,7 +180,7 @@ Follow-ups from importing the prototype (spikes m1b–m12) into this repo.
 - [ ] Not measured (w3 e20): an app calling `startRunning` while interrupted in the background (the engine now runs it and
       ends the interruption; a device would keep it interrupted until foreground).
 - [ ] A control-file interruption with engine reason 3 reaches the app as interruption reason 2 (w2 e15; not looked into).
-- [ ] An interruption (`M12Interrupt`, core/control.inc) waits for in-flight photo encodes while it holds the pump queue, so
+- [ ] An interruption (`InterruptBegin`, core/control.inc) waits for in-flight photo encodes while it holds the pump queue, so
       in-flight photos complete before its DidStopRunning. A session op queued behind it (the app's `stopRunning` in
       `sceneDidEnterBackground` right after a photo) counts that encode time against its 2 s deadline: on a starved machine
       (7.6 s encodes, w1 U7) that records a session hang, and two latch the gate. Moving the wait off the pump queue needs the
@@ -173,10 +193,10 @@ Follow-ups from importing the prototype (spikes m1b–m12) into this repo.
       queue and reports the stop from the `stopRunning` thread once its own DidStopRunning handling ran, unordered with it.
       Fixed in w4 e40 (ledger L66): a stop with photos of its session pending posts DidStopRunning, from a private queue,
       once AVF has run their didFinishCapture (≤ 1 s); a stop on a photo delegate queue (the main thread, or a photo
-      callback) doesn't wait. `M40_OLD_STOP=1` brings the old order back; `M40_FINISH_DELAY_MS` makes it deterministic.
+      callback) doesn't wait. `SIMCAM_OFF_STOP_WAIT=1` brings the old order back; `SIMCAM_TEST_FINISH_DELAY_MS` makes it deterministic.
 - [x] (w4 e40) A content `fail(…)` is confirmed by one more canary launch before it is cached (Go CLI and `scripts/verify.sh`); a
       pass after it is a short-lived pass with a `note:` line (`Result.FailedFirst`).
-- [ ] (w4 e40) The interruption's DidStopRunning (`M12Interrupt`, core/control.inc) drains the photo queue but doesn't wait for
+- [ ] (w4 e40) The interruption's DidStopRunning (`InterruptBegin`, core/control.inc) drains the photo queue but doesn't wait for
       the photos' delegate callbacks as `sess_StopRunning` now does (L66), so an interruption right after a shutter can still be
       reported before `didFinishCaptureFor` on 17.5. It can't wait the same way: it runs on the pump queue, and the end of the
       interruption must stay after it.
@@ -186,11 +206,11 @@ Follow-ups from importing the prototype (spikes m1b–m12) into this repo.
       waits for some other way (a semaphore, a lock, or the common AVCam shape: main does `sessionQueue.sync {}` while a
       `sessionQueue.async { stopRunning() }` runs on a worker): a 1 s UI hitch there. w4 e54: the bound is 500 ms (covers the
       300 ms test fault; usual waits are 1.4-10 ms), the canary's stop timing check < 250 ms.
-- [x] (review r2, done in w4 e54) The flush on startRunning (M40FlushStop) had a window and could wait behind another
-      session's waiter: it now waits on gM40Cond until the session's deferred stop has queued its DidStopRunning (bounded), and
+- [x] (review r2, done in w4 e54) The flush on startRunning (StopWaitFlush) had a window and could wait behind another
+      session's waiter: it now waits on gStopWaitCond until the session's deferred stop has queued its DidStopRunning (bounded), and
       the stop queue is concurrent (L73; `activation.sh flush-race`). Still unreachable through AVF (e44).
-- [x] (review r2, done in w4 e54) A failed delegate-queue lookup's `MISMATCH: w4 e40` now fails the run (run.sh's
-      canary summary, mutation.sh's baseline; mutant `M40_NO_DELEGATEQ`); tools/inventory.py tracks ActHookResolve hooks
+- [x] (review r2, done in w4 e54) A failed delegate-queue lookup's `MISMATCH: photo stop` now fails the run (run.sh's
+      canary summary, mutation.sh's baseline; mutant `SIMCAM_TEST_NO_DELEGATE_QUEUE`); tools/inventory.py tracks ActHookResolve hooks
       (with labels) and KVC keys/paths, docs/inventory.md regenerated. Only that one MISMATCH is fatal; the CLI's `verify`
       doesn't read the engine log for it yet.
 - [ ] (w4 e40) With L66 fixed, L13 (encode back on the pump) is caught by the frame-gap check only; on 27.0 only the HEVC stage
@@ -253,20 +273,20 @@ Follow-ups from importing the prototype (spikes m1b–m12) into this repo.
       forwarding traps that print one line); a stand-in crash is `crash motion` through the thread-specific feature key and
       never closes the camera; the second strike's crash handler writes `latched-motion-<build>`; `preflight-fail` expires
       after 24 h. Ledger L58-L61.
-- [x] PR B review round 2 lows, done in w4 e29 (measured internally): (1) the extra motion-key clears in `M5OrientTrackStart` (motion.inc:192) and
+- [x] PR B review round 2 lows, done in w4 e29 (measured internally): (1) the extra motion-key clears in `OrientTrackStart` (motion.inc:192) and
       ActEnsure's main-thread tracker run (lazy.inc:322) are untested (orient-crash/L61 still pass without them, since
-      `upd` clears the key itself): add an `M16_ORIENT_FAULT` variant that faults in `M5OrientTrackRunMain` before `upd`.
+      `upd` clears the key itself): add a `SIMCAM_TEST_ORIENT_FAULT` variant that faults in `OrientTrackRunMain` before `upd`.
       (2) The `preflight-fail` prune (safety.inc:494) can unlink a marker another app of the same build is writing (open
       with O_TRUNC sets mtime to now, `futimens` sets the until after): write via temp + rename, or prune only when
       `st_mtime <= now - 60`. (3) App code can run inside the motion scope through dynamic sends (an overridden
       `accelerometerUpdateInterval`, an `NSOperationQueue` subclass's `addOperationWithBlock:`, motion.inc:70-82): clear
       the key around those sends. (4) The stock line can print a re-written `latched-` marker's features with the
-      load-time until (log text only). Done: (1) `M16_ORIENT_FAULT=start|runmain|ensure`, cases orient-crash-main and
+      load-time until (log text only). Done: (1) `SIMCAM_TEST_ORIENT_FAULT=start|runmain|ensure`, cases orient-crash-main and
       orient-crash-ensure, mutants L62/L63; (2) markers via temp file + rename (handler too), case pf-prune-race, mutant L64;
       (3) the key is cleared around those sends; (4) the stock line reads the features only from the load-time version.
       (3) had no guard of its own in e29 (only lazy.inc's clear, by injection, L63): w4 e31 added one, case app-send-crash
-      (a CMMotionManager subclass's interval getter makes the first camera call; `M16_TRAP_FAULT` faults in its trap) and
-      mutant L65 (`M17_APP_SEND_KEEP_KEY`). It exercises the interval getter only; the handler copy and
+      (a CMMotionManager subclass's interval getter makes the first camera call; `SIMCAM_TEST_TRAP_FAULT` faults in its trap) and
+      mutant L65 (`SIMCAM_OFF_APP_SEND_KEY_CLEAR`). It exercises the interval getter only; the handler copy and
       `addOperationWithBlock:` go through the same macro and mutant but no case drives them.
 - [x] review round 1 (w4 e31, measured internally): activation.sh matches crash reports by pid (the fault
       lines' pids, DiagnosticReports + Retired, `tools/ipspid.py`), and a case whose engine side passes but whose crash got no
@@ -275,7 +295,7 @@ Follow-ups from importing the prototype (spikes m1b–m12) into this repo.
       unlink. [ ] Left from the prune fix: while a fresh marker is aside (a few syscalls, only when it was re-written between
       the prune's stat and its rename), another process's load-time stat misses it for one launch; there is no case for this
       window (it needs two processes inside the same few microseconds). The re-check's "kept" branch itself (a fresh marker
-      renamed in after the stat goes back) has a case since w4 e34: activation.sh pf-prune-kept (M16_PRUNE_PAUSE_MS).
+      renamed in after the stat goes back) has a case since w4 e34: activation.sh pf-prune-kept (SIMCAM_TEST_PRUNE_PAUSE_MS).
 - [x] review round 2 (w4 e34, measured internally): M1, while the stand-in is active every archived
       CMAttitude decodes as the stand-in (a decoded real CMAttitude's multiply by a stand-in segfaulted in CoreMotion, its
       isEqual: answered NO; measured on 27.0 and 26.3); `tools/ipspid.py` also requires the report's capture time >= the
@@ -397,8 +417,8 @@ Follow-ups from importing the prototype (spikes m1b–m12) into this repo.
       e55's own loops); Debug-only single-cycle jumps of +24 to +80 MB were the only outliers.
 - [ ] w4 e58 follow-ups: `memcycle.sh` movie/both variants grow 0.3–0.5 MB/cycle on 26.3 in the system H.264 encoder's
       teardown (not gated).
-      review: the preview sink's CAImageQueue + registered IOSurfaces (opt-in `M5_PREVIEW_IQ` path, video.inc) are not
-      released in `M5Sink -dealloc`; `memcycle.sh` only covers the conversion pool/transfer session — add a mirrored/rotated
+      review: the preview sink's CAImageQueue + registered IOSurfaces (opt-in `SIMCAM_PREVIEW_IMAGE_QUEUE` path, video.inc) are not
+      released in `SimcamSink -dealloc`; `memcycle.sh` only covers the conversion pool/transfer session — add a mirrored/rotated
       video-data-output variant so the rotation pool and flip sessions' release is exercised too.
 - [ ] w4 e55 F2: zoom (`VideoZoomFactor`, and on 27.0 `rampToVideoZoomFactor` too — contradicting the vcfull note below) is
       accepted but never rendered; README's "Device behaviour: … zoom" overclaims. Crop the source by the zoom factor, or

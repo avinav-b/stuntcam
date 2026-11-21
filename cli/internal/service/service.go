@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -37,7 +38,7 @@ const (
 func ToArm(ds []simctl.Device, armed Armed, handled map[string]time.Time, only ...string) []simctl.Device {
 	var out []simctl.Device
 	for _, d := range ds {
-		if len(only) > 0 && !contains(only, d.UDID) {
+		if len(only) > 0 && !slices.Contains(only, d.UDID) {
 			continue
 		}
 		if d.State != "Booted" || !strings.Contains(d.RuntimeID, "iOS") {
@@ -131,13 +132,4 @@ func xmlEscape(s string) string {
 func Notice(d simctl.Device) (title, body string) {
 	return "stuntcam: " + d.Name + " has a camera for command-line launches",
 		fmt.Sprintf("It booted without stuntcam. Xcode Run won't have a camera until `stuntcam up --udid %s --reboot`.", d.UDID)
-}
-
-func contains(s []string, x string) bool {
-	for _, v := range s {
-		if v == x {
-			return true
-		}
-	}
-	return false
 }

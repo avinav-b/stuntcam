@@ -7,21 +7,21 @@
 #     bracket   photo maxBracketedCapturePhotoCount is not 0, before or after startRunning           [L53]
 #     multicam  supportedMultiCamDeviceSets is not []                                               [L54]
 #   or if the ifsupported launch turned on anything but flash (its RESULT enabled= is not "none" or "flash"), hung, threw,
-#   or took fewer than
-#   5/5 photos. Also FAIL if the read-out has no END, lists no camera, or the torch is gone from the back cameras
+#   or took fewer than 5/5 photos. Also FAIL if the read-out has no END, lists no camera, or the torch is gone from the back cameras
 #   (hasTorch must stay YES on every back camera: the torch works, the canary checks it). Flash is offered on the back
 #   cameras and never fires (a documented limit, design §6.5; L55): reported, and hasFlash must stay YES on the back
 #   cameras so apps that set flashMode .on without checking don't throw. The MultiCam class flag
 #   (AVCaptureMultiCamSession.isMultiCamSupported) is the simulator's own and is only reported (design §6.5).
 #   Prints one PASS/FAIL line per check and exits 1 if any failed (2 on a usage error).
-#   XENV="VAR=val ..." adds SIMCTL_CHILD_VAR=val to both launches (e.g. XENV=M15_OLD_BRACKET=1 must FAIL bracket).
+#   XENV="VAR=val ..." adds SIMCTL_CHILD_VAR=val to both launches (e.g. XENV=SIMCAM_OFF_BRACKET_UNSUPPORTED=1 must FAIL bracket).
 #   UDID: $SIMCAM_UDID_<rt>. Needs fixtures/features-probe/build/featuresprobe.app (fixtures/features-probe/build.sh);
 #   installed here. Results: $SIMCAM_RESULTS/features-<rt>-boot-{read,ifsupported-back-wide}-<tag>/.
 set -u
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"; source $ROOT/scripts/env.sh
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"; source $ROOT/scripts/env.sh; source $ROOT/scripts/common.sh
 RT=${1:?usage: $0 <rt>}
-V=SIMCAM_UDID_$RT; UDID=${(P)V:-}; [[ -n $UDID ]] || { echo "$0: set $V to the UDID of your iOS $RT simulator" >&2; exit 2; }
-BL=$(cat $ROOT/build/bootlogdir-$RT.txt 2>/dev/null); [[ -n $BL && -d $BL ]] || { echo "$0: no boot log dir: boot with scripts/boot.sh $RT stub first" >&2; exit 2; }
+need_udid "$0" "$RT" UDID long
+BL=$(cat $ROOT/build/bootlogdir-$RT.txt 2>/dev/null); [[ -n $BL && -d $BL ]] ||
+  { echo "$0: no boot log dir: boot with scripts/boot.sh $RT stub first" >&2; exit 2; }
 APP=$ROOT/fixtures/features-probe/build/featuresprobe.app
 [[ -d $APP ]] || { echo "$0: $APP missing: run fixtures/features-probe/build.sh" >&2; exit 2; }
 xcrun simctl install $UDID $APP || { echo "$0: installing the probe failed" >&2; exit 2; }

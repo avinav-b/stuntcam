@@ -54,7 +54,7 @@ while (( $# )); do
     --no-build) BUILD=0;;
     --allow-dirty) DIRTY=1;;
     --helper) HELPER=${2:?--helper APP}; shift;;
-    -h|--help) sed -n '3,44p' "$0"; exit 0;;
+    -h|--help) awk 'NR < 3 { next } !/^#/ { exit } { print }' "$0"; exit 0;;
     *) echo "package.sh: unknown argument $1" >&2; exit 2;;
   esac
   shift
@@ -171,9 +171,10 @@ const [out, version] = process.argv.slice(2);
 const pkg = {
   name: 'stuntcam', version,
   description: 'A camera for the iOS Simulator: your app\'s real AVFoundation camera code runs unmodified',
-  keywords: ['ios', 'simulator', 'camera', 'avfoundation', 'xcode', 'testing', 'react-native', 'expo', 'flutter'],
+  keywords: ['ios', 'ios-simulator', 'simulator', 'camera', 'avfoundation', 'xcode', 'testing', 'xcuitest', 'ci',
+    'react-native', 'visioncamera', 'expo', 'expo-camera', 'flutter', 'mobile_scanner', 'qr-code'],
   license: 'Apache-2.0',
-  homepage: 'https://github.com/avinav-b/stuntcam#readme',
+  homepage: 'https://stuntcam.dev',
   repository: { type: 'git', url: 'git+https://github.com/avinav-b/stuntcam.git' },
   bugs: { url: 'https://github.com/avinav-b/stuntcam/issues' },
   bin: { stuntcam: 'bin/stuntcam' },
@@ -246,7 +247,7 @@ cat > $OUTD/stuntcam.rb <<RB
 # share/stuntcam/manifest.txt and unpacks the payload into \$SIMCAM_HOME at each use.
 class Stuntcam < Formula
   desc "Camera for the iOS Simulator: real AVFoundation, no app changes"
-  homepage "https://github.com/avinav-b/stuntcam"
+  homepage "https://stuntcam.dev"
   # TODO(release): placeholder URL. Upload stuntcam-$V.tgz to the v$V release (or point at the npm registry tarball,
   # https://registry.npmjs.org/stuntcam/-/stuntcam-$V.tgz, once published) and keep sha256 in sync with that file.
   url "https://github.com/avinav-b/stuntcam/releases/download/v$V/stuntcam-$V.tgz"

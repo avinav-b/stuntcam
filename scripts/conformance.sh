@@ -6,18 +6,18 @@
 #   cases (default: all):
 #     kill-switch    SIMCAM=0 per launch: stub logs it, no camera, no crash
 #     motion-gate    preflight broken with CoreMotion queried first: the camera is stock, the CoreMotion stand-in stays for the
-#                    launch and its stream keeps running, no marker [L40: a failed activation doesn't remove
-#                    the stand-in mid-run]
+#                    launch and its stream keeps running, no marker [L40]
 #     current-bad    `current` = garbage / proto 0 / relative path / missing: one refusal line each, no camera [L50]
 #     proto-skew     `current` with a newer proto: "needs a newer stub", no camera
 #     latch-photo    two hung photo ops latch photo in-process; the next real photo error-completes (-11800/-16800) [L15]
 #     crash-latch    two attributed crashes latch the next activation (no camera); SIMCAM_SENTINEL=clear restores it
 #   The sentinel is cleared after the cases that latch, and `current` is restored (written back as it was) after the ones that
 #   edit it; an exit trap restores it too, so Ctrl-C mid-case doesn't leave the sim with a broken `current`.
-set -u; ROOT="$(cd "$(dirname "$0")/.." && pwd)"; source $ROOT/scripts/env.sh
+set -u; ROOT="$(cd "$(dirname "$0")/.." && pwd)"; source $ROOT/scripts/env.sh; source $ROOT/scripts/common.sh
 RT=${1:?usage: $0 <rt> [case ...]}; shift
-V=SIMCAM_UDID_$RT; U=${(P)V:-}; [[ -n $U ]] || { echo "$0: set $V" >&2; exit 2; }
-typeset -a CASES; CASES=("$@"); (( ${#CASES} )) || CASES=(kill-switch motion-gate current-bad proto-skew latch-photo crash-latch)   # ${@:-a b} is one word in zsh
+need_udid "$0" "$RT" U short
+typeset -a CASES; CASES=("$@"); (( ${#CASES} )) ||
+  CASES=(kill-switch motion-gate current-bad proto-skew latch-photo crash-latch)   # ${@:-a b} is one word in zsh
 CUR=$SIMCAM_HOME/sims/$U/current; [[ -f $CUR ]] || { echo "$0: $CUR missing: boot with scripts/boot.sh $RT stub first" >&2; exit 2; }
 GOOD=$(<$CUR); fails=0; TAG=conf-$(date +%H%M%S)
 restore_current() { [[ $(cat $CUR 2>/dev/null) == $GOOD ]] || { print -r -- $GOOD > $CUR.tmp && mv $CUR.tmp $CUR; }; }
@@ -37,16 +37,21 @@ for c in $CASES; do case $c in
   kill-switch)
     s0=$(size "$(stublog)"); run canary ks SIMCAM=0
     sum=$(cat "$(res canary ks)"/summary.txt 2>/dev/null)
-    if lines_since "$(stublog)" $s0 | grep -q 'SIMCAM=0, nothing loaded' && [[ $sum == *RESULT* && $sum != *core=PASS* ]]; then ok $c "stub logged SIMCAM=0, canary ran without a camera"
+    if lines_since "$(stublog)" $s0 | grep -q 'SIMCAM=0, nothing loaded' && [[ $sum == *RESULT* &&
+      $sum != *core=PASS* ]]; then ok $c "stub logged SIMCAM=0, canary ran without a camera"
     else bad $c "stub/log mismatch: ${sum:0:160}"; fi;;
   motion-gate)
     run plain mg M5APP_ORDER=motion SIMCAM_PF_BREAK=1
     d=$(res plain mg)
     st=$SIMCAM_HOME/sims/$U/state; b=$(<$ROOT/build/current_dylib.txt); b=${b:h:t}
+    # plain's accelerometer stream runs at 100 Hz and its rate check reads it at 1.5 s (150 updates): more than
+    # min_end_updates by the end means the stream kept running after the check
+    min_end_updates=180
     end=$(grep -oE 'motion.end counts=\[[0-9]+\]' $d/app.log 2>/dev/null | grep -oE '[0-9]+')
     mk=$(print -l $st/dev.simcam.spike.m10plain/latched-*(N) $st/preflight-fail-$b(N) | grep -c .)
-    if ! grep -q 'stand-in removed' $d/dylib.log 2>/dev/null && grep -q 'PASS order.motion.rate' $d/app.log && grep -q 'DISABLED - preflight failed' $d/app.log &&
-       (( ${end:-0} > 180 )) && (( mk == 0 )) && grep -q 'DONE' $d/app.log; then
+    if ! grep -q 'stand-in removed' $d/dylib.log 2>/dev/null && grep -q 'PASS order.motion.rate' $d/app.log &&
+      grep -q 'DISABLED - preflight failed' $d/app.log &&
+       (( ${end:-0} > min_end_updates )) && (( mk == 0 )) && grep -q 'DONE' $d/app.log; then
       ok $c "camera stock, stand-in kept: $end updates by the end, no 'stand-in removed', no marker"
     else bad $c "removed=$(grep -c 'stand-in removed' $d/dylib.log 2>/dev/null) end=${end:-?} markers=$mk (see $d)"; fi;;
   current-bad)
@@ -57,7 +62,8 @@ for c in $CASES; do case $c in
       run canary cb$i
       got=$(lines_since "$(stublog)" $s0 | grep -cE 'nothing loaded|needs|no current file|empty current|loader failed')
       sum=$(cat "$(res canary cb$i)"/summary.txt 2>/dev/null)
-      if (( got >= 1 )) && [[ $sum != *core=PASS* ]]; then ok "${c}[$i]" "'${line:-<missing>}' refused ($got line)"; else bad "${c}[$i]" "'${line:-<missing>}': $got refusal lines, ${sum:0:100}"; fi
+      if (( got >= 1 )) && [[ $sum != *core=PASS* ]]; then ok "${c}[$i]" "'${line:-<missing>}' refused ($got line)"
+      else bad "${c}[$i]" "'${line:-<missing>}': $got refusal lines, ${sum:0:100}"; fi
     done
     print -r -- $GOOD > $CUR;;
   proto-skew)
@@ -67,7 +73,9 @@ for c in $CASES; do case $c in
   latch-photo)
     run plain lp SIMCAM_WD_TEST=hang
     d=$(res plain lp)
-    if grep -q 'photo latched: this capture error-completes' $d/dylib.log 2>/dev/null && grep -qE '\-11800' $d/app.log && grep -q 'DONE' $d/app.log; then ok $c "photo error-completed: $(grep -oE 'code=?-11800[^ ]*' $d/app.log | head -1)"
+    if grep -q 'photo latched: this capture error-completes' $d/dylib.log 2>/dev/null &&
+      grep -qE '\-11800' $d/app.log && grep -q 'DONE' $d/app.log
+    then ok $c "photo error-completed: $(grep -oE 'code=?-11800[^ ]*' $d/app.log | head -1)"
     elif ! grep -q 'latched after 2 hangs' $d/dylib.log 2>/dev/null; then bad $c "photo never latched before the photo (timing: see $d/dylib.log)"
     else bad $c "latched, but the photo did not error-complete (see $d/app.log)"; fi
     clear_sentinel plain;;

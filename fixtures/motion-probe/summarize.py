@@ -38,7 +38,7 @@ for k in sorted(runs, key=lambda k: (k[0], order.get(k[1], 9), k[2], k[3])):
         m = re.search(r'CAM frames=\d+ inWindow=\d+ fps=(\S+)', t)
         if m: fps[m[1]] += 1
         dy = open(os.path.join(d, 'dylib.log'), errors='replace').read() if os.path.exists(os.path.join(d, 'dylib.log')) else ''
-        m = re.search(r'M11 LAZY armed by (\S+)', dy)
+        m = re.search(r'LAZY armed by (\S+)', dy)
         armed['lazy:' + m[1] if m else ('eager (gate at load)' if 'TIMING gate entered' in dy else 'not armed')] += 1
     fmt = lambda c: '; '.join(f'{s} ×{n}' if len(c) > 1 else s for s, n in c.most_common())
     mm = lambda xs: f'{sum(xs) / len(xs):.1f} / {min(xs):.1f}' if xs else '-'

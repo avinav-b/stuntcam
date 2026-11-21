@@ -173,7 +173,8 @@ func ParseMdfind(out string) []string {
 	sc := bufio.NewScanner(strings.NewReader(out))
 	for sc.Scan() {
 		p := strings.TrimSpace(sc.Text())
-		if !strings.HasSuffix(p, ".app") || strings.Contains(p, "/.Trash/") || strings.Contains(strings.TrimSuffix(p, ".app"), ".app/") {
+		insideApp := strings.Contains(strings.TrimSuffix(p, ".app"), ".app/") // an app inside another app's bundle
+		if !strings.HasSuffix(p, ".app") || strings.Contains(p, "/.Trash/") || insideApp {
 			continue
 		}
 		ps = append(ps, p)

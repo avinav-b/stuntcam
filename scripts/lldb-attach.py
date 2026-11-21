@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
-# lldb-attach.py <pid> <logfile> <regex> <timeout_s> — attach lldb (SB API, command line only; the method of
-# fixtures/pause-probe/hold.py on main) to one of our own sim apps, continue it, stay attached until <logfile> matches <regex>
+# lldb-attach.py <pid> <logfile> <regex> <timeout_s> — attach lldb (SB API, command line only, as
+# fixtures/pause-probe/hold.py does) to one of our own sim apps, continue it, stay attached until <logfile> matches <regex>
 # or <timeout_s> passes, then detach. No breakpoints: the app only has to run traced (P_TRACED), e.g. after
 # `simctl launch --wait-for-debugger`. Prints "ATTACH| ..." lines; exit 1 if the attach failed.
 # Run with Xcode's python3 and PYTHONPATH=$(xcrun lldb -P).

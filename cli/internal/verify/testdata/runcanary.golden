@@ -1,0 +1,132 @@
+== result
+result: "RESULT core=PASS ext=PASS t=1.0s"
+refused=false ran=true
+calls:
+simctl --set SET launch --console-pty U dev.simcam.spike.m10canary
+simctl --set SET terminate U dev.simcam.spike.m10canary
+simctl --set SET terminate U com.apple.Preferences
+file run.log:
+CANARY| start
+RESULT core=PASS ext=PASS t=1.0s
+
+== result with CR
+result: "RESULT core=FAIL ext=PASS t=2s core:[qr: x]"
+refused=false ran=true
+calls:
+simctl --set SET launch --console-pty U dev.simcam.spike.m10canary
+simctl --set SET terminate U dev.simcam.spike.m10canary
+simctl --set SET terminate U com.apple.Preferences
+file run.log:
+CANARY| a
+RESULT core=FAIL ext=PASS t=2s core:[qr: x]
+
+== crash
+result: "RESULT core=FAIL ext=FAIL core:[canary exited without a verdict (crash); last: CANARY| 6.1 ok x]"
+refused=false ran=true
+calls:
+simctl --set SET launch --console-pty U dev.simcam.spike.m10canary
+simctl --set SET terminate U dev.simcam.spike.m10canary
+simctl --set SET terminate U com.apple.Preferences
+file run.log:
+CANARY| 6.1 ok x
+some other line
+
+== crash with a reason
+result: "RESULT core=FAIL ext=FAIL core:[canary exited without a verdict (crash); last: reason: SIGSEGV]"
+refused=false ran=true
+calls:
+simctl --set SET launch --console-pty U dev.simcam.spike.m10canary
+simctl --set SET terminate U dev.simcam.spike.m10canary
+simctl --set SET terminate U com.apple.Preferences
+file run.log:
+CANARY| 6.1 ok x
+  reason: SIGSEGV  
+
+== crash, long last line
+result: "RESULT core=FAIL ext=FAIL core:[canary exited without a verdict (crash); last: CANARY| zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz]"
+refused=false ran=true
+calls:
+simctl --set SET launch --console-pty U dev.simcam.spike.m10canary
+simctl --set SET terminate U dev.simcam.spike.m10canary
+simctl --set SET terminate U com.apple.Preferences
+file run.log:
+CANARY| zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz
+
+== exits without starting
+result: "RESULT core=INCONCLUSIVE (no verdict in 1 s; last: failed to launch: x)"
+refused=false ran=false
+calls:
+simctl --set SET launch --console-pty U dev.simcam.spike.m10canary
+simctl --set SET terminate U dev.simcam.spike.m10canary
+simctl --set SET terminate U com.apple.Preferences
+file run.log:
+failed to launch: x
+
+== no verdict in time
+result: "RESULT core=INCONCLUSIVE (no verdict in 1 s; last: CANARY| photo-4x3 start)"
+refused=false ran=true
+calls:
+simctl --set SET launch --console-pty U dev.simcam.spike.m10canary
+simctl --set SET terminate U dev.simcam.spike.m10canary
+simctl --set SET terminate U com.apple.Preferences
+file run.log:
+CANARY| photo-4x3 start
+
+== no output in time
+result: "RESULT core=INCONCLUSIVE (no verdict in 1 s; last: )"
+refused=false ran=false
+calls:
+simctl --set SET launch --console-pty U dev.simcam.spike.m10canary
+simctl --set SET terminate U dev.simcam.spike.m10canary
+simctl --set SET terminate U com.apple.Preferences
+file run.log:
+hello
+
+== refused every time
+result: "RESULT core=INCONCLUSIVE (every launch refused: Busy)"
+refused=true ran=false
+calls:
+simctl --set SET launch --console-pty U dev.simcam.spike.m10canary
+simctl --set SET terminate U dev.simcam.spike.m10canary
+simctl --set SET terminate U com.apple.Preferences
+simctl --set SET launch --console-pty U dev.simcam.spike.m10canary
+simctl --set SET terminate U dev.simcam.spike.m10canary
+simctl --set SET terminate U com.apple.Preferences
+simctl --set SET launch --console-pty U dev.simcam.spike.m10canary
+simctl --set SET terminate U dev.simcam.spike.m10canary
+simctl --set SET terminate U com.apple.Preferences
+file run.log:
+An error was encountered processing the command (code=1): Busy
+
+== failed preflight then result
+result: "RESULT core=PASS ext=PASS t=3s"
+refused=false ran=true
+calls:
+simctl --set SET launch --console-pty U dev.simcam.spike.m10canary
+simctl --set SET terminate U dev.simcam.spike.m10canary
+simctl --set SET terminate U com.apple.Preferences
+simctl --set SET launch --console-pty U dev.simcam.spike.m10canary
+simctl --set SET terminate U dev.simcam.spike.m10canary
+simctl --set SET terminate U com.apple.Preferences
+file run.log:
+CANARY| go
+RESULT core=PASS ext=PASS t=3s
+
+== background request
+result: "RESULT core=PASS ext=PASS t=4s"
+refused=false ran=true
+calls:
+simctl --set SET launch --console-pty U dev.simcam.spike.m10canary
+simctl --set SET launch U com.apple.Preferences
+simctl --set SET launch U dev.simcam.spike.m10canary
+simctl --set SET terminate U dev.simcam.spike.m10canary
+simctl --set SET terminate U com.apple.Preferences
+file run.log:
+CANARY| bg
+BG-REQUEST
+RESULT core=PASS ext=PASS t=4s
+
+== launch fails
+result: "RESULT core=INCONCLUSIVE (launch failed: exec: \"xcrun\": executable file not found in $PATH)"
+refused=false ran=false
+calls:

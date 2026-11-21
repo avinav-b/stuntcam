@@ -38,10 +38,12 @@ func Verdicts() string { return filepath.Join(Root(), "verdicts") }
 func Canary() string { return filepath.Join(Root(), "canary") }
 
 func Logs() string { return filepath.Join(Root(), "logs") }
-func Dev() string  { return filepath.Join(Root(), "dev") } // profiles/ and media/ rsync'd by the last checkout that sourced scripts/env.sh (the scripts use dev/<hash>/)
 
-// Data holds the profiles and media the CLI stages, at content-hash paths (data/<sha1-12>/<name>): an armed sim's M2_PLIST
-// and M5_IMAGE never change under it when another `up`, `verify` or script stages a different file of the same name.
+// Dev holds profiles/ and media/ as rsync'd by the last checkout that sourced scripts/env.sh (the scripts use dev/<hash>/).
+func Dev() string { return filepath.Join(Root(), "dev") }
+
+// Data holds the profiles and media the CLI stages, at content-hash paths (data/<sha1-12>/<name>): an armed sim's SIMCAM_PROFILE
+// and SIMCAM_FIXTURE_IMAGE never change under it when another `up`, `verify` or script stages a different file of the same name.
 func Data() string { return filepath.Join(Root(), "data") }
 
 // Sim is one simulator's directory: current (the loader to use), chain.txt, state/ (sentinel events per bundle id).
@@ -101,13 +103,16 @@ func ParseCurrent(s string) (proto int, loader string, err error) {
 	return proto, path, nil
 }
 
-// WriteAtomic writes via a temp file in the same directory and renames it into place.
-func WriteAtomic(path string, data []byte) error {
+// WriteAtomic writes via a temp file in the same directory and renames it into place (mode 0644).
+func WriteAtomic(path string, data []byte) error { return WriteAtomicPerm(path, data, 0o644) }
+
+// WriteAtomicPerm is WriteAtomic with the file's mode.
+func WriteAtomicPerm(path string, data []byte, perm os.FileMode) error {
 	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*")
 	if err != nil {
 		return err
 	}
-	if err := tmp.Chmod(0o644); err != nil {
+	if err := tmp.Chmod(perm); err != nil {
 		tmp.Close()
 		os.Remove(tmp.Name())
 		return err
@@ -121,7 +126,11 @@ func WriteAtomic(path string, data []byte) error {
 		os.Remove(tmp.Name())
 		return err
 	}
-	return os.Rename(tmp.Name(), path)
+	if err := os.Rename(tmp.Name(), path); err != nil {
+		os.Remove(tmp.Name())
+		return err
+	}
+	return nil
 }
 
 // Protected reports whether a path is inside a folder simulator processes can't reach.

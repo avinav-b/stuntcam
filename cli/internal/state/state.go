@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Package state reads what the engine records per app (engine/src/core/safety.inc): one events.log per bundle id under
-// sims/<udid>/state/<bundle>/, lines "<epoch> <activation#> <kind> <feature> <build> <detail…>". Latch rules match the
-// engine's: two crash or hang events of one feature, same build, within the last 20 activations and 24 h.
+// Package state reads what the engine records per app (its crash sentinel, engine/src/core/safety.inc and the files
+// after it): one events.log per bundle id under sims/<udid>/state/<bundle>/, lines "<epoch> <activation#> <kind>
+// <feature> <build> <detail…>". Latch rules match the engine's: two crash or hang events of one feature, same build,
+// within the last 20 activations and 24 h.
 package state
 
 import (
@@ -272,7 +273,11 @@ func PreflightFailsIn(root string) []PreflightFail {
 			continue
 		}
 		b, _ := os.ReadFile(filepath.Join(root, n))
-		out = append(out, PreflightFail{Build: strings.TrimPrefix(n, "preflight-fail-"), What: strings.TrimSpace(string(b)), Until: fi.ModTime()})
+		out = append(out, PreflightFail{
+			Build: strings.TrimPrefix(n, "preflight-fail-"),
+			What:  strings.TrimSpace(string(b)),
+			Until: fi.ModTime(),
+		})
 	}
 	return out
 }

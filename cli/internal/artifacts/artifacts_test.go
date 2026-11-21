@@ -86,7 +86,7 @@ func TestFindFromDirNeedsAllThree(t *testing.T) {
 	write(t, filepath.Join(d, "b1", EngineName), "e")
 	write(t, filepath.Join(d, "s1", StubName), "s")
 	if _, err := fromDir(filepath.Join(d, "b1"), nil, false); err == nil {
-		t.Fatal("accepted a build without a profile (apps crash without M2_PLIST)")
+		t.Fatal("accepted a build without a profile (apps crash without SIMCAM_PROFILE)")
 	}
 	write(t, filepath.Join(d, "p", "cfg-m10.plist"), "p")
 	t.Setenv("STUNTCAM_PROFILE", filepath.Join(d, "p", "cfg-m10.plist"))
@@ -97,7 +97,7 @@ func TestFindFromDirNeedsAllThree(t *testing.T) {
 }
 
 func TestStageDataIsContentAddressed(t *testing.T) {
-	// staging another profile must not overwrite dev/profiles/cfg-m10.plist, which an armed sim's M2_PLIST may name
+	// staging another profile must not overwrite dev/profiles/cfg-m10.plist, which an armed sim's SIMCAM_PROFILE may name
 	src := t.TempDir()
 	t.Setenv("SIMCAM_HOME", filepath.Join(t.TempDir(), "home"))
 	write(t, filepath.Join(src, "a", "cfg-m10.plist"), "good")
@@ -676,7 +676,7 @@ func TestInstalledCheckoutTrust(t *testing.T) {
 	t.Setenv("STUNTCAM_CANARY", "")
 	t.Setenv("STUNTCAM_PROFILE", "")
 
-	// a binary that isn't installed keeps the old order and says nothing
+	// a binary that isn't installed uses the working directory's checkout and says nothing
 	notes = nil
 	noteSeen = map[string]bool{}
 	if s, err := find("", "", d); err != nil || s.BuildID() != pair || len(notes) != 0 {

@@ -29,7 +29,7 @@ for d in sorted(glob.glob(os.path.join(R, 'bgfg-*-e20-*'))):
         if t < br - 0.001: continue
         if s == 'APP' and (x.startswith(('CALL', 'RET', 'NOTE', 'SCENE', 'END', 'no WasInterrupted'))):
             x = re.sub(r' thread=\w+', '', x); keep.append(f'{t:7.3f} A {x}')
-        elif s == 'ENG' and re.search(r'StartRunning|StopRunning|m12 interrupt|interruption ended|posted DidStartRunning|posted DidStopRunning|watchdog', x):
+        elif s == 'ENG' and re.search(r'StartRunning|StopRunning|interrupt session|interruption ended|posted DidStartRunning|posted DidStopRunning|watchdog', x):
             keep.append(f'{t:7.3f} E {x}')
         elif s == 'HOST' and ('after END' in x or 'Preferences' in x and 'returned' not in x or 'foreground' in x):
             keep.append(f'{t:7.3f} H {x}')

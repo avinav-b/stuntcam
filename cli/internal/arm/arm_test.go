@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -16,14 +17,16 @@ import (
 )
 
 type fakeSim struct {
-	mu      sync.Mutex // ArmLaunchd sets variables concurrently
-	env     map[string]string
-	booted  []string
-	flaky   int    // Setenv calls that silently don't stick
-	failKey string // Setenv of this key never sticks
-	getErr  bool   // Getenv fails
-	bootErr bool   // Boot fails
-	order   []string
+	mu          sync.Mutex // ArmLaunchd sets variables concurrently
+	env         map[string]string
+	booted      []string
+	flaky       int    // Setenv calls that silently don't stick
+	failKey     string // Setenv of this key never sticks
+	getErr      bool   // Getenv fails
+	bootErr     bool   // Boot fails
+	order       []string
+	unset       []string // every Unsetenv call's name, in order
+	unsetErrKey string   // Unsetenv of this key fails and leaves it set
 }
 
 func (f *fakeSim) Boot(u string, e []string) error {
@@ -48,6 +51,10 @@ func (f *fakeSim) Getenv(_ string, k string) (string, error) {
 func (f *fakeSim) Unsetenv(_ string, k string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.unset = append(f.unset, k)
+	if k != "" && k == f.unsetErrKey {
+		return errors.New("launchctl unsetenv failed")
+	}
 	delete(f.env, k)
 	return nil
 }
@@ -159,10 +166,143 @@ func TestLaunchdArmRollsBack(t *testing.T) {
 	if f.env["SIMCAM_SIM_DIR"] != "" || f.env["SIMCAM_STATE_DIR"] != "" {
 		t.Errorf("variables set before the failure not unset: %v", f.env)
 	}
-	// a later down still knows every name, and the record is cumulative
-	r, _ := ReadRecord("U")
-	if !strings.Contains(strings.Join(r.Vars, " "), "SIMCAM_CHAIN") {
-		t.Errorf("record: %v", r.Vars)
+	// a `current` without a record (how the scripts arm): the rollback took the stub out, so a launchd record for the
+	// build `current` is back on says so (without one, `status` would read the sim as armed outside stuntcam)
+	if r, err := ReadRecord("U"); err != nil || r.Mode != Launchd || r.Build != "b0" || r.Booting {
+		t.Errorf("record after the rollback: %+v %v, want a launchd record for build b0", r, err)
+	}
+}
+
+// After a rollback the record says what is true about the sim, also where "as it was found" would not:
+//   - a sim the scripts armed (a `current`, no record) has lost its stub and settings: a launchd record for the build
+//     `current` is back on lets `status` say the stub is gone and `down` clean up; without one it would read as armed;
+//   - the in-progress record this process's own BootUnarmed wrote is not a record to put back;
+//   - when one of the rollback's own unsets fails, a record names every variable that may be left, for `down`.
+func TestLaunchdArmRollbackRecordTellsTheTruth(t *testing.T) {
+	b2 := artifacts.Set{Stub: "/h/builds/s2/libsimcamstub.dylib", Loader: "/h/builds/b2/libsimcamloader.dylib",
+		Engine: "/h/builds/b2/libsimcam.dylib"}
+	for _, c := range []struct {
+		name                string
+		current, ownBooting bool   // before the arm: a `current` on build b0; BootUnarmed's record of this process
+		earlier             bool   // before the arm: a launchd arm on build b1 (with a source the re-arm drops)
+		unsetErrKey         string // an unset that fails during the rollback
+		wantRecord          bool
+		wantBuild           string
+		wantVars            []string // names the record must list (a subset check)
+	}{
+		{name: "script-armed: a current, no record", current: true, wantRecord: true, wantBuild: "b0",
+			wantVars: []string{"DYLD_INSERT_LIBRARIES", "SIMCAM_SIM_DIR", "SIMCAM_FIG_SOURCES", "M2_FAKE"}},
+		{name: "own boot-in-progress record, no current", ownBooting: true},
+		{name: "own boot-in-progress record, a current", ownBooting: true, current: true, wantRecord: true, wantBuild: "b0",
+			wantVars: []string{"DYLD_INSERT_LIBRARIES", "SIMCAM_SIM_DIR"}},
+		{name: "no record, an unset fails", unsetErrKey: "SIMCAM_CHAIN", wantRecord: true, wantBuild: "b2",
+			wantVars: []string{"SIMCAM_CHAIN", "DYLD_INSERT_LIBRARIES"}},
+		// SIMCAM_LAZY is a name only the failed arm adds: the earlier arm's record doesn't list it
+		{name: "launchd record, an unset fails", earlier: true, unsetErrKey: "SIMCAM_LAZY", wantRecord: true, wantBuild: "b1",
+			wantVars: []string{"SIMCAM_LAZY", "SIMCAM_SOURCE", "DYLD_INSERT_LIBRARIES"}},
+	} {
+		t.Setenv("SIMCAM_HOME", t.TempDir())
+		f := &fakeSim{env: map[string]string{}}
+		os.MkdirAll(home.Sim("U"), 0o755)
+		if c.current {
+			if err := home.WriteCurrent("U", "/h/builds/b0/libsimcamloader.dylib"); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if c.earlier {
+			s1 := set(t)
+			if err := ArmLaunchd(f, "U", s1, Vars("U", s1, Options{Extra: map[string]string{"SIMCAM_SOURCE": "scene"}})); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if c.ownBooting {
+			booting := Record{Mode: Launchd, Build: "b2", At: time.Now().Unix(), Booting: true, Pid: os.Getpid()}
+			if err := WriteRecord("U", booting); err != nil {
+				t.Fatal(err)
+			}
+		}
+		f.failKey, f.unsetErrKey = "DYLD_INSERT_LIBRARIES", c.unsetErrKey
+		vars := Vars("U", b2, Options{Extra: map[string]string{"SIMCAM_LAZY": "0"}})
+		if err := ArmLaunchd(f, "U", b2, vars); err == nil || !strings.Contains(err.Error(), "rolled back") {
+			t.Fatalf("%s: err %v", c.name, err)
+		}
+		r, err := ReadRecord("U")
+		if !c.wantRecord {
+			if err == nil {
+				t.Errorf("%s: a record is left: %+v", c.name, r)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("%s: no record; want a launchd record for build %s", c.name, c.wantBuild)
+			continue
+		}
+		if r.Mode != Launchd || r.Build != c.wantBuild || r.Booting || InProgress(r) {
+			t.Errorf("%s: record %+v, want a finished launchd record for build %s", c.name, r, c.wantBuild)
+		}
+		for _, n := range c.wantVars {
+			if !slices.Contains(r.Vars, n) {
+				t.Errorf("%s: the record doesn't name %s: %v", c.name, n, r.Vars)
+			}
+		}
+	}
+}
+
+// A boot-mode record from an earlier boot (the sim was rebooted unarmed since) is not special in a rollback: when one
+// of the rollback's unsets fails, the record must name what is left, or `down` (which only unsets for a launchd
+// record) never clears it. An env record comes back when the rollback is clean. After the rollback, `down` leaves no
+// stuntcam variable set.
+func TestLaunchdArmRollbackOverBootAndEnvRecords(t *testing.T) {
+	b2 := artifacts.Set{Stub: "/h/builds/s2/libsimcamstub.dylib", Loader: "/h/builds/b2/libsimcamloader.dylib",
+		Engine: "/h/builds/b2/libsimcam.dylib"}
+	for _, c := range []struct {
+		name        string
+		before      Record
+		unsetErrKey string
+		wantMode    Mode
+		wantSame    bool // arm.json byte for byte as before
+	}{
+		{name: "boot record, clean", before: Record{Mode: Boot, Build: "b0", At: 42, Vars: []string{"DYLD_INSERT_LIBRARIES"}},
+			wantMode: Boot, wantSame: true},
+		{name: "boot record, an unset fails", before: Record{Mode: Boot, Build: "b0", At: 42,
+			Vars: []string{"DYLD_INSERT_LIBRARIES"}}, unsetErrKey: "SIMCAM_CHAIN", wantMode: Launchd},
+		{name: "env record, clean", before: Record{Mode: Env, Build: "b0", At: 42}, wantMode: Env, wantSame: true},
+		{name: "env record, an unset fails", before: Record{Mode: Env, Build: "b0", At: 42}, unsetErrKey: "SIMCAM_CHAIN",
+			wantMode: Launchd},
+	} {
+		t.Setenv("SIMCAM_HOME", t.TempDir())
+		f := &fakeSim{env: map[string]string{}}
+		os.MkdirAll(home.Sim("U"), 0o755)
+		if err := home.WriteCurrent("U", "/h/builds/b0/libsimcamloader.dylib"); err != nil {
+			t.Fatal(err)
+		}
+		if err := WriteRecord("U", c.before); err != nil {
+			t.Fatal(err)
+		}
+		rec, _ := os.ReadFile(recordPath("U"))
+		f.failKey, f.unsetErrKey = "DYLD_INSERT_LIBRARIES", c.unsetErrKey
+		if err := ArmLaunchd(f, "U", b2, Vars("U", b2, Options{})); err == nil || !strings.Contains(err.Error(), "rolled back") {
+			t.Fatalf("%s: err %v", c.name, err)
+		}
+		after, _ := os.ReadFile(recordPath("U"))
+		r, err := ReadRecord("U")
+		if err != nil || r.Mode != c.wantMode || r.Build != "b0" || (c.wantSame && string(after) != string(rec)) {
+			t.Errorf("%s: record %s (%v), want mode %s for build b0 (unchanged: %v)", c.name, after, err, c.wantMode, c.wantSame)
+		}
+		if c.unsetErrKey != "" && !slices.Contains(r.Vars, c.unsetErrKey) {
+			t.Errorf("%s: the record doesn't name %s, which is still set: %v", c.name, c.unsetErrKey, r.Vars)
+		}
+		if _, left := f.env[c.unsetErrKey]; c.unsetErrKey != "" && !left {
+			t.Fatalf("%s: %s is not set after the rollback: the case tests nothing", c.name, c.unsetErrKey)
+		}
+		// the unset works at the next try: `down` must then leave nothing of stuntcam's
+		f.unsetErrKey = ""
+		if err := Disarm(f, "U", true); err != nil {
+			t.Fatalf("%s: down: %v", c.name, err)
+		}
+		if len(f.env) != 0 {
+			t.Errorf("%s: after down: %v", c.name, f.env)
+		}
 	}
 }
 
@@ -273,7 +413,7 @@ func TestArmBootRecords(t *testing.T) {
 	}
 }
 
-// config.json keeps & < > as they are (json.Marshal wrote &, which the loader's jstr didn't decode)
+// config.json keeps & < > unescaped (SetEscapeHTML(false)), so paths with & read back as written
 func TestWriteConfigKeepsAmpersand(t *testing.T) {
 	h := filepath.Join(t.TempDir(), "stuntcam e30 & <co>")
 	t.Setenv("SIMCAM_HOME", h)
@@ -333,5 +473,142 @@ func TestWriteConfigEmptyRulesDirAndSize(t *testing.T) {
 	}
 	if err := SetRulesDir("UC", "/r2"); err == nil {
 		t.Fatal("SetRulesDir without a config.json")
+	}
+}
+
+// a re-arm unsets what an earlier launchd arm set and this one doesn't, records both, and sets DYLD_INSERT_LIBRARIES last
+func TestLaunchdArmDropsEarlierVars(t *testing.T) {
+	t.Setenv("SIMCAM_HOME", t.TempDir())
+	s := set(t)
+	f := &fakeSim{env: map[string]string{}}
+	if err := ArmLaunchd(f, "U", s, Vars("U", s, Options{Extra: map[string]string{"SIMCAM_SOURCE": "scene"}})); err != nil {
+		t.Fatal(err)
+	}
+	f.order = nil
+	if err := ArmLaunchd(f, "U", s, Vars("U", s, Options{})); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := f.env["SIMCAM_SOURCE"]; ok {
+		t.Fatal("SIMCAM_SOURCE from the earlier arm is still set")
+	}
+	if last := f.order[len(f.order)-1]; last != "DYLD_INSERT_LIBRARIES" {
+		t.Fatalf("set last: %s (%v)", last, f.order)
+	}
+	r, _ := ReadRecord("U")
+	if got := strings.Join(r.Vars, " "); !strings.Contains(got, "SIMCAM_SOURCE") || !strings.HasPrefix(got, "DYLD_INSERT_LIBRARIES ") {
+		t.Fatalf("record: %v", r.Vars)
+	}
+}
+
+// a failed launchd arm of a sim that another tool also inserts into, and that already had a `current`: the rollback
+// writes the old `current` back, leaves the other tool's DYLD_INSERT_LIBRARIES entry (without stuntcam's stub) and
+// unsets the settings, whether a setting or DYLD_INSERT_LIBRARIES itself didn't stick
+func TestLaunchdArmRollbackRestoresCurrentAndOtherTools(t *testing.T) {
+	for _, failKey := range []string{"SIMCAM_CHAIN", "DYLD_INSERT_LIBRARIES"} {
+		t.Setenv("SIMCAM_HOME", t.TempDir())
+		s := set(t)
+		const before = "/x/libother.dylib:/old/builds/s0/libsimcamstub.dylib"
+		f := &fakeSim{env: map[string]string{"DYLD_INSERT_LIBRARIES": before}, failKey: failKey}
+		os.MkdirAll(home.Sim("U"), 0o755)
+		oldCurrent := []byte("1 /old/builds/b0/libsimcamloader.dylib\n")
+		if err := os.WriteFile(home.CurrentFile("U"), oldCurrent, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		err := ArmLaunchd(f, "U", s, Vars("U", s, Options{}))
+		if err == nil || !strings.Contains(err.Error(), "launchctl setenv "+failKey+" did not stick") ||
+			!strings.Contains(err.Error(), "rolled back") {
+			t.Fatalf("%s: err %v", failKey, err)
+		}
+		if c, _ := os.ReadFile(home.CurrentFile("U")); string(c) != string(oldCurrent) {
+			t.Errorf("%s: current not put back: %q", failKey, c)
+		}
+		// the fake never lets failKey stick, so when DYLD_INSERT_LIBRARIES is the one that fails it still reads as before
+		wantInsert := "/x/libother.dylib"
+		if failKey == "DYLD_INSERT_LIBRARIES" {
+			wantInsert = before
+		}
+		if got := f.env["DYLD_INSERT_LIBRARIES"]; got != wantInsert {
+			t.Errorf("%s: DYLD_INSERT_LIBRARIES %q, want %q", failKey, got, wantInsert)
+		}
+		if len(f.env) != 1 {
+			t.Errorf("%s: variables left: %v", failKey, f.env)
+		}
+	}
+}
+
+// a failed launchd arm of a sim with a boot record from an earlier boot puts that record and its down marker back, and
+// says it rolled back
+func TestLaunchdArmRollbackKeepsBootRecordAndDown(t *testing.T) {
+	t.Setenv("SIMCAM_HOME", t.TempDir())
+	s := set(t)
+	f := &fakeSim{env: map[string]string{}, failKey: "SIMCAM_CHAIN"}
+	os.MkdirAll(home.Sim("U"), 0o755)
+	boot := Record{Mode: Boot, Build: "b0", At: 42, Vars: []string{"DYLD_INSERT_LIBRARIES"}}
+	if err := WriteRecord("U", boot); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := os.ReadFile(recordPath("U"))
+	os.WriteFile(DownMarker("U"), []byte("1\n"), 0o644)
+	err := ArmLaunchd(f, "U", s, Vars("U", s, Options{}))
+	want := "launchctl setenv SIMCAM_CHAIN did not stick (reads \"\"); rolled back (other tools' DYLD_INSERT_LIBRARIES " +
+		"entries kept, stuntcam's removed)"
+	if err == nil || err.Error() != want {
+		t.Fatalf("err %v", err)
+	}
+	if after, _ := os.ReadFile(recordPath("U")); string(after) != string(before) {
+		t.Fatalf("boot record not put back: %s", after)
+	}
+	if _, err := os.Stat(DownMarker("U")); err != nil {
+		t.Fatal("down marker not put back")
+	}
+	if _, err := os.Stat(home.CurrentFile("U")); err == nil {
+		t.Fatal("current left behind")
+	}
+	if len(f.env) != 0 {
+		t.Fatalf("variables left: %v", f.env)
+	}
+}
+
+// a failed launchd arm's rollback leaves arm.json as it found it: none stays none, a boot record and an earlier launchd
+// record are put back byte for byte. After the rollback of a re-arm, the earlier arm's `current` is back and none of its
+// variables is set, which is what its record says once `status` finds the stub gone; `down` then still knows its names.
+func TestLaunchdArmRollbackPutsBackTheRecordItFound(t *testing.T) {
+	for _, before := range []string{"none", "boot", "launchd"} {
+		t.Setenv("SIMCAM_HOME", t.TempDir())
+		s := set(t)
+		f := &fakeSim{env: map[string]string{}}
+		os.MkdirAll(home.Sim("U"), 0o755)
+		switch before {
+		case "boot":
+			if err := WriteRecord("U", Record{Mode: Boot, Build: "b0", At: 42, Vars: []string{"DYLD_INSERT_LIBRARIES"}}); err != nil {
+				t.Fatal(err)
+			}
+		case "launchd": // an earlier launchd arm with a source; the re-arm drops it
+			if err := ArmLaunchd(f, "U", s, Vars("U", s, Options{Extra: map[string]string{"SIMCAM_SOURCE": "scene"}})); err != nil {
+				t.Fatal(err)
+			}
+		}
+		rec, recErr := os.ReadFile(recordPath("U"))
+		cur, curErr := os.ReadFile(home.CurrentFile("U"))
+		// an arm of another build whose stub never sticks
+		s2 := artifacts.Set{Stub: "/h/builds/s2/libsimcamstub.dylib", Loader: "/h/builds/b2/libsimcamloader.dylib",
+			Engine: "/h/builds/b2/libsimcam.dylib"}
+		f.failKey = "DYLD_INSERT_LIBRARIES"
+		if err := ArmLaunchd(f, "U", s2, Vars("U", s2, Options{})); err == nil || !strings.Contains(err.Error(), "rolled back") {
+			t.Fatalf("%s: err %v", before, err)
+		}
+		after, afterErr := os.ReadFile(recordPath("U"))
+		switch {
+		case recErr != nil && afterErr == nil:
+			t.Errorf("%s: the failed arm's record is left: %s", before, after)
+		case recErr == nil && string(after) != string(rec):
+			t.Errorf("%s: record not put back:\n%s\nwant\n%s", before, after, rec)
+		}
+		if c, err := os.ReadFile(home.CurrentFile("U")); (err == nil) != (curErr == nil) || string(c) != string(cur) {
+			t.Errorf("%s: current %q, want %q", before, c, cur)
+		}
+		if len(f.env) != 0 {
+			t.Errorf("%s: variables left: %v", before, f.env)
+		}
 	}
 }

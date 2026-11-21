@@ -19,29 +19,29 @@ func writeApp(t *testing.T, dir, exe string) string {
 	return app
 }
 
-func TestBundleHash(t *testing.T) {
+func TestBundleSHA256(t *testing.T) {
 	a := writeApp(t, t.TempDir(), "v1")
 	b := writeApp(t, t.TempDir(), "v1")
-	ha, _ := BundleHash(a)
-	hb, _ := BundleHash(b)
+	ha, _ := bundleSHA256(a)
+	hb, _ := bundleSHA256(b)
 	if ha == "" || ha != hb {
 		t.Fatalf("same content, different hash: %s %s", ha, hb)
 	}
 	os.WriteFile(filepath.Join(b, "m10canary"), []byte("v2"), 0o755)
-	if h, _ := BundleHash(b); h == ha {
+	if h, _ := bundleSHA256(b); h == ha {
 		t.Fatal("changed executable, same hash")
 	}
 	c := writeApp(t, t.TempDir(), "v1")
 	os.WriteFile(filepath.Join(c, "extra.txt"), nil, 0o644)
-	if h, _ := BundleHash(c); h == ha {
+	if h, _ := bundleSHA256(c); h == ha {
 		t.Fatal("added file, same hash")
 	}
 	d := writeApp(t, t.TempDir(), "v1")
 	os.Rename(filepath.Join(d, "Info.plist"), filepath.Join(d, "Info2.plist"))
-	if h, _ := BundleHash(d); h == ha {
+	if h, _ := bundleSHA256(d); h == ha {
 		t.Fatal("renamed file, same hash")
 	}
-	if _, err := BundleHash(filepath.Join(t.TempDir(), "missing.app")); err == nil {
+	if _, err := bundleSHA256(filepath.Join(t.TempDir(), "missing.app")); err == nil {
 		t.Fatal("missing bundle hashed")
 	}
 }
@@ -58,7 +58,7 @@ func TestPlanInstall(t *testing.T) {
 	t.Setenv("SIMCAM_HOME", t.TempDir())
 	const udid = "5EED0001-0000-4000-8000-00000000B001"
 	src := writeApp(t, t.TempDir(), "build-1")
-	want, _ := BundleHash(src)
+	want, _ := bundleSHA256(src)
 
 	// nothing installed
 	if p := planInstall(t.TempDir(), udid, src); !p.Install || !p.Grant || !strings.Contains(p.Why, "not installed") {

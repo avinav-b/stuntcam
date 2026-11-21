@@ -1,0 +1,28 @@
+{
+  "$schema": "https://context7.com/schema/context7.json",
+  "projectTitle": "stuntcam",
+  "description": "A camera for the iOS Simulator: your app's AVFoundation, VisionCamera, expo-camera or Flutter camera code runs unmodified",
+  "folders": [
+    "cli",
+    "docs"
+  ],
+  "excludeFolders": [
+    "testdata"
+  ],
+  "excludeFiles": [
+    "design.md",
+    "inventory.md",
+    "ledger.md",
+    "renames.md"
+  ],
+  "rules": [
+    "Run `npx stuntcam up` before launching the app in the iOS Simulator; the app needs no code, dependency or project changes.",
+    "Requires an Apple silicon Mac and Xcode 27. iOS Simulator runtimes 17.5, 26.3, 27.0 and 27.2 are verified; on others, `stuntcam up` runs a self-test first and won't arm a simulator where the camera doesn't work.",
+    "Xcode Run (⌘R) and Xcode tests need boot mode: run `npx stuntcam up` with the simulator shut down (`--udid <simulator>` boots it armed), or `npx stuntcam up --reboot` if it is already booted.",
+    "React Native / Expo: `npx stuntcam up`, then `npx expo run:ios`. Flutter: `npx stuntcam up`, then `flutter run`.",
+    "UI tests and CI: `npx stuntcam up --udid $SIM --grant <bundle id>` grants camera and microphone; then `npx stuntcam exec -- xcodebuild test -scheme <scheme> -destination \"platform=iOS Simulator,id=$SIM\"`. Use `id=` destinations, not `name=`.",
+    "Show your own picture with `npx stuntcam source image:/path/photo.png` or `video:/path/clip.mov`, or your Mac's camera with `npx stuntcam source webcam`; `npx stuntcam source scene` returns to the built-in test scene.",
+    "If the camera doesn't appear, run `npx stuntcam doctor`. `npx stuntcam down` turns stuntcam off without a reboot.",
+    "VisionCamera 4 compiles its camera code out of simulator builds and can't work; use VisionCamera 5."
+  ]
+}

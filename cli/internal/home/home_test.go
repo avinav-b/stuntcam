@@ -53,3 +53,21 @@ func TestProtected(t *testing.T) {
 		}
 	}
 }
+
+// a rename that fails (the target is a directory) leaves no temp file behind
+func TestWriteAtomicRenameFailure(t *testing.T) {
+	d := t.TempDir()
+	target := filepath.Join(d, "f")
+	if err := os.Mkdir(filepath.Join(target), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(target, "x"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteAtomic(target, []byte("data")); err == nil {
+		t.Fatal("rename onto a non-empty directory succeeded")
+	}
+	if es, _ := os.ReadDir(d); len(es) != 1 {
+		t.Fatalf("left behind: %v", es)
+	}
+}

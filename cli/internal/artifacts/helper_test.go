@@ -11,9 +11,9 @@ import (
 )
 
 // helper/build.sh's <sha>: sha1 over "<path> <sha1>\n" lines in byte order, first 12 hex digits
-func TestBundleSHAMatchesBuildSh(t *testing.T) {
+func TestHelperBundleSHA1MatchesBuildSh(t *testing.T) {
 	// printf 'Contents/Info.plist %s\nContents/MacOS/stuntcam-camera %s\n' $(printf p | shasum | cut -c1-40) $(printf x | shasum | cut -c1-40) | shasum
-	got := BundleSHA(map[string][]byte{"Contents/MacOS/stuntcam-camera": []byte("x"), "Contents/Info.plist": []byte("p")})
+	got := helperBundleSHA1(map[string][]byte{"Contents/MacOS/stuntcam-camera": []byte("x"), "Contents/Info.plist": []byte("p")})
 	if got != "51b3e2cb3c7a" {
 		t.Fatal(got)
 	}
@@ -24,7 +24,7 @@ func helperMembers(files map[string]string) ([][2]string, string) {
 	for r, c := range files {
 		data[r] = []byte(c)
 	}
-	sha := BundleSHA(data)
+	sha := helperBundleSHA1(data)
 	var ms [][2]string
 	for r, c := range files {
 		ms = append(ms, [2]string{"helper/" + sha + "/" + HelperApp + "/" + r, c})

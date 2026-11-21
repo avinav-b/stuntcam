@@ -44,7 +44,8 @@ var hostProcs = func(udid, deviceDir string) (string, error) {
 		return out.String(), nil
 	}
 	if len(ld) > 0 {
-		args, err := runBounded(exec.Command("/bin/ps", "-ww", "-o", "pid=,ppid=,stat=,command=", "-p", strings.Join(ld, ",")), 2*time.Second)
+		ps := exec.Command("/bin/ps", "-ww", "-o", "pid=,ppid=,stat=,command=", "-p", strings.Join(ld, ","))
+		args, err := runBounded(ps, 2*time.Second)
 		if err != nil {
 			return "", err
 		}
@@ -93,7 +94,8 @@ func springboardFromPS(ps, deviceDir string) (pid string, launchd bool) {
 	boot := strings.TrimRight(deviceDir, "/") + "/data/var/run/launchd_bootstrap.plist"
 	var ld string
 	for _, p := range procs {
-		if strings.HasPrefix(p.cmd, "launchd_sim ") && strings.TrimSpace(strings.TrimPrefix(p.cmd, "launchd_sim ")) == boot && !strings.HasPrefix(p.stat, "Z") {
+		plist, isLaunchdSim := strings.CutPrefix(p.cmd, "launchd_sim ")
+		if isLaunchdSim && strings.TrimSpace(plist) == boot && !strings.HasPrefix(p.stat, "Z") {
 			ld = p.pid
 		}
 	}
@@ -101,7 +103,8 @@ func springboardFromPS(ps, deviceDir string) (pid string, launchd bool) {
 		return "", false
 	}
 	for _, p := range procs {
-		if p.ppid == ld && !strings.HasPrefix(p.stat, "Z") && (p.cmd == "SpringBoard" || strings.HasSuffix(p.cmd, "/SpringBoard.app/SpringBoard")) {
+		isSpringBoard := p.cmd == "SpringBoard" || strings.HasSuffix(p.cmd, "/SpringBoard.app/SpringBoard")
+		if p.ppid == ld && !strings.HasPrefix(p.stat, "Z") && isSpringBoard {
 			return p.pid, true
 		}
 	}
@@ -109,11 +112,10 @@ func springboardFromPS(ps, deviceDir string) (pid string, launchd bool) {
 }
 
 // springboardPID is the guard's poll: host side first. Only if the host can't see the device's launchd_sim at all (ps
-// failed, or a runtime laid out differently) does it ask inside the device as before. A launchd_sim without a SpringBoard
-// child is an answer ("not running yet"), not a reason to spawn: right after bootstatus
-// the spawn poll found nothing the next host poll didn't (29 of 31 found nothing), and under the AVCam xcodebuild loop
-// that one `simctl spawn` took 9.7-11.3 s on 27.0, pushing the guard to 10-14 s. how says which answered.
-// A host poll that fails (ps timed out) is no answer ("host-error"); only the third in a row falls back to spawn.
+// failed, or a runtime laid out differently) does it ask inside the device. A launchd_sim without a SpringBoard child is
+// an answer ("not running yet"), not a reason to spawn: right after bootstatus a spawn poll found nothing the next host
+// poll didn't (29 of 31), and under an xcodebuild loop one `simctl spawn` took 9.7-11.3 s on 27.0. how says which
+// answered. A host poll that fails (ps timed out) is no answer ("host-error"); only the third in a row falls back to spawn.
 func springboardPID(ctl simctl.Ctl, deviceDir, udid string, hostErrs *int) (pid, how string) {
 	ps, err := hostProcs(udid, deviceDir)
 	if err == nil {

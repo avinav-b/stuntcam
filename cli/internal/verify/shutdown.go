@@ -2,6 +2,7 @@
 package verify
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -22,7 +23,7 @@ import (
 //     down, waits until simctl lists it as Shutdown, then releases the lock;
 //   - the next verify for that runtime (or `up`) that finds the lock held by a live owner with that marker waits for it, up
 //     to ShutdownWait, instead of returning inconclusive at once;
-//   - if the child dies, its lock has a dead owner and is taken over as before; a device still "Shutting Down" (or booted)
+//   - if the child dies, its lock has a dead owner and is taken over; a device still "Shutting Down" (or booted)
 //     is then waited for / shut down by the next verify before it boots it (waitDevice, arm.ArmBoot);
 //   - if the child can't be started, or can't be made the lock's owner, Run kills it and shuts the device down itself;
 //   - the child lives at most ShutdownLife (then exits, leaving a dead owner's lock), shuts the device down again only while
@@ -40,8 +41,7 @@ var ShutdownLife = 75 * time.Second
 const staleSlack = 5 * time.Second
 
 // ShutdownWait bounds how long a verify waits for the previous verify's device to finish shutting down: the child's whole
-// life, so a waiter never gives up on a child that would still finish (a shorter wait, e.g. 60 s, would give up on a child that can run
-// ~65 s plus its simctl calls).
+// life plus staleSlack, so a waiter never gives up on a child that would still finish.
 var ShutdownWait = ShutdownLife + staleSlack
 
 // handoffGrace is how long the child waits for its parent to name it the lock's owner before it decides whose lock it is.
@@ -120,9 +120,13 @@ var killChild = func(pid int) {
 func FinishShutdown(udid, lock string, parent int) error {
 	t0 := time.Now()
 	logf := func(f string, a ...any) {
-		fmt.Printf("%s %s pid=%d +%.1fs %s\n", time.Now().Format("2006-01-02 15:04:05"), udid, os.Getpid(), time.Since(t0).Seconds(), fmt.Sprintf(f, a...))
+		now := time.Now().Format("2006-01-02 15:04:05")
+		fmt.Printf("%s %s pid=%d +%.1fs %s\n", now, udid, os.Getpid(), time.Since(t0).Seconds(), fmt.Sprintf(f, a...))
 	}
-	life := time.AfterFunc(ShutdownLife, func() { logf("gave up after %s; the lock is left to the next verify", ShutdownLife); os.Exit(1) })
+	life := time.AfterFunc(ShutdownLife, func() {
+		logf("gave up after %s; the lock is left to the next verify", ShutdownLife)
+		os.Exit(1)
+	})
 	defer life.Stop()
 	owned := func() bool { p := readPid(lock); return p != 0 && (p == os.Getpid() || p == parent) }
 	ctl := simctl.Ctl{Set: home.Devices(), Timeout: ShutdownLife}
@@ -204,37 +208,42 @@ func shuttingDown(dir string) (bool, string) {
 	return p != 0 && pidAlive(p), udid
 }
 
+// lockPoll is how often acquireWait tries the lock again.
+const lockPoll = 200 * time.Millisecond
+
 // acquireWait is acquire, except that a lock held by the previous verify's device shutdown is waited for, up to max.
-func acquireWait(dir string, max time.Duration, say func(string)) (bool, string) {
+func acquireWait(dir string, max time.Duration, say func(string)) error {
 	start := time.Now()
 	said := false
 	for {
-		ok, why := acquire(dir)
-		if ok {
+		err := acquire(dir)
+		if err == nil {
 			if said {
 				mark("lock-wait %.1f", time.Since(start).Seconds())
 			}
-			return true, ""
+			return nil
 		}
-		if strings.HasPrefix(why, "mkdir ") { // the lock can't be made at all (no $SIMCAM_HOME, EACCES, ENOSPC): no waiting
-			return false, why
+		var noDir lockDirError
+		if errors.As(err, &noDir) { // the lock can't be made at all: no waiting
+			return err
 		}
 		sd, udid := shuttingDown(dir)
 		if !sd {
-			if _, err := os.Stat(dir); os.IsNotExist(err) && time.Since(start) < max {
-				time.Sleep(200 * time.Millisecond) // released between acquire's look and ours (the child finished): try again
+			if _, statErr := os.Stat(dir); os.IsNotExist(statErr) && time.Since(start) < max {
+				time.Sleep(lockPoll) // released between acquire's look and ours (the child finished): try again
 				continue
 			}
-			return false, why
+			return err
 		}
 		if time.Since(start) >= max {
-			return false, fmt.Sprintf("the previous verify's device %s is still shutting down after %s; lock %s", udid, max.Round(time.Second), dir)
+			return fmt.Errorf("the previous verify's device %s is still shutting down after %s; lock %s",
+				udid, max.Round(time.Second), dir)
 		}
 		if !said {
 			said = true
 			say(fmt.Sprintf("waiting for the previous verify's device %s to finish shutting down", udid))
 		}
-		time.Sleep(200 * time.Millisecond)
+		time.Sleep(lockPoll)
 	}
 }
 

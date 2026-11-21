@@ -84,7 +84,7 @@ func TestReadPlistBinary(t *testing.T) {
 	}
 }
 
-// r2 M-1: where xcodebuild looks for -scheme
+// where xcodebuild looks for -scheme
 func TestLocate(t *testing.T) {
 	d := t.TempDir()
 	mk := func(p string) string {
@@ -115,7 +115,7 @@ func TestLocate(t *testing.T) {
 	}
 }
 
-// r2 L-3: a configuration's nested sanitizer options merge over the defaults'
+// a configuration's nested sanitizer options merge over the defaults'
 func TestPlanNestedOverride(t *testing.T) {
 	pf := filepath.Join(t.TempDir(), "p.xctestplan")
 	os.WriteFile(pf, []byte(`{"configurations":[{"name":"C","options":{"addressSanitizer":{"detectStackUseAfterReturn":true}}}],

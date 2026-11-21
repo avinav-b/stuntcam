@@ -1,0 +1,945 @@
+== pass
+launches: 1
+redo ran: []
+state=pass cached=false
+{
+ "proto": 0,
+ "key": "k",
+ "verdict": "pass",
+ "result": "RESULT core=PASS ext=PASS t=13.4s",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "times": "create=0s boot=0s canary=0s total=0s",
+ "at": 1,
+ "notes": [
+  "canary /x"
+ ]
+}
+cache file:
+{
+ "proto": 1,
+ "key": "k",
+ "verdict": "pass",
+ "result": "RESULT core=PASS ext=PASS t=13.4s",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "times": "create=0s boot=0s canary=0s total=0s",
+ "at": 1,
+ "notes": [
+  "canary /x"
+ ]
+}
+== retried pass
+launches: 1
+redo ran: []
+state=pass cached=false
+{
+ "proto": 0,
+ "key": "k",
+ "verdict": "pass",
+ "result": "RESULT core=PASS ext=PASS t=16.7s retried:[photo-4x3: longest frame gap 215 ms -\u003e retry ok]",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "times": "create=0s boot=0s canary=0s total=0s",
+ "at": 1,
+ "notes": [
+  "canary /x",
+  "canary stage retried: photo-4x3: longest frame gap 215 ms -\u003e retry ok"
+ ],
+ "retried": "photo-4x3: longest frame gap 215 ms -\u003e retry ok"
+}
+cache file:
+{
+ "proto": 1,
+ "key": "k",
+ "verdict": "pass",
+ "result": "RESULT core=PASS ext=PASS t=16.7s retried:[photo-4x3: longest frame gap 215 ms -\u003e retry ok]",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "times": "create=0s boot=0s canary=0s total=0s",
+ "at": 1,
+ "notes": [
+  "canary /x",
+  "canary stage retried: photo-4x3: longest frame gap 215 ms -\u003e retry ok"
+ ],
+ "retried": "photo-4x3: longest frame gap 215 ms -\u003e retry ok"
+}
+== fail confirmed
+launches: 1 c
+redo ran: []
+state=fail cached=false
+{
+ "proto": 0,
+ "key": "k",
+ "verdict": "fail(photo-then-stop: didFinishCaptureFor before didStopRunning)",
+ "result": "RESULT core=FAIL ext=PASS t=13.2s core:[photo-then-stop: didFinishCaptureFor before didStopRunning]",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "times": "create=0s boot=0s canary=0s total=0s",
+ "at": 1,
+ "notes": [
+  "canary /x",
+  "confirmed by a second launch: fail(photo-then-stop: didFinishCaptureFor before didStopRunning)"
+ ]
+}
+cache file:
+{
+ "proto": 1,
+ "key": "k",
+ "verdict": "fail(photo-then-stop: didFinishCaptureFor before didStopRunning)",
+ "result": "RESULT core=FAIL ext=PASS t=13.2s core:[photo-then-stop: didFinishCaptureFor before didStopRunning]",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "times": "create=0s boot=0s canary=0s total=0s",
+ "at": 1,
+ "notes": [
+  "canary /x",
+  "confirmed by a second launch: fail(photo-then-stop: didFinishCaptureFor before didStopRunning)"
+ ]
+}
+== fail confirmed by another fail
+launches: 1 c
+redo ran: []
+state=fail cached=false
+{
+ "proto": 0,
+ "key": "k",
+ "verdict": "fail(photo-jpeg: fileDataRepresentation decodes)",
+ "result": "RESULT core=FAIL ext=PASS t=13.3s core:[photo-jpeg: fileDataRepresentation decodes] ext:[x]",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "times": "create=0s boot=0s canary=0s total=0s",
+ "at": 1,
+ "notes": [
+  "canary /x",
+  "confirmed by a second launch: fail(photo-then-stop: didFinishCaptureFor before didStopRunning)"
+ ]
+}
+cache file:
+{
+ "proto": 1,
+ "key": "k",
+ "verdict": "fail(photo-jpeg: fileDataRepresentation decodes)",
+ "result": "RESULT core=FAIL ext=PASS t=13.3s core:[photo-jpeg: fileDataRepresentation decodes] ext:[x]",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "times": "create=0s boot=0s canary=0s total=0s",
+ "at": 1,
+ "notes": [
+  "canary /x",
+  "confirmed by a second launch: fail(photo-then-stop: didFinishCaptureFor before didStopRunning)"
+ ]
+}
+== fail then pass
+launches: 1 c
+redo ran: []
+state=pass cached=false
+{
+ "proto": 0,
+ "key": "k",
+ "verdict": "pass",
+ "result": "RESULT core=PASS ext=PASS t=13.4s",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "times": "create=0s boot=0s canary=0s total=0s",
+ "at": 1,
+ "notes": [
+  "canary /x",
+  "the first launch failed (fail(photo-then-stop: didFinishCaptureFor before didStopRunning)); the launch run to confirm it passed"
+ ],
+ "failed_first": "RESULT core=FAIL ext=PASS t=13.2s core:[photo-then-stop: didFinishCaptureFor before didStopRunning]"
+}
+cache file:
+{
+ "proto": 1,
+ "key": "k",
+ "verdict": "pass",
+ "result": "RESULT core=PASS ext=PASS t=13.4s",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "times": "create=0s boot=0s canary=0s total=0s",
+ "at": 1,
+ "notes": [
+  "canary /x",
+  "the first launch failed (fail(photo-then-stop: didFinishCaptureFor before didStopRunning)); the launch run to confirm it passed"
+ ],
+ "failed_first": "RESULT core=FAIL ext=PASS t=13.2s core:[photo-then-stop: didFinishCaptureFor before didStopRunning]"
+}
+== fail then inconclusive
+launches: 1 c
+redo ran: []
+state=fail cached=false
+{
+ "proto": 0,
+ "key": "k",
+ "verdict": "fail(photo-then-stop: didFinishCaptureFor before didStopRunning)",
+ "result": "RESULT core=FAIL ext=PASS t=13.2s core:[photo-then-stop: didFinishCaptureFor before didStopRunning]",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "times": "create=0s boot=0s canary=0s total=0s",
+ "at": 1,
+ "notes": [
+  "canary /x",
+  "not cached: the launch run to confirm this fail gave no verdict (inconclusive(core=INCONCLUSIVE ext=PASS t=18.0s timing:[frames: A frames=4 (\u003e= 12 in window)]))"
+ ]
+}
+cache file: none
+== fail then crash
+launches: 1 c
+redo ran: []
+state=fail cached=false
+{
+ "proto": 0,
+ "key": "k",
+ "verdict": "fail(photo-then-stop: didFinishCaptureFor before didStopRunning)",
+ "result": "RESULT core=FAIL ext=PASS t=13.2s core:[photo-then-stop: didFinishCaptureFor before didStopRunning]",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "times": "create=0s boot=0s canary=0s total=0s",
+ "at": 1,
+ "notes": [
+  "canary /x",
+  "not cached: the launch run to confirm this fail gave no verdict (fail(canary exited without a verdict (crash); last: CANARY| 6.1 ok x))"
+ ]
+}
+cache file: none
+== long fail then pass
+launches: 1 c
+redo ran: []
+state=pass cached=false
+{
+ "proto": 0,
+ "key": "k",
+ "verdict": "pass",
+ "result": "RESULT core=PASS ext=PASS t=13.4s",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "times": "create=0s boot=0s canary=0s total=0s",
+ "at": 1,
+ "notes": [
+  "canary /x",
+  "the first launch failed (fail(photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; ); the launch run to confirm it passed"
+ ],
+ "failed_first": "RESULT core=FAIL ext=PASS t=13.2s core:[photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: "
+}
+cache file:
+{
+ "proto": 1,
+ "key": "k",
+ "verdict": "pass",
+ "result": "RESULT core=PASS ext=PASS t=13.4s",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "times": "create=0s boot=0s canary=0s total=0s",
+ "at": 1,
+ "notes": [
+  "canary /x",
+  "the first launch failed (fail(photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; ); the launch run to confirm it passed"
+ ],
+ "failed_first": "RESULT core=FAIL ext=PASS t=13.2s core:[photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: "
+}
+== long fail confirmed
+launches: 1 c
+redo ran: []
+state=fail cached=false
+{
+ "proto": 0,
+ "key": "k",
+ "verdict": "fail(photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a l)",
+ "result": "RESULT core=FAIL ext=PASS t=13.2s core:[photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; ]",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "times": "create=0s boot=0s canary=0s total=0s",
+ "at": 1,
+ "notes": [
+  "canary /x",
+  "confirmed by a second launch: fail(photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; "
+ ]
+}
+cache file:
+{
+ "proto": 1,
+ "key": "k",
+ "verdict": "fail(photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a l)",
+ "result": "RESULT core=FAIL ext=PASS t=13.2s core:[photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; ]",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "times": "create=0s boot=0s canary=0s total=0s",
+ "at": 1,
+ "notes": [
+  "canary /x",
+  "confirmed by a second launch: fail(photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; photo-jpeg: a long check text; "
+ ]
+}
+== inconclusive then pass
+launches: 1 2
+redo ran: [true]
+state=pass cached=false
+{
+ "proto": 0,
+ "key": "k",
+ "verdict": "pass",
+ "result": "RESULT core=PASS ext=PASS t=13.4s",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "times": "create=0s boot=0s canary=0s total=0s",
+ "at": 1,
+ "notes": [
+  "canary /x",
+  "first run: RESULT core=INCONCLUSIVE ext=PASS t=18.0s timing:[frames: A frames=4 (\u003e= 12 in window)]"
+ ],
+ "relaunched": "RESULT core=INCONCLUSIVE ext=PASS t=18.0s timing:[frames: A frames=4 (\u003e= 12 in window)]"
+}
+cache file:
+{
+ "proto": 1,
+ "key": "k",
+ "verdict": "pass",
+ "result": "RESULT core=PASS ext=PASS t=13.4s",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "times": "create=0s boot=0s canary=0s total=0s",
+ "at": 1,
+ "notes": [
+  "canary /x",
+  "first run: RESULT core=INCONCLUSIVE ext=PASS t=18.0s timing:[frames: A frames=4 (\u003e= 12 in window)]"
+ ],
+ "relaunched": "RESULT core=INCONCLUSIVE ext=PASS t=18.0s timing:[frames: A frames=4 (\u003e= 12 in window)]"
+}
+== inconclusive then retried pass
+launches: 1 2
+redo ran: [true]
+state=pass cached=false
+{
+ "proto": 0,
+ "key": "k",
+ "verdict": "pass",
+ "result": "RESULT core=PASS ext=PASS t=16.7s retried:[photo-4x3: longest frame gap 215 ms -\u003e retry ok]",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "times": "create=0s boot=0s canary=0s total=0s",
+ "at": 1,
+ "notes": [
+  "canary /x",
+  "first run: RESULT core=INCONCLUSIVE ext=PASS t=18.0s timing:[frames: A frames=4 (\u003e= 12 in window)]",
+  "canary stage retried: photo-4x3: longest frame gap 215 ms -\u003e retry ok"
+ ],
+ "retried": "photo-4x3: longest frame gap 215 ms -\u003e retry ok",
+ "relaunched": "RESULT core=INCONCLUSIVE ext=PASS t=18.0s timing:[frames: A frames=4 (\u003e= 12 in window)]"
+}
+cache file:
+{
+ "proto": 1,
+ "key": "k",
+ "verdict": "pass",
+ "result": "RESULT core=PASS ext=PASS t=16.7s retried:[photo-4x3: longest frame gap 215 ms -\u003e retry ok]",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "times": "create=0s boot=0s canary=0s total=0s",
+ "at": 1,
+ "notes": [
+  "canary /x",
+  "first run: RESULT core=INCONCLUSIVE ext=PASS t=18.0s timing:[frames: A frames=4 (\u003e= 12 in window)]",
+  "canary stage retried: photo-4x3: longest frame gap 215 ms -\u003e retry ok"
+ ],
+ "retried": "photo-4x3: longest frame gap 215 ms -\u003e retry ok",
+ "relaunched": "RESULT core=INCONCLUSIVE ext=PASS t=18.0s timing:[frames: A frames=4 (\u003e= 12 in window)]"
+}
+== inconclusive then crash
+launches: 1 2
+redo ran: [true]
+state=inconclusive cached=false
+{
+ "proto": 0,
+ "key": "k",
+ "verdict": "inconclusive(core=INCONCLUSIVE (the canary crashed once, after an inconclusive first run; not cached))",
+ "result": "RESULT core=INCONCLUSIVE (the canary crashed once, after an inconclusive first run; not cached)",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "times": "create=0s boot=0s canary=0s total=0s",
+ "at": 1,
+ "notes": [
+  "canary /x",
+  "first run: RESULT core=INCONCLUSIVE ext=PASS t=18.0s timing:[frames: A frames=4 (\u003e= 12 in window)]"
+ ],
+ "relaunched": "RESULT core=INCONCLUSIVE ext=PASS t=18.0s timing:[frames: A frames=4 (\u003e= 12 in window)]"
+}
+cache file: none
+== inconclusive twice
+launches: 1 2
+redo ran: [true]
+state=inconclusive cached=false
+{
+ "proto": 0,
+ "key": "k",
+ "verdict": "inconclusive(core=INCONCLUSIVE ext=INCONCLUSIVE watchdog stage=movie after 45s)",
+ "result": "RESULT core=INCONCLUSIVE ext=INCONCLUSIVE watchdog stage=movie after 45s",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "times": "create=0s boot=0s canary=0s total=0s",
+ "at": 1,
+ "notes": [
+  "canary /x",
+  "first run: RESULT core=INCONCLUSIVE ext=PASS t=18.0s timing:[frames: A frames=4 (\u003e= 12 in window)]"
+ ],
+ "relaunched": "RESULT core=INCONCLUSIVE ext=PASS t=18.0s timing:[frames: A frames=4 (\u003e= 12 in window)]"
+}
+cache file: none
+== inconclusive, fail, fail
+launches: 1 2 c
+redo ran: [true]
+state=fail cached=false
+{
+ "proto": 0,
+ "key": "k",
+ "verdict": "fail(photo-jpeg: fileDataRepresentation decodes)",
+ "result": "RESULT core=FAIL ext=PASS t=13.3s core:[photo-jpeg: fileDataRepresentation decodes] ext:[x]",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "times": "create=0s boot=0s canary=0s total=0s",
+ "at": 1,
+ "notes": [
+  "canary /x",
+  "first run: RESULT core=INCONCLUSIVE ext=PASS t=18.0s timing:[frames: A frames=4 (\u003e= 12 in window)]",
+  "confirmed by a second launch: fail(photo-then-stop: didFinishCaptureFor before didStopRunning)"
+ ],
+ "relaunched": "RESULT core=INCONCLUSIVE ext=PASS t=18.0s timing:[frames: A frames=4 (\u003e= 12 in window)]"
+}
+cache file:
+{
+ "proto": 1,
+ "key": "k",
+ "verdict": "fail(photo-jpeg: fileDataRepresentation decodes)",
+ "result": "RESULT core=FAIL ext=PASS t=13.3s core:[photo-jpeg: fileDataRepresentation decodes] ext:[x]",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "times": "create=0s boot=0s canary=0s total=0s",
+ "at": 1,
+ "notes": [
+  "canary /x",
+  "first run: RESULT core=INCONCLUSIVE ext=PASS t=18.0s timing:[frames: A frames=4 (\u003e= 12 in window)]",
+  "confirmed by a second launch: fail(photo-then-stop: didFinishCaptureFor before didStopRunning)"
+ ],
+ "relaunched": "RESULT core=INCONCLUSIVE ext=PASS t=18.0s timing:[frames: A frames=4 (\u003e= 12 in window)]"
+}
+== inconclusive, fail, pass
+launches: 1 2 c
+redo ran: [true]
+state=pass cached=false
+{
+ "proto": 0,
+ "key": "k",
+ "verdict": "pass",
+ "result": "RESULT core=PASS ext=PASS t=13.4s",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "times": "create=0s boot=0s canary=0s total=0s",
+ "at": 1,
+ "notes": [
+  "canary /x",
+  "first run: RESULT core=INCONCLUSIVE ext=PASS t=18.0s timing:[frames: A frames=4 (\u003e= 12 in window)]",
+  "the first launch failed (fail(photo-then-stop: didFinishCaptureFor before didStopRunning)); the launch run to confirm it passed"
+ ],
+ "relaunched": "RESULT core=INCONCLUSIVE ext=PASS t=18.0s timing:[frames: A frames=4 (\u003e= 12 in window)]",
+ "failed_first": "RESULT core=FAIL ext=PASS t=13.2s core:[photo-then-stop: didFinishCaptureFor before didStopRunning]"
+}
+cache file:
+{
+ "proto": 1,
+ "key": "k",
+ "verdict": "pass",
+ "result": "RESULT core=PASS ext=PASS t=13.4s",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "times": "create=0s boot=0s canary=0s total=0s",
+ "at": 1,
+ "notes": [
+  "canary /x",
+  "first run: RESULT core=INCONCLUSIVE ext=PASS t=18.0s timing:[frames: A frames=4 (\u003e= 12 in window)]",
+  "the first launch failed (fail(photo-then-stop: didFinishCaptureFor before didStopRunning)); the launch run to confirm it passed"
+ ],
+ "relaunched": "RESULT core=INCONCLUSIVE ext=PASS t=18.0s timing:[frames: A frames=4 (\u003e= 12 in window)]",
+ "failed_first": "RESULT core=FAIL ext=PASS t=13.2s core:[photo-then-stop: didFinishCaptureFor before didStopRunning]"
+}
+== crash then crash
+launches: 1 2
+redo ran: [true]
+state=fail cached=false
+{
+ "proto": 0,
+ "key": "k",
+ "verdict": "fail(canary exited without a verdict (crash); last: CANARY| yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy)",
+ "result": "RESULT core=FAIL ext=FAIL core:[canary exited without a verdict (crash); last: CANARY| yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy]",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "times": "create=0s boot=0s canary=0s total=0s",
+ "at": 1,
+ "notes": [
+  "canary /x",
+  "first run: RESULT core=FAIL ext=FAIL core:[canary exited without a verdict (crash); last: CANARY| 6.1 ok x]"
+ ],
+ "relaunched": "RESULT core=FAIL ext=FAIL core:[canary exited without a verdict (crash); last: CANARY| 6.1 ok x]"
+}
+cache file:
+{
+ "proto": 1,
+ "key": "k",
+ "verdict": "fail(canary exited without a verdict (crash); last: CANARY| yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy)",
+ "result": "RESULT core=FAIL ext=FAIL core:[canary exited without a verdict (crash); last: CANARY| yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy]",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "times": "create=0s boot=0s canary=0s total=0s",
+ "at": 1,
+ "notes": [
+  "canary /x",
+  "first run: RESULT core=FAIL ext=FAIL core:[canary exited without a verdict (crash); last: CANARY| 6.1 ok x]"
+ ],
+ "relaunched": "RESULT core=FAIL ext=FAIL core:[canary exited without a verdict (crash); last: CANARY| 6.1 ok x]"
+}
+== crash then pass
+launches: 1 2
+redo ran: [true]
+state=pass cached=false
+{
+ "proto": 0,
+ "key": "k",
+ "verdict": "pass",
+ "result": "RESULT core=PASS ext=PASS t=13.4s",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "times": "create=0s boot=0s canary=0s total=0s",
+ "at": 1,
+ "notes": [
+  "canary /x",
+  "first run: RESULT core=FAIL ext=FAIL core:[canary exited without a verdict (crash); last: CANARY| 6.1 ok x]"
+ ],
+ "relaunched": "RESULT core=FAIL ext=FAIL core:[canary exited without a verdict (crash); last: CANARY| 6.1 ok x]"
+}
+cache file:
+{
+ "proto": 1,
+ "key": "k",
+ "verdict": "pass",
+ "result": "RESULT core=PASS ext=PASS t=13.4s",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "times": "create=0s boot=0s canary=0s total=0s",
+ "at": 1,
+ "notes": [
+  "canary /x",
+  "first run: RESULT core=FAIL ext=FAIL core:[canary exited without a verdict (crash); last: CANARY| 6.1 ok x]"
+ ],
+ "relaunched": "RESULT core=FAIL ext=FAIL core:[canary exited without a verdict (crash); last: CANARY| 6.1 ok x]"
+}
+== crash then inconclusive
+launches: 1 2
+redo ran: [true]
+state=inconclusive cached=false
+{
+ "proto": 0,
+ "key": "k",
+ "verdict": "inconclusive(core=INCONCLUSIVE ext=PASS t=18.0s timing:[frames: A frames=4 (\u003e= 12 in window)])",
+ "result": "RESULT core=INCONCLUSIVE ext=PASS t=18.0s timing:[frames: A frames=4 (\u003e= 12 in window)]",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "times": "create=0s boot=0s canary=0s total=0s",
+ "at": 1,
+ "notes": [
+  "canary /x",
+  "first run: RESULT core=FAIL ext=FAIL core:[canary exited without a verdict (crash); last: CANARY| yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+ ],
+ "relaunched": "RESULT core=FAIL ext=FAIL core:[canary exited without a verdict (crash); last: CANARY| yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy]"
+}
+cache file: none
+== timeout twice
+launches: 1 2
+redo ran: [true]
+state=inconclusive cached=false
+{
+ "proto": 0,
+ "key": "k",
+ "verdict": "inconclusive(core=INCONCLUSIVE (no verdict in 60 s; last: ))",
+ "result": "RESULT core=INCONCLUSIVE (no verdict in 60 s; last: )",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "times": "create=0s boot=0s canary=0s total=0s",
+ "at": 1,
+ "notes": [
+  "canary /x",
+  "first run: RESULT core=INCONCLUSIVE (no verdict in 60 s; last: CANARY| photo-4x3 start)"
+ ],
+ "relaunched": "RESULT core=INCONCLUSIVE (no verdict in 60 s; last: CANARY| photo-4x3 start)"
+}
+cache file: none
+== timeout then fail then fail
+launches: 1 2 c
+redo ran: [true]
+state=fail cached=false
+{
+ "proto": 0,
+ "key": "k",
+ "verdict": "fail(photo-then-stop: didFinishCaptureFor before didStopRunning)",
+ "result": "RESULT core=FAIL ext=PASS t=13.2s core:[photo-then-stop: didFinishCaptureFor before didStopRunning]",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "times": "create=0s boot=0s canary=0s total=0s",
+ "at": 1,
+ "notes": [
+  "canary /x",
+  "first run: RESULT core=INCONCLUSIVE (no verdict in 60 s; last: CANARY| photo-4x3 start)",
+  "confirmed by a second launch: fail(photo-then-stop: didFinishCaptureFor before didStopRunning)"
+ ],
+ "relaunched": "RESULT core=INCONCLUSIVE (no verdict in 60 s; last: CANARY| photo-4x3 start)"
+}
+cache file:
+{
+ "proto": 1,
+ "key": "k",
+ "verdict": "fail(photo-then-stop: didFinishCaptureFor before didStopRunning)",
+ "result": "RESULT core=FAIL ext=PASS t=13.2s core:[photo-then-stop: didFinishCaptureFor before didStopRunning]",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "times": "create=0s boot=0s canary=0s total=0s",
+ "at": 1,
+ "notes": [
+  "canary /x",
+  "first run: RESULT core=INCONCLUSIVE (no verdict in 60 s; last: CANARY| photo-4x3 start)",
+  "confirmed by a second launch: fail(photo-then-stop: didFinishCaptureFor before didStopRunning)"
+ ],
+ "relaunched": "RESULT core=INCONCLUSIVE (no verdict in 60 s; last: CANARY| photo-4x3 start)"
+}
+== refused, reboot, pass
+launches: 1 reboot 1r
+redo ran: []
+state=pass cached=false
+{
+ "proto": 0,
+ "key": "k",
+ "verdict": "pass",
+ "result": "RESULT core=PASS ext=PASS t=13.4s",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "times": "create=0s boot=0s canary=0s total=0s",
+ "at": 1,
+ "notes": [
+  "canary /x",
+  "every launch refused this boot; rebooted once"
+ ]
+}
+cache file:
+{
+ "proto": 1,
+ "key": "k",
+ "verdict": "pass",
+ "result": "RESULT core=PASS ext=PASS t=13.4s",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "times": "create=0s boot=0s canary=0s total=0s",
+ "at": 1,
+ "notes": [
+  "canary /x",
+  "every launch refused this boot; rebooted once"
+ ]
+}
+== refused, reboot, refused, pass
+launches: 1 reboot 1r 2
+redo ran: [false]
+state=pass cached=false
+{
+ "proto": 0,
+ "key": "k",
+ "verdict": "pass",
+ "result": "RESULT core=PASS ext=PASS t=13.4s",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "times": "create=0s boot=0s canary=0s total=0s",
+ "at": 1,
+ "notes": [
+  "canary /x",
+  "every launch refused this boot; rebooted once",
+  "first run: RESULT core=INCONCLUSIVE (every launch refused: Busy)"
+ ],
+ "relaunched": "RESULT core=INCONCLUSIVE (every launch refused: Busy)"
+}
+cache file:
+{
+ "proto": 1,
+ "key": "k",
+ "verdict": "pass",
+ "result": "RESULT core=PASS ext=PASS t=13.4s",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "times": "create=0s boot=0s canary=0s total=0s",
+ "at": 1,
+ "notes": [
+  "canary /x",
+  "every launch refused this boot; rebooted once",
+  "first run: RESULT core=INCONCLUSIVE (every launch refused: Busy)"
+ ],
+ "relaunched": "RESULT core=INCONCLUSIVE (every launch refused: Busy)"
+}
+== refused, reboot fails
+launches: 1 reboot
+redo ran: []
+state=inconclusive cached=false
+{
+ "proto": 0,
+ "key": "k",
+ "verdict": "inconclusive(reboot after refused launches: simctl boot U: exit status 149)",
+ "result": "",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "at": 1,
+ "notes": [
+  "canary /x",
+  "every launch refused this boot; rebooted once"
+ ]
+}
+cache file: none
+== not started, redo, pass
+launches: 1 2
+redo ran: [false]
+state=pass cached=false
+{
+ "proto": 0,
+ "key": "k",
+ "verdict": "pass",
+ "result": "RESULT core=PASS ext=PASS t=13.4s",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "times": "create=0s boot=0s canary=0s total=0s",
+ "at": 1,
+ "notes": [
+  "canary /x",
+  "first run: RESULT core=INCONCLUSIVE (launch failed: exec: \"xcrun\": executable file not found in $PATH)",
+  "the canary did not start with the install or grant skipped: reinstalled and granted"
+ ],
+ "relaunched": "RESULT core=INCONCLUSIVE (launch failed: exec: \"xcrun\": executable file not found in $PATH)"
+}
+cache file:
+{
+ "proto": 1,
+ "key": "k",
+ "verdict": "pass",
+ "result": "RESULT core=PASS ext=PASS t=13.4s",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "times": "create=0s boot=0s canary=0s total=0s",
+ "at": 1,
+ "notes": [
+  "canary /x",
+  "first run: RESULT core=INCONCLUSIVE (launch failed: exec: \"xcrun\": executable file not found in $PATH)",
+  "the canary did not start with the install or grant skipped: reinstalled and granted"
+ ],
+ "relaunched": "RESULT core=INCONCLUSIVE (launch failed: exec: \"xcrun\": executable file not found in $PATH)"
+}
+== not started, redo fails
+launches: 1
+redo ran: [false]
+state=inconclusive cached=false
+{
+ "proto": 0,
+ "key": "k",
+ "verdict": "inconclusive(install failed: x)",
+ "result": "",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "at": 1,
+ "notes": [
+  "canary /x",
+  "first run: RESULT core=INCONCLUSIVE (launch failed: exec: \"xcrun\": executable file not found in $PATH)"
+ ]
+}
+cache file: none
+== cache bypassed
+launches: 1 c
+redo ran: []
+state=pass cached=false
+{
+ "proto": 0,
+ "key": "k",
+ "verdict": "pass",
+ "result": "RESULT core=PASS ext=PASS t=13.4s",
+ "runtime_build": "",
+ "engine_build": "",
+ "stub_build": "",
+ "canary_sha": "",
+ "profile_sha": "",
+ "device": "",
+ "times": "create=0s boot=0s canary=0s total=0s",
+ "at": 1,
+ "notes": [
+  "canary /x",
+  "the first launch failed (fail(photo-then-stop: didFinishCaptureFor before didStopRunning)); the launch run to confirm it passed"
+ ],
+ "failed_first": "RESULT core=FAIL ext=PASS t=13.2s core:[photo-then-stop: didFinishCaptureFor before didStopRunning]"
+}
+cache file: none

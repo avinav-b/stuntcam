@@ -11,14 +11,15 @@
 #            (both for the image source only, whose picture is static; the movie covers audio.inc's append path and its
 #            conversion; by index, because the encoder refines a still picture frame by frame).
 #   compare  per case, whether the two captures hold the same set of distinct frames (and photo and movie frames),
-#            and that each has every case of the other. Exit 1 on any difference. Frame counts are not compared: which frames of a moving source fall inside the window depends
-#            on timing, so the scene and video runs are long enough to see every frame they have (the scene's moving
-#            bar repeats every 160 frames; the video is $SIMCAM_HOME/golden/slow10.mov, 30 frames at 10 fps, made once
-#            with tools/mkvideo, so each of its frames lasts 3 ticks).
-set -u; ROOT="$(cd "$(dirname "$0")/.." && pwd)"; source $ROOT/scripts/env.sh
+#            and that each has every case of the other. Exit 1 on any difference. Frame counts are not compared:
+#            which frames of a moving source fall inside the window depends on timing, so the scene and video runs
+#            are long enough to see every frame they have (the scene's moving bar repeats every 160 frames; the video
+#            is $SIMCAM_HOME/golden/slow10.mov, 30 frames at 10 fps, made once with tools/mkvideo, so each of its
+#            frames lasts 3 ticks).
+set -u; ROOT="$(cd "$(dirname "$0")/.." && pwd)"; source $ROOT/scripts/env.sh; source $ROOT/scripts/common.sh
 CMD=${1:?capture|compare}; shift
 B=dev.simcam.spike.m10plain
-# case: name source-kind W H fps fmt pos rot mirror orientation
+# case: name W H fps fmt pos rot mirror orientation (the source comes from SOURCES)
 CASES=(
   "p1080bgra   1920 1080 30 bgra back  90  0 portrait"
   "p1080v      1920 1080 30 420v back  0   0 portrait"
@@ -43,7 +44,7 @@ case $CMD in
       $ROOT/tools/bin/mkvideo $SIMCAM_HOME/golden/slow10.mov 10 30 >/dev/null || exit 1
     fi
     for rt in ${=RTS:-263 27}; do
-      V=SIMCAM_UDID_$rt; U=${(P)V:-}; [[ -n $U ]] || { echo "$0: set $V" >&2; exit 2; }
+      need_udid "$0" "$rt" U short
       PREV=$(cat $SIMCAM_HOME/sims/$U/current 2>/dev/null)
       [[ -n $LDR ]] && $ROOT/scripts/swap.sh $U $LDR >/dev/null
       CUR=$(<$SIMCAM_HOME/sims/$U/current); CUR=${CUR#1 }; echo "== $rt: engine ${CUR:h:t}"
@@ -59,12 +60,15 @@ case $CMD in
         xcrun simctl terminate $U $B 2>/dev/null
         env $ENVS xcrun simctl launch --console-pty $U $B > $LOG 2>&1 &
         LP=$!
-        for i in {1..400}; do sleep 0.1; grep -q "DONE" $LOG && break; kill -0 $LP 2>/dev/null || break; done
+        wait_for_line $LOG DONE 400 $LP   # up to 40 s
         kill $LP 2>/dev/null; xcrun simctl terminate $U $B 2>/dev/null
         { grep -oE "GFH [^ ]+" $LOG | cut -c5-; grep -oE "GFPHOTO [^ ]+" $LOG | sed 's/GFPHOTO/photo/'; grep -oE "GFMOVIE [0-9]+ [^ ]+" $LOG | tr -d '\r' | sed 's/^GFMOVIE/movie/'; } | LC_ALL=C sort -u > $OUT/$rt-$NAME.txt
         printf "%-22s %s %s\n" $NAME "$(grep -oE 'GFSTAT.*|GFMOVIESTAT [^ ]+ [^ ]+' $LOG | tr -d '\r' | tr '\n' ' ')" "$(grep -cE '\| FAIL' $LOG | sed 's/^0$//;s/^[1-9].*/FAIL (see log)/')"
       done; done
-      if [[ -n $LDR && -n $PREV ]]; then $ROOT/scripts/swap.sh $U "${PREV#1 }" >/dev/null; fi   # an `if`: a false && list as the loop's last statement made the exit status 1
+      # an `if`: a false && list as the loop's last statement made the exit status 1
+      if [[ -n $LDR && -n $PREV ]]; then
+        $ROOT/scripts/swap.sh $U "${PREV#1 }" >/dev/null
+      fi
     done;;
   compare)
     A=$SIMCAM_RESULTS/golden-${1:?labelA}; Bd=$SIMCAM_RESULTS/golden-${2:?labelB}; bad=0
@@ -72,7 +76,9 @@ case $CMD in
     for f in $A/*.txt(N); do
       n=${f:t:r}; g=$Bd/${f:t}
       [[ -f $g ]] || { printf "%-26s missing in %s\n" $n ${Bd:t}; bad=1; continue; }
-      na=$(grep -vcE '^(photo|movie)' $f); nb=$(grep -vcE '^(photo|movie)' $g); cm=$(LC_ALL=C comm -12 $f $g | grep -vcE '^(photo|movie)'); oa=$(LC_ALL=C comm -23 $f $g | wc -l | tr -d ' '); ob=$(LC_ALL=C comm -13 $f $g | wc -l | tr -d ' ')
+      na=$(grep -vcE '^(photo|movie)' $f); nb=$(grep -vcE '^(photo|movie)' $g)
+      cm=$(LC_ALL=C comm -12 $f $g | grep -vcE '^(photo|movie)'); oa=$(LC_ALL=C comm -23 $f $g | wc -l | tr -d ' ')
+      ob=$(LC_ALL=C comm -13 $f $g | wc -l | tr -d ' ')
       r=identical; (( oa || ob || na == 0 )) && { r=DIFFERENT; bad=1; }
       (( na == 0 )) && r="NO FRAMES"
       printf "%-26s %8s %8s %8s %7s %7s  %s\n" $n $na $nb $cm $oa $ob "$r"
@@ -80,5 +86,5 @@ case $CMD in
     for g in $Bd/*.txt(N); do [[ -f $A/${g:t} ]] || { printf "%-26s missing in %s\n" ${g:t:r} ${A:t}; bad=1; }; done
     (( bad )) && echo "golden: differences found" || echo "golden: all cases identical"
     exit $bad;;
-  *) sed -n '3,16p' $0; exit 2;;
+  *) print_usage $0; exit 2;;
 esac

@@ -47,9 +47,34 @@ type Options struct {
 	Extra   map[string]string // more variables for every app, e.g. SIMCAM_SOURCE, SIMCAM_LAZY=0
 }
 
+// LegacyNames maps each engine setting Vars sets to its stuntcam 1.1.0 name. Vars sets both, with the same value: an
+// older engine (a 1.1.0 build that `swap`, `up --build` or the login service's pinned build still runs) reads only the
+// old name, and the engine reads the old one when the new one is missing (a sim armed by 1.1.0:
+// engine/src/core/env.inc). Arm records list both, so `down` unsets both. Drop both sides together, in 2.0 at the
+// earliest (docs/renames.md, "Upgrading from 1.1.0"). The keys are also the list of a sim's camera settings
+// that `exec` never forwards from the caller's shell (cmd/stuntcam hook.go): when the old names go, keep that list.
+var LegacyNames = map[string]string{
+	"SIMCAM_FIG_SOURCES":   "M2_FAKE",
+	"SIMCAM_FIG_SESSION":   "M2_SESSION_HOOK",
+	"SIMCAM_OFF_KEY_LOG":   "M2_NOLOGDICT",
+	"SIMCAM_PROFILE":       "M2_PLIST",
+	"SIMCAM_FIXTURE_IMAGE": "M5_IMAGE",
+	"SIMCAM_ENGINE_LOG":    "M5_LOG",
+}
+
+// appendSetting appends k=val and, for a LegacyNames setting, its 1.1.0 name with the same value right after it.
+func appendSetting(v []string, k, val string) []string {
+	v = append(v, k+"="+val)
+	if old, ok := LegacyNames[k]; ok {
+		v = append(v, old+"="+val)
+	}
+	return v
+}
+
 // Vars is the one variable list for both modes (scripts/arm-env.sh): the stub, the sim dir (whose `current` names the
-// loader), the sentinel state dir, the chain file, the engine's config. The engine is not pinned: the loader loads the engine
-// next to it, so `stuntcam swap` / an upgrade needs no reboot.
+// loader), the sentinel state dir, the chain file, the engine's config (each LegacyNames setting twice: new name, then
+// old). The engine is not pinned: the loader loads the engine next to it, so `stuntcam swap` / an upgrade needs no
+// reboot.
 func Vars(udid string, s artifacts.Set, o Options) []string {
 	v := []string{
 		"DYLD_INSERT_LIBRARIES=" + s.Stub,
@@ -57,16 +82,19 @@ func Vars(udid string, s artifacts.Set, o Options) []string {
 		"SIMCAM_STATE_DIR=" + home.StateDir(udid),
 		"SIMCAM_CHAIN=" + home.ChainFile(udid),
 		"SIMCAM_CONTROL=" + home.ControlFile(udid), // stuntcam source / orient
-		"M2_FAKE=1", "M2_SESSION_HOOK=1", "M2_NOLOGDICT=1",
 	}
+	v = appendSetting(v, "SIMCAM_FIG_SOURCES", "1")
+	v = appendSetting(v, "SIMCAM_FIG_SESSION", "1")
+	v = appendSetting(v, "SIMCAM_OFF_KEY_LOG", "1")
 	if s.Profile != "" {
-		v = append(v, "M2_PLIST="+s.Profile)
+		v = appendSetting(v, "SIMCAM_PROFILE", s.Profile)
 	}
 	if s.Image != "" {
-		v = append(v, "M5_IMAGE="+s.Image)
+		v = appendSetting(v, "SIMCAM_FIXTURE_IMAGE", s.Image)
 	}
 	if o.StubLog {
-		v = append(v, "SIMCAM_STUB_LOG="+filepath.Join(home.Logs(), udid, "stub.log"), "M5_LOG="+filepath.Join(home.Logs(), udid, "dylib-%p.log"))
+		v = append(v, "SIMCAM_STUB_LOG="+filepath.Join(home.Logs(), udid, "stub.log"))
+		v = appendSetting(v, "SIMCAM_ENGINE_LOG", filepath.Join(home.Logs(), udid, "dylib-%p.log"))
 	}
 	for k, val := range o.Extra {
 		v = append(v, k+"="+val)
@@ -96,11 +124,15 @@ func Prepare(udid string, s artifacts.Set) error {
 	return home.WriteCurrent(udid, s.Loader)
 }
 
+// sameBootSlack is how many seconds after a boot record's At the sim's reported boot time may lie and still count as
+// that boot: a margin for when simctl stamps it.
+const sameBootSlack = 5
+
 // SameBoot reports whether a boot-mode record is about the sim's current boot: booted, and not booted again since the
 // record (lastBootedAt, or lastUsedAt on Xcode 27). An unknown boot time counts as a different boot (the safe direction:
 // nothing assumes a boot environment that may be gone).
 func SameBoot(r Record, booted bool, lastBooted time.Time) bool {
-	return r.Mode == Boot && booted && !lastBooted.IsZero() && lastBooted.Unix() <= r.At+5
+	return r.Mode == Boot && booted && !lastBooted.IsZero() && lastBooted.Unix() <= r.At+sameBootSlack
 }
 
 // Record is what `status` reads back: how and when a sim was armed.
@@ -119,13 +151,16 @@ type Record struct {
 // Env is the record `stuntcam env` leaves: current written for per-launch arming, nothing in the sim's environment.
 const Env Mode = "env"
 
-// InProgress reports a boot record whose boot hasn't finished: its stuntcam process is alive and it is less than 180 s
-// old (a crashed or interrupted stuntcam, or a clock change, can't leave it stuck).
+// bootingRecordLife is how long a Booting record counts as in progress at most.
+const bootingRecordLife = 180 * time.Second
+
+// InProgress reports a boot record whose boot hasn't finished: its stuntcam process is alive and it is less than
+// bootingRecordLife old (a crashed or interrupted stuntcam, or a clock change, can't leave it stuck).
 func InProgress(r Record) bool {
 	if !r.Booting {
 		return false
 	}
-	if age := time.Since(time.Unix(r.At, 0)); age < 0 || age > 180*time.Second {
+	if age := time.Since(time.Unix(r.At, 0)); age < 0 || age > bootingRecordLife {
 		return false
 	}
 	return r.Pid > 0 && syscall.Kill(r.Pid, 0) == nil
@@ -167,7 +202,8 @@ func writeConfig(udid string, c Config) error {
 		return err
 	}
 	if len(b) > MaxConfigSize && len(c.BootSignals) > 0 { // only boot_signals can grow without bound (long ASAN_OPTIONS, many IDB_*)
-		fmt.Fprintf(os.Stderr, "warning: %s: the boot's signal variables don't fit the loader's %d bytes; not recorded, so apps may say \"displaced\" for them\n", home.ConfigFile(udid), MaxConfigSize)
+		fmt.Fprintf(os.Stderr, "warning: %s: the boot's signal variables don't fit the loader's %d bytes; "+
+			"not recorded, so apps may say \"displaced\" for them\n", home.ConfigFile(udid), MaxConfigSize)
 		c.BootSignals = nil
 		if b, err = MarshalConfig(c); err != nil {
 			return err
@@ -269,6 +305,14 @@ func names(vars []string) []string {
 	return n
 }
 
+// bootReadyWait bounds the wait for a booted sim to be ready (bootstatus).
+const bootReadyWait = 120 * time.Second
+
+// notReady is the error for a boot that bootstatus didn't see finish in bootReadyWait.
+func notReady(err error) error {
+	return fmt.Errorf("booted, but not ready in %d s: %w", int(bootReadyWait/time.Second), err)
+}
+
 // ArmBoot (re)boots the sim with the variables as its boot environment.
 func ArmBoot(sim Sim, udid string, s artifacts.Set, vars []string) error {
 	snap := takeSnapshot(udid)
@@ -279,7 +323,8 @@ func ArmBoot(sim Sim, udid string, s artifacts.Set, vars []string) error {
 	_ = sim.Shutdown(udid)          // fine if already shut down
 	// recorded before the boot too, flagged in progress (with our pid), so a watcher (the login service) sees an arming,
 	// not an unarmed boot; everything is put back as it was if the boot itself fails (the boot env then has no stub)
-	if err := WriteRecord(udid, Record{Mode: Boot, Build: s.BuildID(), At: time.Now().Unix(), Vars: names(vars), Booting: true, Pid: os.Getpid()}); err != nil {
+	booting := Record{Mode: Boot, Build: s.BuildID(), At: time.Now().Unix(), Vars: names(vars), Booting: true, Pid: os.Getpid()}
+	if err := WriteRecord(udid, booting); err != nil {
 		snap.restore(udid)
 		return err
 	}
@@ -288,8 +333,8 @@ func ArmBoot(sim Sim, udid string, s artifacts.Set, vars []string) error {
 		return err
 	}
 	final := WriteRecord(udid, Record{Mode: Boot, Build: s.BuildID(), At: time.Now().Unix(), Vars: names(vars)})
-	if err := sim.WaitBooted(udid, 120*time.Second); err != nil {
-		return fmt.Errorf("booted, but not ready in 120 s: %w", err) // the boot env has the stub: the record stays, final
+	if err := sim.WaitBooted(udid, bootReadyWait); err != nil {
+		return notReady(err) // the boot env has the stub: the record stays, final
 	}
 	return final
 }
@@ -302,16 +347,17 @@ func BootUnarmed(sim Sim, udid, build string) error {
 	if err := os.MkdirAll(home.Sim(udid), 0o755); err != nil {
 		return err
 	}
-	if err := WriteRecord(udid, Record{Mode: Launchd, Build: build, At: time.Now().Unix(), Booting: true, Pid: os.Getpid()}); err != nil {
+	booting := Record{Mode: Launchd, Build: build, At: time.Now().Unix(), Booting: true, Pid: os.Getpid()}
+	if err := WriteRecord(udid, booting); err != nil {
 		return err
 	}
 	if err := sim.Boot(udid, nil); err != nil {
 		snap.restore(udid)
 		return err
 	}
-	if err := sim.WaitBooted(udid, 120*time.Second); err != nil {
+	if err := sim.WaitBooted(udid, bootReadyWait); err != nil {
 		snap.restore(udid)
-		return fmt.Errorf("booted, but not ready in 120 s: %w", err)
+		return notReady(err)
 	}
 	return nil
 }
@@ -378,47 +424,31 @@ func withoutOurs(existing string) []string {
 // scripts/launchd-arm.sh does:
 //   - a failed read of DYLD_INSERT_LIBRARIES aborts before anything changes (an empty read would drop other tools' entries);
 //   - DYLD_INSERT_LIBRARIES is set last, so an app launched meanwhile never gets the stub without its settings;
-//   - on a failed write it rolls back: DYLD_INSERT_LIBRARIES as found minus stuntcam's entries, the previous `current`, and
-//     every setting this arm names is unset (set or not: they are stuntcam's own);
+//   - on a failed write it rolls back: DYLD_INSERT_LIBRARIES as found minus stuntcam's entries, the previous `current`,
+//     every setting this arm names is unset (set or not: they are stuntcam's own), and arm.json says what is then
+//     true (launchdBefore.rollback);
 //   - the record of variable names is cumulative, so `down` unsets everything any arm set.
 func ArmLaunchd(sim Sim, udid string, s artifacts.Set, vars []string) error {
 	old, err := sim.Getenv(udid, "DYLD_INSERT_LIBRARIES")
 	if err != nil {
 		return fmt.Errorf("reading the simulator's DYLD_INSERT_LIBRARIES failed, not arming: %w", err)
 	}
+	before := launchdBefore{insert: old}
 	_, downErr := os.Stat(DownMarker(udid))
+	before.down = downErr == nil
 	_ = os.Remove(DownMarker(udid)) // an explicit arm undoes `down` (put back if this arm rolls back)
-	prevCurrent, prevErr := os.ReadFile(home.CurrentFile(udid))
+	before.current, before.currentErr = os.ReadFile(home.CurrentFile(udid))
 	prev, _ := ReadRecord(udid)
 	if err := Prepare(udid, s); err != nil {
 		return err
 	}
-	var ordered []string
-	stub := ""
-	for _, kv := range vars {
-		if k, v, _ := strings.Cut(kv, "="); k == "DYLD_INSERT_LIBRARIES" {
-			stub = v
-		} else {
-			ordered = append(ordered, kv)
-		}
-	}
-	ordered = append(ordered, "DYLD_INSERT_LIBRARIES="+MergeInsert(old, stub))
-	all := names(vars)
-	var dropped []string // set by an earlier arm, not by this one (e.g. SIMCAM_SOURCE after `up --source`, then a plain `up`)
-	if prev.Mode == Launchd {
-		have := map[string]bool{}
-		for _, n := range all {
-			have[n] = true
-		}
-		for _, n := range prev.Vars {
-			if !have[n] {
-				dropped = append(dropped, n)
-			}
-		}
-		all = union(prev.Vars, all)
-	}
-	prevRecord, prevRecErr := os.ReadFile(recordPath(udid))
-	// recorded before the writes, so a `down` after a failure still knows every name
+	settings, stub := splitInsert(vars)
+	all, dropped := launchdNames(prev, names(vars))
+	before.record, before.recordErr = os.ReadFile(recordPath(udid))
+	// the in-progress record this process's BootUnarmed wrote is not an earlier arm's: nothing to put back
+	before.ownBooting = prev.Booting && prev.Pid == os.Getpid()
+	// recorded before the writes: an arm killed half-way, or one that stops at a failed unset below, leaves a record
+	// that names every variable for `down`
 	if err := WriteRecord(udid, Record{Mode: Launchd, Build: s.BuildID(), At: time.Now().Unix(), Vars: all}); err != nil {
 		return err
 	}
@@ -427,9 +457,48 @@ func ArmLaunchd(sim Sim, udid string, s artifacts.Set, vars []string) error {
 			return fmt.Errorf("unsetting %s (left by an earlier arm): %w", n, err)
 		}
 	}
-	// the settings all at once, then DYLD_INSERT_LIBRARIES alone: each is a set and a read-back through `simctl spawn`
-	// (0.5-1.5 s), and one after another they took 10-25 s on a busy Mac, a window in which launches got no camera
-	settings := ordered[:len(ordered)-1]
+	err = setAllVerified(sim, udid, settings)
+	if err == nil {
+		err = setVerified(sim, udid, "DYLD_INSERT_LIBRARIES", MergeInsert(old, stub))
+	}
+	if err != nil {
+		before.rollback(sim, udid, settings, all, s.BuildID())
+		return fmt.Errorf("%w; rolled back (other tools' DYLD_INSERT_LIBRARIES entries kept, stuntcam's removed)", err)
+	}
+	return nil
+}
+
+// splitInsert separates DYLD_INSERT_LIBRARIES (the stub; the last one if vars names it twice) from the other settings,
+// which keep their order.
+func splitInsert(vars []string) (settings []string, stub string) {
+	for _, kv := range vars {
+		if k, v, _ := strings.Cut(kv, "="); k == "DYLD_INSERT_LIBRARIES" {
+			stub = v
+		} else {
+			settings = append(settings, kv)
+		}
+	}
+	return settings, stub
+}
+
+// launchdNames is the record's cumulative list of names after a launchd arm setting names, and the names an earlier
+// launchd arm (prev) set that this one doesn't (e.g. SIMCAM_SOURCE after `up --source`, then a plain `up`).
+func launchdNames(prev Record, names []string) (all, dropped []string) {
+	if prev.Mode != Launchd {
+		return names, nil
+	}
+	for _, n := range prev.Vars {
+		if !slices.Contains(names, n) {
+			dropped = append(dropped, n)
+		}
+	}
+	return union(prev.Vars, names), dropped
+}
+
+// setAllVerified sets the settings at once, each with setVerified, and joins their errors into one line (the service
+// logs it). Each set and read-back goes through `simctl spawn` (0.5-1.5 s); one after another they took 10-25 s on a busy
+// Mac, a window in which launches got no camera.
+func setAllVerified(sim Sim, udid string, settings []string) error {
 	errs := make([]error, len(settings))
 	var wg sync.WaitGroup
 	for i, kv := range settings {
@@ -442,43 +511,70 @@ func ArmLaunchd(sim Sim, udid string, s artifacts.Set, vars []string) error {
 	}
 	wg.Wait()
 	var failed []string
-	err = nil
 	for _, e := range errs {
 		if e != nil {
 			failed = append(failed, e.Error())
 		}
 	}
-	if len(failed) > 0 { // one line: the service logs it
-		err = errors.New(strings.Join(failed, "; "))
-	}
-	if err == nil {
-		_, stubV, _ := strings.Cut(ordered[len(ordered)-1], "=")
-		err = setVerified(sim, udid, "DYLD_INSERT_LIBRARIES", stubV)
-	}
-	if err != nil {
-		if rest := WithoutOurs(old); rest != "" {
-			_ = setVerified(sim, udid, "DYLD_INSERT_LIBRARIES", rest)
-		} else {
-			_ = sim.Unsetenv(udid, "DYLD_INSERT_LIBRARIES")
-		}
-		if prevErr == nil {
-			_ = home.WriteAtomic(home.CurrentFile(udid), prevCurrent)
-		} else {
-			_ = os.Remove(home.CurrentFile(udid))
-		}
-		for _, kv := range settings { // set or not: they are stuntcam's own names
-			k, _, _ := strings.Cut(kv, "=")
-			_ = sim.Unsetenv(udid, k)
-		}
-		if prevRecErr == nil && prev.Mode == Boot { // a boot-mode sim stays armed by its boot environment: keep saying so
-			_ = home.WriteAtomic(recordPath(udid), prevRecord)
-		}
-		if downErr == nil {
-			_ = os.WriteFile(DownMarker(udid), []byte(fmt.Sprintf("%d\n", time.Now().Unix())), 0o644)
-		}
-		return fmt.Errorf("%w; rolled back (other tools' DYLD_INSERT_LIBRARIES entries kept, stuntcam's removed)", err)
+	if len(failed) > 0 {
+		return errors.New(strings.Join(failed, "; "))
 	}
 	return nil
+}
+
+// launchdBefore is what ArmLaunchd found before it changed anything, for its rollback.
+type launchdBefore struct {
+	insert     string // DYLD_INSERT_LIBRARIES as found
+	down       bool   // the down marker existed
+	current    []byte // the sim's `current`, if currentErr is nil
+	currentErr error
+	record     []byte // arm.json, if recordErr is nil
+	recordErr  error
+	ownBooting bool // arm.json was this process's own boot-in-progress record (BootUnarmed)
+}
+
+// rollback undoes a failed launchd arm: DYLD_INSERT_LIBRARIES as found minus stuntcam's entries, the previous `current`,
+// every setting this arm names unset (set or not: they are stuntcam's own), the down marker put back, and an arm.json
+// that says what is then true (all: this arm's names, plus an earlier launchd record's; build: the failed arm's):
+//   - another arm's record is put back if every step above worked. A boot-mode record met here is from an earlier
+//     boot, and `status` says so; after a launchd arm its `current` is back and none of its variables is set, which
+//     `status` reads as "the stub is no longer in the simulator's launchd environment", and `down` still unsets its
+//     names; an env record is per-launch arming again;
+//   - no record before (or only this process's boot-in-progress one) and no `current`: none, if every step worked;
+//   - otherwise a launchd record for the build `current` is back on, naming all: a sim the scripts armed (a `current`
+//     without a record) would read as armed without one, though its stub is gone; and after a failed unset the names
+//     that may still be set are there for `down`, which unsets only what a launchd record lists.
+func (b launchdBefore) rollback(sim Sim, udid string, settings, all []string, build string) {
+	if b.down { // first: a sim the user ran `down` on must not look armable if this process dies during the rollback
+		_ = os.WriteFile(DownMarker(udid), []byte(fmt.Sprintf("%d\n", time.Now().Unix())), 0o644)
+	}
+	clean := true // every step that changes the sim's environment worked
+	if rest := WithoutOurs(b.insert); rest != "" {
+		clean = setVerified(sim, udid, "DYLD_INSERT_LIBRARIES", rest) == nil && clean
+	} else {
+		clean = sim.Unsetenv(udid, "DYLD_INSERT_LIBRARIES") == nil && clean
+	}
+	if b.currentErr == nil {
+		_ = home.WriteAtomic(home.CurrentFile(udid), b.current)
+	} else {
+		_ = os.Remove(home.CurrentFile(udid))
+	}
+	for _, kv := range settings {
+		k, _, _ := strings.Cut(kv, "=")
+		clean = sim.Unsetenv(udid, k) == nil && clean
+	}
+	found := b.recordErr == nil && !b.ownBooting
+	switch {
+	case found && clean:
+		_ = home.WriteAtomic(recordPath(udid), b.record)
+	case !found && clean && b.currentErr != nil:
+		_ = os.Remove(recordPath(udid))
+	default:
+		if _, loader, err := home.ReadCurrent(udid); err == nil {
+			build = filepath.Base(filepath.Dir(loader))
+		}
+		_ = WriteRecord(udid, Record{Mode: Launchd, Build: build, At: time.Now().Unix(), Vars: all})
+	}
 }
 
 func union(a, b []string) []string {
@@ -493,9 +589,16 @@ func union(a, b []string) []string {
 	return out
 }
 
+// setVerifiedTries and setVerifiedPause: a launchctl setenv that doesn't read back is tried this often, this far apart.
+const (
+	setVerifiedTries = 3
+	setVerifiedPause = 300 * time.Millisecond
+)
+
+// setVerified sets k in the sim's launchd and reads it back, up to setVerifiedTries times.
 func setVerified(sim Sim, udid, k, v string) error {
 	var last string
-	for i := 0; i < 3; i++ {
+	for i := 0; i < setVerifiedTries; i++ {
 		if err := sim.Setenv(udid, k, v); err == nil {
 			if got, err := sim.Getenv(udid, k); err == nil && got == v {
 				return nil
@@ -503,7 +606,7 @@ func setVerified(sim Sim, udid, k, v string) error {
 				last = got
 			}
 		}
-		time.Sleep(300 * time.Millisecond)
+		time.Sleep(setVerifiedPause)
 	}
 	return fmt.Errorf("launchctl setenv %s did not stick (reads %q)", k, last)
 }

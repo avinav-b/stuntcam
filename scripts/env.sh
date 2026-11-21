@@ -57,7 +57,8 @@ rsync -a --delete --exclude README.md $ROOT/fixtures/media/ $SIMCAM_HOME/dev/med
   SIMCAM_RULES_DIR=$SIMCAM_HOME/restore-rules/$h
   [[ -f $SIMCAM_RULES_DIR/.complete ]] && return 0
   mkdir -p $SIMCAM_HOME/restore-rules
-  t=$(mktemp -d "$SIMCAM_HOME/restore-rules/.stage-XXXXXX") || { print -u2 "env.sh: mktemp failed in $SIMCAM_HOME/restore-rules"; SIMCAM_RULES_DIR=; return 1 }
+  t=$(mktemp -d "$SIMCAM_HOME/restore-rules/.stage-XXXXXX") ||
+    { print -u2 "env.sh: mktemp failed in $SIMCAM_HOME/restore-rules"; SIMCAM_RULES_DIR=; return 1 }
   chmod 755 $t
   for f in $fs; do if (( ok )); then cp -p $f $t/ || ok=0; fi; done
   if (( ok )); then : > $t/.complete || ok=0; fi

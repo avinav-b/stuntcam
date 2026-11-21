@@ -9,9 +9,10 @@
 #   Everything the sim reads or writes is under $SIMCAM_HOME (scripts/env.sh); a warning names any path that isn't reachable.
 #   UDID: 3rd argument, else $SIMCAM_UDID_<rt> (e.g. SIMCAM_UDID_263). Run ./build.sh first (writes build/current_*.txt).
 #   Extra settings (stub and launchd): export SIMCTL_CHILD_<VAR> before calling (e.g. SIMCTL_CHILD_SIMCAM_LAZY=0 arms at load).
-set -u; ROOT="$(cd "$(dirname "$0")/.." && pwd)"; source $ROOT/scripts/env.sh; source $ROOT/scripts/arm-env.sh; RT=$1; MODE=$2; UDID=${3:-}
+set -u; ROOT="$(cd "$(dirname "$0")/.." && pwd)"; source $ROOT/scripts/env.sh; source $ROOT/scripts/common.sh
+source $ROOT/scripts/arm-env.sh; RT=$1; MODE=$2; UDID=${3:-}
 [[ $MODE == (stub|launchd|plain) ]] || { echo "$0: mode must be stub, launchd or plain" >&2; exit 2; }
-[[ -z $UDID ]] && { V=SIMCAM_UDID_$RT; UDID=${(P)V:-}; [[ -n $UDID ]] || { echo "$0: set $V to the UDID of your iOS $RT simulator" >&2; exit 2; } }
+[[ -z $UDID ]] && need_udid "$0" "$RT" UDID long
 mkdir -p $ROOT/build
 xcrun simctl shutdown $UDID 2>/dev/null; for i in {1..30}; do xcrun simctl list devices | grep $UDID | grep -q Shutdown && break; sleep 1; done
 if [[ $MODE == stub ]]; then
@@ -19,7 +20,7 @@ if [[ $MODE == stub ]]; then
   env "${(@)ARMV/#/SIMCTL_CHILD_}" xcrun simctl boot $UDID || { echo "$0: simctl boot failed" >&2; exit 1; }
 else
   # launchd mode sets the SIMCTL_CHILD_ extras with launchctl setenv after the boot. A variable that is also in the boot env
-  # (simctl boot passes SIMCTL_CHILD_* on by itself) never reads back there, so arming failed and rolled back:
+  # (simctl boot passes SIMCTL_CHILD_* on by itself) never reads back there, so arming would fail and roll back:
   # boot without them in that mode. plain boots without anything, so it drops them too (and a later launchd-arm.sh can arm it)
   typeset -a UNS; UNS=(); for v in ${(f)"$(env | grep -oE '^SIMCTL_CHILD_[A-Za-z0-9_]+')"}; do [[ -n $v ]] && UNS+=(-u $v); done
   rm -f $ROOT/build/bootlogdir-$RT.txt; env $UNS xcrun simctl boot $UDID || { echo "$0: simctl boot failed" >&2; exit 1; }

@@ -394,7 +394,7 @@ int scw_pidfile_parse(const char *text, size_t len, scw_pidfile *out) {
         size_t n = end - pos;
         pos = end + 1;
         line_no++;
-        if (line_no == 1) {                                       // "stuntcam-webcam 1"
+        if (line_no == 1) {
             if (!scw_span_is(l, n, "stuntcam-webcam 1")) return SCW_E_ARG;
             seen |= F_HEAD;
             continue;

@@ -16,7 +16,7 @@ set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"; LOGS=$ROOT/build/fixtures; mkdir -p $LOGS
 export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8   # CocoaPods needs a UTF-8 locale
 CLEAN=0; typeset -a APPS; APPS=()
-for a in "$@"; do case $a in --clean) CLEAN=1;; -h|--help) sed -n '3,16p' "$0"; exit 0;; *) APPS+=($a);; esac; done
+for a in "$@"; do case $a in --clean) CLEAN=1;; -h|--help) awk 'NR < 3 { next } !/^#/ { exit } { print }' "$0"; exit 0;; *) APPS+=($a);; esac; done
 (( ${#APPS} )) || APPS=(canary plain plain-orient expo flutter)
 typeset -a UDIDS; UDIDS=(); for v in SIMCAM_UDID_263 SIMCAM_UDID_27 SIMCAM_UDID_175; do [[ -n ${(P)v:-} ]] && UDIDS+=(${(P)v}); done
 (( ${#UDIDS} )) || echo "build-fixtures.sh: no SIMCAM_UDID_* set; building without installing" >&2

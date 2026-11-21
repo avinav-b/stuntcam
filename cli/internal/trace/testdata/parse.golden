@@ -1,0 +1,46 @@
+== ""
+err: not a stuntcam trace file
+{Path: Location: Pid:0 Bundle: Build: Numer:0 Denom:0 WrittenNs:0 WrittenMach:0 Recorded:0 Ops:[]}
+== "hello\n"
+err: not a stuntcam trace file
+{Path: Location: Pid:0 Bundle: Build: Numer:0 Denom:0 WrittenNs:0 WrittenMach:0 Recorded:0 Ops:[]}
+== "stuntcam-trace 2\nend\n"
+err: not a stuntcam trace file (format 2; this stuntcam reads format 1: update the CLI)
+{Path: Location: Pid:0 Bundle: Build: Numer:0 Denom:0 WrittenNs:0 WrittenMach:0 Recorded:0 Ops:[]}
+== "stuntcam-trace 1\n"
+err: trace file has no end line (cut short)
+{Path: Location: Pid:0 Bundle: Build: Numer:0 Denom:0 WrittenNs:0 WrittenMach:0 Recorded:0 Ops:[]}
+== "stuntcam-trace 1\npid 7\nbundle b\nbuild x\ntimebase 125 3\nwritten 5 6\nrecorded 2\nop 0 1 2 shutter 3 0\n"
+err: trace file has no end line (cut short)
+{Path: Location: Pid:7 Bundle:b Build:x Numer:125 Denom:3 WrittenNs:5 WrittenMach:6 Recorded:2 Ops:[{Index:0 WallNs:1 Mach:2 Name:shutter SettingsID:3 Arg:0}]}
+== "stuntcam-trace 1\npid 7\nbundle b\nbuild x\ntimebase 125 3\nwritten 5 6\nrecorded 2\nop 0 1 2 shutter 3 0\nend\n"
+err: <nil>
+{Path: Location: Pid:7 Bundle:b Build:x Numer:125 Denom:3 WrittenNs:5 WrittenMach:6 Recorded:2 Ops:[{Index:0 WallNs:1 Mach:2 Name:shutter SettingsID:3 Arg:0}]}
+== "stuntcam-trace 1\npid 7\nbundle b\nbuild x\ntimebase 125 3\nwritten 5 6\nrecorded 2\nop 0 1 2 shutter 3\nend\n"
+err: bad op line "op 0 1 2 shutter 3"
+{Path: Location: Pid:7 Bundle:b Build:x Numer:125 Denom:3 WrittenNs:5 WrittenMach:6 Recorded:2 Ops:[]}
+== "stuntcam-trace 1\npid 7\nbundle b\nbuild x\ntimebase 125 3\nwritten 5 6\nrecorded 2\nop x 1 2 shutter 3 0\nend\n"
+err: bad line "op x 1 2 shutter 3 0": strconv.ParseUint: parsing "x": invalid syntax
+{Path: Location: Pid:7 Bundle:b Build:x Numer:125 Denom:3 WrittenNs:5 WrittenMach:6 Recorded:2 Ops:[]}
+== "stuntcam-trace 1\npid 7\nbundle b\nbuild x\ntimebase 125 3\nwritten 5 6\nrecorded 2\nop 0 1 2 shutter y z\nend\n"
+err: bad line "op 0 1 2 shutter y z": strconv.ParseInt: parsing "y": invalid syntax
+strconv.ParseInt: parsing "z": invalid syntax
+{Path: Location: Pid:7 Bundle:b Build:x Numer:125 Denom:3 WrittenNs:5 WrittenMach:6 Recorded:2 Ops:[]}
+== "stuntcam-trace 1\npid seven\nend\n"
+err: bad line "pid seven": strconv.Atoi: parsing "seven": invalid syntax
+{Path: Location: Pid:0 Bundle: Build: Numer:0 Denom:0 WrittenNs:0 WrittenMach:0 Recorded:0 Ops:[]}
+== "stuntcam-trace 1\ntimebase 1 x\nend\n"
+err: bad line "timebase 1 x": strconv.ParseUint: parsing "x": invalid syntax
+{Path: Location: Pid:0 Bundle: Build: Numer:1 Denom:0 WrittenNs:0 WrittenMach:0 Recorded:0 Ops:[]}
+== "stuntcam-trace 1\nwritten x 1\nend\n"
+err: bad line "written x 1": strconv.ParseInt: parsing "x": invalid syntax
+{Path: Location: Pid:0 Bundle: Build: Numer:0 Denom:0 WrittenNs:0 WrittenMach:0 Recorded:0 Ops:[]}
+== "stuntcam-trace 1\nrecorded -1\nend\n"
+err: bad line "recorded -1": strconv.ParseUint: parsing "-1": invalid syntax
+{Path: Location: Pid:0 Bundle: Build: Numer:0 Denom:0 WrittenNs:0 WrittenMach:0 Recorded:0 Ops:[]}
+== "stuntcam-trace 1\npid 1 2\nbundle\nunknown line\n\nend\n"
+err: <nil>
+{Path: Location: Pid:0 Bundle: Build: Numer:1 Denom:1 WrittenNs:0 WrittenMach:0 Recorded:0 Ops:[]}
+== "stuntcam-trace 1\ntimebase 0 0\nend\n"
+err: <nil>
+{Path: Location: Pid:0 Bundle: Build: Numer:1 Denom:1 WrittenNs:0 WrittenMach:0 Recorded:0 Ops:[]}

@@ -1,0 +1,3460 @@
+=== usage: no arguments
+$ stuntcam 
+--- stdout
+--- stderr
+usage: stuntcam <command> [options]
+
+  up        arm a simulator (boots it armed if it is shut down)
+            [--udid U] [--mode boot|launchd] [--reboot] [--grant BUNDLE]... [--source S] [--log] [--build DIR] [--skip-verify] [--allow-unverified]
+  verify    canary verdict for this build on a runtime (private device set, cached)
+            [--runtime V] [--fresh] [--keep] [--json] [--build DIR]
+  exec      run a command (xcodebuild test, a CI script) so simulators it boots come up armed
+            [--build DIR] -- COMMAND [ARGS…]
+  service   notify-only helper: arms simulators Xcode/Simulator boot (launchd mode) and says when Xcode Run needs `up`
+            install [--preboot U] [--only U]…|uninstall|status|run [--only U]…
+  gc        remove private canary devices for removed runtimes, unused builds and unpacked canaries, and state of deleted simulators
+            [--dry-run] [--keep-builds N]
+  down      stop arming new launches (no reboot needed)
+            [--udid U]
+  status    every simulator stuntcam knows about: mode, build, latches
+            [--json]
+  swap      point an armed simulator at another build, effective at the next launch
+            [--udid U] [LOADER]
+  chain     extra libraries every app launch loads (e.g. another tool's loader)
+            add|rm|ls [--udid U] [LIB]
+  sentinel  crash/hang records and latches per app
+            ls|clear [--udid U] [--bundle B]
+  trace     an app's last 64 camera ops with host-clock times (shutter -> slot 12 -> still complete -> timestamp)
+            [--json] [--udid U] [--pid N] BUNDLE
+  env       print SIMCTL_CHILD_* exports for per-launch arming (Detox, scripts)
+            [--udid U]
+  source    switch the picture live, in running apps and the next ones (webcam: the Mac camera)
+            [--udid U] [--front NAME] [--back NAME] scene|image:PATH|video:PATH|webcam[:NAME]
+  orient    set the virtual device orientation, live
+            [--udid U] portrait|upsideDown|landscapeLeft|landscapeRight|auto
+  doctor    check Xcode, runtimes, the host directory, the build and each simulator
+            [--json]
+  version   print the version and the commit it was built from (--check: verify the installed files and unpack the payload)
+            [--check]
+--- simctl
+--- files
+--- exit 64
+
+=== usage: help
+$ stuntcam help
+--- stdout
+--- stderr
+usage: stuntcam <command> [options]
+
+  up        arm a simulator (boots it armed if it is shut down)
+            [--udid U] [--mode boot|launchd] [--reboot] [--grant BUNDLE]... [--source S] [--log] [--build DIR] [--skip-verify] [--allow-unverified]
+  verify    canary verdict for this build on a runtime (private device set, cached)
+            [--runtime V] [--fresh] [--keep] [--json] [--build DIR]
+  exec      run a command (xcodebuild test, a CI script) so simulators it boots come up armed
+            [--build DIR] -- COMMAND [ARGS…]
+  service   notify-only helper: arms simulators Xcode/Simulator boot (launchd mode) and says when Xcode Run needs `up`
+            install [--preboot U] [--only U]…|uninstall|status|run [--only U]…
+  gc        remove private canary devices for removed runtimes, unused builds and unpacked canaries, and state of deleted simulators
+            [--dry-run] [--keep-builds N]
+  down      stop arming new launches (no reboot needed)
+            [--udid U]
+  status    every simulator stuntcam knows about: mode, build, latches
+            [--json]
+  swap      point an armed simulator at another build, effective at the next launch
+            [--udid U] [LOADER]
+  chain     extra libraries every app launch loads (e.g. another tool's loader)
+            add|rm|ls [--udid U] [LIB]
+  sentinel  crash/hang records and latches per app
+            ls|clear [--udid U] [--bundle B]
+  trace     an app's last 64 camera ops with host-clock times (shutter -> slot 12 -> still complete -> timestamp)
+            [--json] [--udid U] [--pid N] BUNDLE
+  env       print SIMCTL_CHILD_* exports for per-launch arming (Detox, scripts)
+            [--udid U]
+  source    switch the picture live, in running apps and the next ones (webcam: the Mac camera)
+            [--udid U] [--front NAME] [--back NAME] scene|image:PATH|video:PATH|webcam[:NAME]
+  orient    set the virtual device orientation, live
+            [--udid U] portrait|upsideDown|landscapeLeft|landscapeRight|auto
+  doctor    check Xcode, runtimes, the host directory, the build and each simulator
+            [--json]
+  version   print the version and the commit it was built from (--check: verify the installed files and unpack the payload)
+            [--check]
+--- simctl
+--- files
+--- exit 0
+
+=== usage: -h
+$ stuntcam -h
+--- stdout
+--- stderr
+usage: stuntcam <command> [options]
+
+  up        arm a simulator (boots it armed if it is shut down)
+            [--udid U] [--mode boot|launchd] [--reboot] [--grant BUNDLE]... [--source S] [--log] [--build DIR] [--skip-verify] [--allow-unverified]
+  verify    canary verdict for this build on a runtime (private device set, cached)
+            [--runtime V] [--fresh] [--keep] [--json] [--build DIR]
+  exec      run a command (xcodebuild test, a CI script) so simulators it boots come up armed
+            [--build DIR] -- COMMAND [ARGS…]
+  service   notify-only helper: arms simulators Xcode/Simulator boot (launchd mode) and says when Xcode Run needs `up`
+            install [--preboot U] [--only U]…|uninstall|status|run [--only U]…
+  gc        remove private canary devices for removed runtimes, unused builds and unpacked canaries, and state of deleted simulators
+            [--dry-run] [--keep-builds N]
+  down      stop arming new launches (no reboot needed)
+            [--udid U]
+  status    every simulator stuntcam knows about: mode, build, latches
+            [--json]
+  swap      point an armed simulator at another build, effective at the next launch
+            [--udid U] [LOADER]
+  chain     extra libraries every app launch loads (e.g. another tool's loader)
+            add|rm|ls [--udid U] [LIB]
+  sentinel  crash/hang records and latches per app
+            ls|clear [--udid U] [--bundle B]
+  trace     an app's last 64 camera ops with host-clock times (shutter -> slot 12 -> still complete -> timestamp)
+            [--json] [--udid U] [--pid N] BUNDLE
+  env       print SIMCTL_CHILD_* exports for per-launch arming (Detox, scripts)
+            [--udid U]
+  source    switch the picture live, in running apps and the next ones (webcam: the Mac camera)
+            [--udid U] [--front NAME] [--back NAME] scene|image:PATH|video:PATH|webcam[:NAME]
+  orient    set the virtual device orientation, live
+            [--udid U] portrait|upsideDown|landscapeLeft|landscapeRight|auto
+  doctor    check Xcode, runtimes, the host directory, the build and each simulator
+            [--json]
+  version   print the version and the commit it was built from (--check: verify the installed files and unpack the payload)
+            [--check]
+--- simctl
+--- files
+--- exit 0
+
+=== usage: --help
+$ stuntcam --help
+--- stdout
+--- stderr
+usage: stuntcam <command> [options]
+
+  up        arm a simulator (boots it armed if it is shut down)
+            [--udid U] [--mode boot|launchd] [--reboot] [--grant BUNDLE]... [--source S] [--log] [--build DIR] [--skip-verify] [--allow-unverified]
+  verify    canary verdict for this build on a runtime (private device set, cached)
+            [--runtime V] [--fresh] [--keep] [--json] [--build DIR]
+  exec      run a command (xcodebuild test, a CI script) so simulators it boots come up armed
+            [--build DIR] -- COMMAND [ARGS…]
+  service   notify-only helper: arms simulators Xcode/Simulator boot (launchd mode) and says when Xcode Run needs `up`
+            install [--preboot U] [--only U]…|uninstall|status|run [--only U]…
+  gc        remove private canary devices for removed runtimes, unused builds and unpacked canaries, and state of deleted simulators
+            [--dry-run] [--keep-builds N]
+  down      stop arming new launches (no reboot needed)
+            [--udid U]
+  status    every simulator stuntcam knows about: mode, build, latches
+            [--json]
+  swap      point an armed simulator at another build, effective at the next launch
+            [--udid U] [LOADER]
+  chain     extra libraries every app launch loads (e.g. another tool's loader)
+            add|rm|ls [--udid U] [LIB]
+  sentinel  crash/hang records and latches per app
+            ls|clear [--udid U] [--bundle B]
+  trace     an app's last 64 camera ops with host-clock times (shutter -> slot 12 -> still complete -> timestamp)
+            [--json] [--udid U] [--pid N] BUNDLE
+  env       print SIMCTL_CHILD_* exports for per-launch arming (Detox, scripts)
+            [--udid U]
+  source    switch the picture live, in running apps and the next ones (webcam: the Mac camera)
+            [--udid U] [--front NAME] [--back NAME] scene|image:PATH|video:PATH|webcam[:NAME]
+  orient    set the virtual device orientation, live
+            [--udid U] portrait|upsideDown|landscapeLeft|landscapeRight|auto
+  doctor    check Xcode, runtimes, the host directory, the build and each simulator
+            [--json]
+  version   print the version and the commit it was built from (--check: verify the installed files and unpack the payload)
+            [--check]
+--- simctl
+--- files
+--- exit 0
+
+=== usage: unknown command
+$ stuntcam frob
+--- stdout
+--- stderr
+stuntcam: unknown command "frob"
+usage: stuntcam <command> [options]
+
+  up        arm a simulator (boots it armed if it is shut down)
+            [--udid U] [--mode boot|launchd] [--reboot] [--grant BUNDLE]... [--source S] [--log] [--build DIR] [--skip-verify] [--allow-unverified]
+  verify    canary verdict for this build on a runtime (private device set, cached)
+            [--runtime V] [--fresh] [--keep] [--json] [--build DIR]
+  exec      run a command (xcodebuild test, a CI script) so simulators it boots come up armed
+            [--build DIR] -- COMMAND [ARGS…]
+  service   notify-only helper: arms simulators Xcode/Simulator boot (launchd mode) and says when Xcode Run needs `up`
+            install [--preboot U] [--only U]…|uninstall|status|run [--only U]…
+  gc        remove private canary devices for removed runtimes, unused builds and unpacked canaries, and state of deleted simulators
+            [--dry-run] [--keep-builds N]
+  down      stop arming new launches (no reboot needed)
+            [--udid U]
+  status    every simulator stuntcam knows about: mode, build, latches
+            [--json]
+  swap      point an armed simulator at another build, effective at the next launch
+            [--udid U] [LOADER]
+  chain     extra libraries every app launch loads (e.g. another tool's loader)
+            add|rm|ls [--udid U] [LIB]
+  sentinel  crash/hang records and latches per app
+            ls|clear [--udid U] [--bundle B]
+  trace     an app's last 64 camera ops with host-clock times (shutter -> slot 12 -> still complete -> timestamp)
+            [--json] [--udid U] [--pid N] BUNDLE
+  env       print SIMCTL_CHILD_* exports for per-launch arming (Detox, scripts)
+            [--udid U]
+  source    switch the picture live, in running apps and the next ones (webcam: the Mac camera)
+            [--udid U] [--front NAME] [--back NAME] scene|image:PATH|video:PATH|webcam[:NAME]
+  orient    set the virtual device orientation, live
+            [--udid U] portrait|upsideDown|landscapeLeft|landscapeRight|auto
+  doctor    check Xcode, runtimes, the host directory, the build and each simulator
+            [--json]
+  version   print the version and the commit it was built from (--check: verify the installed files and unpack the payload)
+            [--check]
+--- simctl
+--- files
+--- exit 64
+
+=== usage: private shutdown without arguments
+$ stuntcam _private-shutdown
+--- stdout
+--- stderr
+--- simctl
+--- files
+--- exit 64
+
+=== up -h
+$ stuntcam up -h
+--- stdout
+--- stderr
+Usage of up:
+  -allow-unverified
+    	arm even if the canary failed on this runtime
+  -build string
+    	use this build dir (loader + engine pair) instead of the default
+  -grant value
+    	grant camera + microphone to this bundle id (repeatable; terminates it if running)
+  -log
+    	log stub and engine decisions under the host directory's logs/<udid>/
+  -mode string
+    	boot | launchd (default: boot if the sim is shut down, launchd if it is booted)
+  -reboot
+    	reboot a booted simulator into boot mode (Xcode Run and tests need it)
+  -skip-verify
+    	arm without a canary verdict
+  -source string
+    	scene | image:PATH | video:PATH | webcam[:NAME] (default scene)
+  -udid string
+    	simulator UDID
+--- simctl
+--- files
+--- exit 0
+
+=== verify -h
+$ stuntcam verify -h
+--- stdout
+--- stderr
+Usage of verify:
+  -build string
+    	build dir
+  -fresh
+    	ignore the cached verdict
+  -json
+    	JSON output
+  -keep
+    	leave the private device booted
+  -runtime string
+    	iOS version (e.g. 26.3) or runtime identifier; default the newest
+--- simctl
+--- files
+--- exit 0
+
+=== exec -h
+$ stuntcam exec -h
+--- stdout
+--- stderr
+Usage of exec:
+  -build string
+    	build dir
+--- simctl
+--- files
+--- exit 0
+
+=== gc -h
+$ stuntcam gc -h
+--- stdout
+--- stderr
+Usage of gc:
+  -dry-run
+    	list what would be removed
+  -keep-builds int
+    	newest unreferenced builds to keep (default 3)
+--- simctl
+--- files
+--- exit 0
+
+=== down -h
+$ stuntcam down -h
+--- stdout
+--- stderr
+Usage of down:
+  -udid string
+    	simulator UDID
+--- simctl
+--- files
+--- exit 0
+
+=== status -h
+$ stuntcam status -h
+--- stdout
+--- stderr
+Usage of status:
+  -json
+    	JSON output
+--- simctl
+--- files
+--- exit 0
+
+=== swap -h
+$ stuntcam swap -h
+--- stdout
+--- stderr
+Usage of swap:
+  -udid string
+    	simulator UDID
+--- simctl
+--- files
+--- exit 0
+
+=== trace -h
+$ stuntcam trace -h
+--- stdout
+--- stderr
+Usage of trace:
+  -json
+    	JSON output (schema: cli/README.md)
+  -pid int
+    	that process's trace (default: the newest)
+  -udid string
+    	simulator UDID
+--- simctl
+--- files
+--- exit 0
+
+=== env -h
+$ stuntcam env -h
+--- stdout
+--- stderr
+Usage of env:
+  -build string
+    	build dir
+  -udid string
+    	simulator UDID
+--- simctl
+--- files
+--- exit 0
+
+=== source -h
+$ stuntcam source -h
+--- stdout
+--- stderr
+Usage of source:
+  -back string
+    	webcam: the camera for the back position (localized name or uniqueID)
+  -front string
+    	webcam: the camera for the front position (localized name or uniqueID)
+  -udid string
+    	simulator UDID
+--- simctl
+--- files
+--- exit 0
+
+=== orient -h
+$ stuntcam orient -h
+--- stdout
+--- stderr
+Usage of orient:
+  -udid string
+    	simulator UDID
+--- simctl
+--- files
+--- exit 0
+
+=== doctor -h
+$ stuntcam doctor -h
+--- stdout
+--- stderr
+Usage of doctor:
+  -json
+    	JSON output (for bug reports)
+--- simctl
+--- files
+--- exit 0
+
+=== version -h
+$ stuntcam version -h
+--- stdout
+--- stderr
+Usage of version:
+  -check
+    	verify every installed file against the package manifest and unpack the payload (dylibs, canary) into the host directory
+--- simctl
+--- files
+--- exit 0
+
+=== usage error: chain -h
+$ stuntcam chain -h
+--- stdout
+--- stderr
+stuntcam: usage: stuntcam chain add|rm|ls [--udid U] [LIB] (the action comes first)
+--- simctl
+--- files
+--- exit 64
+
+=== usage error: chain ls -h
+$ stuntcam chain ls -h
+--- stdout
+--- stderr
+Usage of chain:
+  -udid string
+    	simulator UDID
+--- simctl
+--- files
+--- exit 0
+
+=== usage error: chain
+$ stuntcam chain
+--- stdout
+--- stderr
+stuntcam: usage: stuntcam chain add|rm|ls [--udid U] [LIB] (the action comes first)
+--- simctl
+--- files
+--- exit 64
+
+=== usage error: chain frob
+$ stuntcam chain frob
+--- stdout
+--- stderr
+stuntcam: unknown chain action "frob" (add, rm, ls)
+--- simctl
+--- files
+--- exit 64
+
+=== usage error: chain ls x
+$ stuntcam chain ls x
+--- stdout
+--- stderr
+stuntcam: chain: unexpected argument "x"
+--- simctl
+--- files
+--- exit 64
+
+=== usage error: sentinel -h
+$ stuntcam sentinel -h
+--- stdout
+--- stderr
+stuntcam: usage: stuntcam sentinel ls|clear [--udid U] [--bundle B] (the action comes first)
+--- simctl
+--- files
+--- exit 64
+
+=== usage error: sentinel ls -h
+$ stuntcam sentinel ls -h
+--- stdout
+--- stderr
+Usage of sentinel:
+  -bundle string
+    	one app (default: every app with records on this simulator)
+  -udid string
+    	simulator UDID
+--- simctl
+--- files
+--- exit 0
+
+=== usage error: sentinel
+$ stuntcam sentinel
+--- stdout
+--- stderr
+stuntcam: usage: stuntcam sentinel ls|clear [--udid U] [--bundle B] (the action comes first)
+--- simctl
+--- files
+--- exit 64
+
+=== usage error: sentinel ls x
+$ stuntcam sentinel ls x
+--- stdout
+--- stderr
+stuntcam: sentinel: unexpected argument "x"
+--- simctl
+--- files
+--- exit 64
+
+=== usage error: service
+$ stuntcam service
+--- stdout
+--- stderr
+stuntcam: usage: stuntcam service install|run (--only U … | --all) [--preboot U] | uninstall | status
+--- simctl
+--- files
+--- exit 64
+
+=== usage error: service -h
+$ stuntcam service -h
+--- stdout
+--- stderr
+stuntcam: unknown service action "-h" (install, uninstall, status, run)
+--- simctl
+--- files
+--- exit 64
+
+=== usage error: service status -h
+$ stuntcam service status -h
+--- stdout
+--- stderr
+Usage of service:
+  -all
+    	arm every iOS simulator that boots unarmed (on a shared Mac this includes other people's)
+  -only value
+    	arm only this simulator (repeatable)
+  -preboot string
+    	boot this simulator armed when the service starts (at login)
+--- simctl
+--- files
+--- exit 0
+
+=== usage error: service install
+$ stuntcam service install
+--- stdout
+--- stderr
+stuntcam: service install needs --only <udid> (repeatable) or --all: it arms simulators that boot without stuntcam, and other tools' or people's simulators may be booted on this Mac
+--- simctl
+--- files
+--- exit 64
+
+=== usage error: service run
+$ stuntcam service run
+--- stdout
+--- stderr
+stuntcam: service run needs --only <udid> (repeatable) or --all: it arms simulators that boot without stuntcam, and other tools' or people's simulators may be booted on this Mac
+--- simctl
+--- files
+--- exit 64
+
+=== usage error: service run --only A --all
+$ stuntcam service run --only A --all
+--- stdout
+--- stderr
+stuntcam: --only and --all exclude each other
+--- simctl
+--- files
+--- exit 64
+
+=== usage error: service frob --all
+$ stuntcam service frob --all
+--- stdout
+--- stderr
+stuntcam: unknown service action "frob" (install, uninstall, status, run)
+--- simctl
+--- files
+--- exit 64
+
+=== usage error: up x
+$ stuntcam up x
+--- stdout
+--- stderr
+stuntcam: up: unexpected argument "x"
+--- simctl
+--- files
+--- exit 64
+
+=== usage error: up --bogus
+$ stuntcam up --bogus
+--- stdout
+--- stderr
+flag provided but not defined: -bogus
+Usage of up:
+  -allow-unverified
+    	arm even if the canary failed on this runtime
+  -build string
+    	use this build dir (loader + engine pair) instead of the default
+  -grant value
+    	grant camera + microphone to this bundle id (repeatable; terminates it if running)
+  -log
+    	log stub and engine decisions under the host directory's logs/<udid>/
+  -mode string
+    	boot | launchd (default: boot if the sim is shut down, launchd if it is booted)
+  -reboot
+    	reboot a booted simulator into boot mode (Xcode Run and tests need it)
+  -skip-verify
+    	arm without a canary verdict
+  -source string
+    	scene | image:PATH | video:PATH | webcam[:NAME] (default scene)
+  -udid string
+    	simulator UDID
+stuntcam: flag provided but not defined: -bogus
+--- simctl
+--- files
+--- exit 64
+
+=== usage error: status x
+$ stuntcam status x
+--- stdout
+--- stderr
+stuntcam: status: unexpected argument "x"
+--- simctl
+--- files
+--- exit 64
+
+=== usage error: swap a b
+$ stuntcam swap a b
+--- stdout
+--- stderr
+stuntcam: swap: unexpected argument "b"
+--- simctl
+--- files
+--- exit 64
+
+=== usage error: swap L --udid X
+$ stuntcam swap L --udid X
+--- stdout
+--- stderr
+stuntcam: swap: options go before the arguments ("--udid")
+--- simctl
+--- files
+--- exit 64
+
+=== usage error: trace
+$ stuntcam trace
+--- stdout
+--- stderr
+stuntcam: usage: stuntcam trace [--json] [--udid U] [--pid N] BUNDLE
+--- simctl
+--- files
+--- exit 64
+
+=== usage error: trace ../x
+$ stuntcam trace ../x
+--- stdout
+--- stderr
+stuntcam: bad bundle id "../x"
+--- simctl
+--- files
+--- exit 64
+
+=== usage error: trace a b
+$ stuntcam trace a b
+--- stdout
+--- stderr
+stuntcam: trace: unexpected argument "b"
+--- simctl
+--- files
+--- exit 64
+
+=== usage error: trace --pid x b
+$ stuntcam trace --pid x b
+--- stdout
+--- stderr
+invalid value "x" for flag -pid: parse error
+Usage of trace:
+  -json
+    	JSON output (schema: cli/README.md)
+  -pid int
+    	that process's trace (default: the newest)
+  -udid string
+    	simulator UDID
+stuntcam: invalid value "x" for flag -pid: parse error
+--- simctl
+--- files
+--- exit 64
+
+=== usage error: source
+$ stuntcam source
+--- stdout
+--- stderr
+stuntcam: usage: stuntcam source [--udid U] [--front NAME] [--back NAME] scene|image:PATH|video:PATH|webcam[:NAME]
+--- simctl
+--- files
+--- exit 64
+
+=== usage error: source bogus
+$ stuntcam source bogus
+--- stdout
+--- stderr
+stuntcam: usage: stuntcam source [--udid U] [--front NAME] [--back NAME] scene|image:PATH|video:PATH|webcam[:NAME]
+--- simctl
+--- files
+--- exit 64
+
+=== usage error: source --front X scene
+$ stuntcam source --front X scene
+--- stdout
+--- stderr
+stuntcam: --front and --back go with the webcam source
+--- simctl
+--- files
+--- exit 64
+
+=== usage error: source scene --udid X
+$ stuntcam source scene --udid X
+--- stdout
+--- stderr
+stuntcam: source: options go before the arguments ("--udid")
+--- simctl
+--- files
+--- exit 64
+
+=== usage error: orient
+$ stuntcam orient
+--- stdout
+--- stderr
+stuntcam: usage: stuntcam orient [--udid U] portrait|upsideDown|landscapeLeft|landscapeRight|auto
+--- simctl
+--- files
+--- exit 64
+
+=== usage error: orient sideways
+$ stuntcam orient sideways
+--- stdout
+--- stderr
+stuntcam: usage: stuntcam orient [--udid U] portrait|upsideDown|landscapeLeft|landscapeRight|auto
+--- simctl
+--- files
+--- exit 64
+
+=== usage error: exec
+$ stuntcam exec
+--- stdout
+--- stderr
+stuntcam: usage: stuntcam exec [--build DIR] -- COMMAND [ARGS…]
+--- simctl
+--- files
+--- exit 64
+
+=== usage error: exec --
+$ stuntcam exec --
+--- stdout
+--- stderr
+stuntcam: usage: stuntcam exec [--build DIR] -- COMMAND [ARGS…]
+--- simctl
+--- files
+--- exit 64
+
+=== usage error: exec --bogus
+$ stuntcam exec --bogus
+--- stdout
+--- stderr
+flag provided but not defined: -bogus
+Usage of exec:
+  -build string
+    	build dir
+stuntcam: flag provided but not defined: -bogus
+--- simctl
+--- files
+--- exit 64
+
+=== usage error: gc x
+$ stuntcam gc x
+--- stdout
+--- stderr
+stuntcam: gc: unexpected argument "x"
+--- simctl
+--- files
+--- exit 64
+
+=== usage error: gc --keep-builds x
+$ stuntcam gc --keep-builds x
+--- stdout
+--- stderr
+invalid value "x" for flag -keep-builds: parse error
+Usage of gc:
+  -dry-run
+    	list what would be removed
+  -keep-builds int
+    	newest unreferenced builds to keep (default 3)
+stuntcam: invalid value "x" for flag -keep-builds: parse error
+--- simctl
+--- files
+--- exit 64
+
+=== usage error: verify x
+$ stuntcam verify x
+--- stdout
+--- stderr
+stuntcam: verify: unexpected argument "x"
+--- simctl
+--- files
+--- exit 64
+
+=== usage error: version x
+$ stuntcam version x
+--- stdout
+--- stderr
+stuntcam: version: unexpected argument "x"
+--- simctl
+--- files
+--- exit 64
+
+=== usage error: doctor x
+$ stuntcam doctor x
+--- stdout
+--- stderr
+stuntcam: doctor: unexpected argument "x"
+--- simctl
+--- files
+--- exit 64
+
+=== usage error: env x
+$ stuntcam env x
+--- stdout
+--- stderr
+stuntcam: env: unexpected argument "x"
+--- simctl
+--- files
+--- exit 64
+
+=== usage error: down x
+$ stuntcam down x
+--- stdout
+--- stderr
+stuntcam: down: unexpected argument "x"
+--- simctl
+--- files
+--- exit 64
+
+=== version
+$ stuntcam version
+--- stdout
+stuntcam 0.0.0-dev
+--- stderr
+--- simctl
+--- files
+--- exit 0
+
+=== version --check (not installed)
+$ stuntcam version --check
+--- stdout
+stuntcam 0.0.0-dev
+--- stderr
+stuntcam: not an installed stuntcam: no share/stuntcam/manifest.txt next to <test binary> (a dev build: `stuntcam doctor` shows its build)
+--- simctl
+--- files
+--- exit 1
+
+=== no simulators: down
+$ stuntcam down
+--- stdout
+--- stderr
+stuntcam: no booted simulator and none booted before; pass --udid (xcrun simctl list devices)
+--- simctl
+list devices -j
+--- files
+--- exit 1
+
+=== no simulators: status
+$ stuntcam status
+--- stdout
+no booted simulators and none armed before (stuntcam up)
+--- stderr
+--- simctl
+list devices -j
+--- files
+--- exit 0
+
+=== no simulators: status --json
+$ stuntcam status --json
+--- stdout
+null
+--- stderr
+--- simctl
+list devices -j
+--- files
+--- exit 0
+
+=== unknown --udid
+$ stuntcam down --udid NOPE
+--- stdout
+--- stderr
+stuntcam: no simulator NOPE (xcrun simctl list devices)
+--- simctl
+list devices -j
+--- files
+--- exit 1
+
+=== two booted simulators
+$ stuntcam swap
+--- stdout
+--- stderr
+stuntcam: 2 simulators are booted; pick one with --udid: iPhone A (U1), iPhone B (U2)
+--- simctl
+list devices -j
+--- files
+--- exit 1
+
+=== no build
+$ stuntcam env
+--- stdout
+--- stderr
+stuntcam: no stuntcam build found: run ./build.sh in a stuntcam checkout, pass --build <dir>, or set STUNTCAM_BUILD
+--- simctl
+list devices -j
+--- files
+--- exit 1
+
+=== status: every mode
+$ stuntcam status
+--- stdout
+Boot exec (B3, iOS 27.0): Booted, boot, build dddddddddddd, Xcode 27B5
+  boot-armed with another directory, $T/simcam/sims/exec-<run> (a simulator `stuntcam exec`'s command booted?)
+Boot other home (B4, iOS 27.0): Booted, boot
+  boot-armed under another stuntcam home: /other/home/sims/B4 (SIMCAM_HOME differs from $T/simcam)
+Boot scripts (B2, iOS 27.0): Booted, boot, build aaaaaaaaaaaa
+  boot-armed outside the stuntcam command (scripts/boot.sh?)
+Boot unreadable (B5, iOS 27.0): Booted, boot, build aaaaaaaaaaaa, armed <ago> ago
+Boot up (B1, iOS 27.0): Booted, boot, build aaaaaaaaaaaa, Xcode 27A266a, armed <ago> ago
+  chain: /x/libother.dylib
+  latched: dev.x (marker: session until <time>): no camera and stock CoreMotion until `stuntcam sentinel clear --bundle dev.x`
+  container-tmp fallback not checked: dev.x: app not installed
+Booting (P1, iOS 27.0): Booted, booting
+  being booted armed by `stuntcam up` or `exec` right now
+Down (D1, iOS 27.0): Booted, booted-unarmed
+  `stuntcam down` since this boot: its boot environment still has the stub, so `stuntcam up` re-arms it without a reboot
+Down unreadable (N3, iOS 27.0): Booted, booted-unarmed
+  `stuntcam down` since this boot: its boot environment still has the stub, so `stuntcam up` re-arms it without a reboot
+Env (E1, iOS 27.0): Booted, env, build aaaaaaaaaaaa
+  per-launch arming only (`stuntcam env`): launches without its exports get no camera
+Launchd (L1, iOS 27.0): Booted, launchd, build aaaaaaaaaaaa, armed <ago> ago
+Launchd lost (L2, iOS 27.0): Booted, booted-unarmed, build aaaaaaaaaaaa, armed <ago> ago
+  the stub is no longer in the simulator's launchd environment
+Launchd no current (N2, iOS 27.0): Booted, booted-unarmed
+Nothing (N1, iOS 27.0): Booted, booted-unarmed
+Off boot (S1, iOS 27.0): Shutdown, unarmed, build aaaaaaaaaaaa
+  boot-mode arming ends at shutdown; `stuntcam up` boots it armed
+Off launchd (S2, iOS 27.0): Shutdown, unarmed
+Rebooted (R1, iOS 27.0): Booted, booted-unarmed, build aaaaaaaaaaaa
+  rebooted since `stuntcam up` (by Xcode, Simulator or a restart): run `stuntcam up --reboot` for Xcode Run
+Rebooted unreadable (R2, iOS 27.0): Booted, booted-unarmed, build aaaaaaaaaaaa
+  rebooted since `stuntcam up` (by Xcode, Simulator or a restart): run `stuntcam up --reboot` for Xcode Run
+Scripts launchd (A1, iOS 27.0): Booted, armed, build aaaaaaaaaaaa
+  armed outside the stuntcam command (scripts/boot.sh or launchd-arm.sh?): mode unknown
+--- stderr
+--- simctl
+list devices -j
+get_app_container B1 dev.x data
+spawn L1 launchctl getenv DYLD_INSERT_LIBRARIES
+spawn L2 launchctl getenv DYLD_INSERT_LIBRARIES
+--- files
+sims/A1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+sims/B1/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"boot","proto":1,"vars":null}
+sims/B1/chain.txt
+  | # a comment
+  | /x/libother.dylib
+sims/B1/config.json
+  | {"proto":1,"xcode_version":"27.0","xcode_build":"27A266a","developer_dir":"/Applications/Xcode.app/Contents/Developer","rules_dir":"","source":"up","at":<n>}
+sims/B1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+sims/B1/state/dev.x/latched-aaaaaaaaaaaa
+sims/B2/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+sims/B5/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"boot","proto":1,"vars":null}
+sims/B5/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+sims/D1/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"boot","proto":1,"vars":null}
+sims/E1/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"env","proto":1,"vars":null}
+sims/E1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+sims/L1/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"launchd","proto":1,"vars":["DYLD_INSERT_LIBRARIES","SIMCAM_CONTROL"]}
+sims/L1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+sims/L2/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"launchd","proto":1,"vars":["DYLD_INSERT_LIBRARIES"]}
+sims/L2/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+sims/N2/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"launchd","proto":1,"vars":null}
+sims/N3/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"boot","proto":1,"vars":null}
+sims/P1/arm.json
+  | {"proto":1,"mode":"boot","build":"x","at":<n>,"booting":true,"pid":<n>}
+sims/R1/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"boot","proto":1,"vars":null}
+sims/R1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+sims/R2/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"boot","proto":1,"vars":null}
+sims/R2/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+sims/S1/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"boot","proto":1,"vars":null}
+sims/S1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+sims/S2/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"launchd","proto":1,"vars":null}
+sims/exec-<run>/config.json
+  | {"proto":1,"xcode_version":"27.0","xcode_build":"27B5","developer_dir":"/Applications/Xcode.app/Contents/Developer","rules_dir":"","source":"up","at":<n>}
+sims/exec-<run>/current
+  | 1 $T/simcam/builds/dddddddddddd/libsimcamloader.dylib
+--- exit 0
+
+=== status --json: every mode
+$ stuntcam status --json
+--- stdout
+[
+ {
+  "UDID": "B3",
+  "Name": "Boot exec",
+  "Runtime": "iOS 27.0",
+  "State": "Booted",
+  "Mode": "boot",
+  "Build": "dddddddddddd",
+  "Xcode": "27B5",
+  "BootEnv": "stub",
+  "SimDir": "$T/simcam/sims/exec-<run>",
+  "Note": "boot-armed with another directory, $T/simcam/sims/exec-<run> (a simulator `stuntcam exec`'s command booted?)"
+ },
+ {
+  "UDID": "B4",
+  "Name": "Boot other home",
+  "Runtime": "iOS 27.0",
+  "State": "Booted",
+  "Mode": "boot",
+  "Build": "",
+  "BootEnv": "stub",
+  "SimDir": "/other/home/sims/B4",
+  "Note": "boot-armed under another stuntcam home: /other/home/sims/B4 (SIMCAM_HOME differs from $T/simcam)"
+ },
+ {
+  "UDID": "B2",
+  "Name": "Boot scripts",
+  "Runtime": "iOS 27.0",
+  "State": "Booted",
+  "Mode": "boot",
+  "Build": "aaaaaaaaaaaa",
+  "BootEnv": "stub",
+  "SimDir": "$T/simcam/sims/B2",
+  "Note": "boot-armed outside the stuntcam command (scripts/boot.sh?)"
+ },
+ {
+  "UDID": "B5",
+  "Name": "Boot unreadable",
+  "Runtime": "iOS 27.0",
+  "State": "Booted",
+  "Mode": "boot",
+  "Build": "aaaaaaaaaaaa",
+  "BootEnv": "unreadable: no launchd_sim for B5",
+  "ArmedAt": <at>
+ },
+ {
+  "UDID": "B1",
+  "Name": "Boot up",
+  "Runtime": "iOS 27.0",
+  "State": "Booted",
+  "Mode": "boot",
+  "Build": "aaaaaaaaaaaa",
+  "Xcode": "27A266a",
+  "BootEnv": "stub",
+  "SimDir": "$T/simcam/sims/B1",
+  "ArmedAt": <at>,
+  "Chain": [
+   "/x/libother.dylib"
+  ],
+  "Latched": {
+   "dev.x": "(marker: session until <time>)"
+  },
+  "LatchEffect": {
+   "dev.x": "no camera and stock CoreMotion"
+  },
+  "FallbackUnchecked": {
+   "dev.x": "app not installed"
+  }
+ },
+ {
+  "UDID": "P1",
+  "Name": "Booting",
+  "Runtime": "iOS 27.0",
+  "State": "Booted",
+  "Mode": "booting",
+  "Build": "",
+  "BootEnv": "unreadable: no launchd_sim for P1",
+  "Note": "being booted armed by `stuntcam up` or `exec` right now"
+ },
+ {
+  "UDID": "D1",
+  "Name": "Down",
+  "Runtime": "iOS 27.0",
+  "State": "Booted",
+  "Mode": "booted-unarmed",
+  "Build": "",
+  "BootEnv": "stub",
+  "SimDir": "$T/simcam/sims/D1",
+  "Note": "`stuntcam down` since this boot: its boot environment still has the stub, so `stuntcam up` re-arms it without a reboot"
+ },
+ {
+  "UDID": "N3",
+  "Name": "Down unreadable",
+  "Runtime": "iOS 27.0",
+  "State": "Booted",
+  "Mode": "booted-unarmed",
+  "Build": "",
+  "BootEnv": "unreadable: no launchd_sim for N3",
+  "Note": "`stuntcam down` since this boot: its boot environment still has the stub, so `stuntcam up` re-arms it without a reboot"
+ },
+ {
+  "UDID": "E1",
+  "Name": "Env",
+  "Runtime": "iOS 27.0",
+  "State": "Booted",
+  "Mode": "env",
+  "Build": "aaaaaaaaaaaa",
+  "BootEnv": "unreadable: no launchd_sim for E1",
+  "Note": "per-launch arming only (`stuntcam env`): launches without its exports get no camera"
+ },
+ {
+  "UDID": "L1",
+  "Name": "Launchd",
+  "Runtime": "iOS 27.0",
+  "State": "Booted",
+  "Mode": "launchd",
+  "Build": "aaaaaaaaaaaa",
+  "BootEnv": "unreadable: no launchd_sim for L1",
+  "ArmedAt": <at>
+ },
+ {
+  "UDID": "L2",
+  "Name": "Launchd lost",
+  "Runtime": "iOS 27.0",
+  "State": "Booted",
+  "Mode": "booted-unarmed",
+  "Build": "aaaaaaaaaaaa",
+  "BootEnv": "unreadable: no launchd_sim for L2",
+  "ArmedAt": <at>,
+  "Note": "the stub is no longer in the simulator's launchd environment"
+ },
+ {
+  "UDID": "N2",
+  "Name": "Launchd no current",
+  "Runtime": "iOS 27.0",
+  "State": "Booted",
+  "Mode": "booted-unarmed",
+  "Build": "",
+  "BootEnv": "unreadable: no launchd_sim for N2"
+ },
+ {
+  "UDID": "N1",
+  "Name": "Nothing",
+  "Runtime": "iOS 27.0",
+  "State": "Booted",
+  "Mode": "booted-unarmed",
+  "Build": "",
+  "BootEnv": "unreadable: no launchd_sim for N1"
+ },
+ {
+  "UDID": "S1",
+  "Name": "Off boot",
+  "Runtime": "iOS 27.0",
+  "State": "Shutdown",
+  "Mode": "unarmed",
+  "Build": "aaaaaaaaaaaa",
+  "Note": "boot-mode arming ends at shutdown; `stuntcam up` boots it armed"
+ },
+ {
+  "UDID": "S2",
+  "Name": "Off launchd",
+  "Runtime": "iOS 27.0",
+  "State": "Shutdown",
+  "Mode": "unarmed",
+  "Build": ""
+ },
+ {
+  "UDID": "R1",
+  "Name": "Rebooted",
+  "Runtime": "iOS 27.0",
+  "State": "Booted",
+  "Mode": "booted-unarmed",
+  "Build": "aaaaaaaaaaaa",
+  "BootEnv": "no stub",
+  "Note": "rebooted since `stuntcam up` (by Xcode, Simulator or a restart): run `stuntcam up --reboot` for Xcode Run"
+ },
+ {
+  "UDID": "R2",
+  "Name": "Rebooted unreadable",
+  "Runtime": "iOS 27.0",
+  "State": "Booted",
+  "Mode": "booted-unarmed",
+  "Build": "aaaaaaaaaaaa",
+  "BootEnv": "unreadable: no launchd_sim for R2",
+  "Note": "rebooted since `stuntcam up` (by Xcode, Simulator or a restart): run `stuntcam up --reboot` for Xcode Run"
+ },
+ {
+  "UDID": "A1",
+  "Name": "Scripts launchd",
+  "Runtime": "iOS 27.0",
+  "State": "Booted",
+  "Mode": "armed",
+  "Build": "aaaaaaaaaaaa",
+  "BootEnv": "no stub",
+  "Note": "armed outside the stuntcam command (scripts/boot.sh or launchd-arm.sh?): mode unknown"
+ }
+]
+--- stderr
+--- simctl
+list devices -j
+get_app_container B1 dev.x data
+spawn L1 launchctl getenv DYLD_INSERT_LIBRARIES
+spawn L2 launchctl getenv DYLD_INSERT_LIBRARIES
+--- files
+sims/A1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+sims/B1/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"boot","proto":1,"vars":null}
+sims/B1/chain.txt
+  | # a comment
+  | /x/libother.dylib
+sims/B1/config.json
+  | {"proto":1,"xcode_version":"27.0","xcode_build":"27A266a","developer_dir":"/Applications/Xcode.app/Contents/Developer","rules_dir":"","source":"up","at":<n>}
+sims/B1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+sims/B1/state/dev.x/latched-aaaaaaaaaaaa
+sims/B2/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+sims/B5/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"boot","proto":1,"vars":null}
+sims/B5/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+sims/D1/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"boot","proto":1,"vars":null}
+sims/E1/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"env","proto":1,"vars":null}
+sims/E1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+sims/L1/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"launchd","proto":1,"vars":["DYLD_INSERT_LIBRARIES","SIMCAM_CONTROL"]}
+sims/L1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+sims/L2/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"launchd","proto":1,"vars":["DYLD_INSERT_LIBRARIES"]}
+sims/L2/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+sims/N2/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"launchd","proto":1,"vars":null}
+sims/N3/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"boot","proto":1,"vars":null}
+sims/P1/arm.json
+  | {"proto":1,"mode":"boot","build":"x","at":<n>,"booting":true,"pid":<n>}
+sims/R1/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"boot","proto":1,"vars":null}
+sims/R1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+sims/R2/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"boot","proto":1,"vars":null}
+sims/R2/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+sims/S1/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"boot","proto":1,"vars":null}
+sims/S1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+sims/S2/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"launchd","proto":1,"vars":null}
+sims/exec-<run>/config.json
+  | {"proto":1,"xcode_version":"27.0","xcode_build":"27B5","developer_dir":"/Applications/Xcode.app/Contents/Developer","rules_dir":"","source":"up","at":<n>}
+sims/exec-<run>/current
+  | 1 $T/simcam/builds/dddddddddddd/libsimcamloader.dylib
+--- exit 0
+
+=== status: latched apps in order
+$ stuntcam status
+--- stdout
+iPhone (U, iOS 27.0): Booted, armed, build aaaaaaaaaaaa
+  armed outside the stuntcam command (scripts/boot.sh or launchd-arm.sh?): mode unknown
+  latched: dev.a (marker: session until <time>): no camera and stock CoreMotion until `stuntcam sentinel clear --bundle dev.a`
+  latched: dev.b (marker: session until <time>): no camera and stock CoreMotion until `stuntcam sentinel clear --bundle dev.b`
+  latched: dev.c (marker: session until <time>): no camera and stock CoreMotion until `stuntcam sentinel clear --bundle dev.c`
+  latched: dev.d (marker: session until <time>): no camera and stock CoreMotion until `stuntcam sentinel clear --bundle dev.d`
+  container-tmp fallback not checked: dev.a, dev.b, dev.c, dev.d: app not installed
+--- stderr
+--- simctl
+list devices -j
+get_app_container U dev.a data
+get_app_container U dev.b data
+get_app_container U dev.c data
+get_app_container U dev.d data
+--- files
+sims/U/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+sims/U/state/dev.a/latched-aaaaaaaaaaaa
+sims/U/state/dev.b/latched-aaaaaaaaaaaa
+sims/U/state/dev.c/latched-aaaaaaaaaaaa
+sims/U/state/dev.d/latched-aaaaaaaaaaaa
+--- exit 0
+
+=== status: fallback
+$ stuntcam status
+--- stdout
+iPhone (U, iOS 27.0): Booted, armed, build aaaaaaaaaaaa
+  armed outside the stuntcam command (scripts/boot.sh or launchd-arm.sh?): mode unknown
+  in the container-tmp fallback: dev.p (marker preflight-fail-aaaaaaaaaaaa: preflight failed until <time> (stock CoreMotion); $T/devices/U/data/Containers/Data/Application/dev.p/tmp/simcam-state/dev.p): stock CoreMotion until `stuntcam sentinel clear --bundle dev.p`
+  in the container-tmp fallback: dev.x (marker latched-aaaaaaaaaaaa: activate until <time>; $T/devices/U/data/Containers/Data/Application/dev.x/tmp/simcam-state/dev.x): no camera and stock CoreMotion until `stuntcam sentinel clear --bundle dev.x`
+  preflight failed (preflight failed until <time>): apps get stock CoreMotion; a passing preflight or `stuntcam sentinel clear` resets it
+  container-tmp fallback not checked: dev.gone: app not installed
+--- stderr
+--- simctl
+list devices -j
+get_app_container U dev.gone data
+get_app_container U dev.p data
+get_app_container U dev.x data
+get_app_container U dev.y data
+--- files
+sims/U/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+sims/U/state/dev.gone/events.log
+sims/U/state/dev.p/events.log
+sims/U/state/dev.x/events.log
+sims/U/state/dev.y/events.log
+sims/U/state/preflight-fail-aaaaaaaaaaaa
+--- exit 0
+
+=== doctor
+$ stuntcam doctor
+--- stdout
+ok   Xcode in use: 27.0 (27A266a) at /Applications/Xcode.app/Contents/Developer
+ok   restore rules for 27A266a: $T/build/rules/27A266a.json
+ok   iOS simulator runtimes: 27.0 (24A1), 26.3 (23D1)
+ok   host directory $T/simcam (simulator processes must be able to read it)
+ok   host directory writable
+ok   build: $T/build/aaaaaaaaaaaa
+ok   libsimcamstub.dylib ad-hoc linker-signed
+ok   libsimcamloader.dylib ad-hoc linker-signed
+ok   libsimcam.dylib ad-hoc linker-signed
+ok   libsimcamrunnerhook.dylib ad-hoc linker-signed
+info webcam: this build has no camera helper (in a checkout: helper/build.sh)
+info webcam: no camera helper running (`stuntcam source webcam` starts one)
+ok   Boot up (iOS 27.0): boot
+     boot environment (launchd_sim): stub
+warn Boot up was armed for Xcode 27B5 (/Applications/Xcode.app/Contents/Developer) but the Xcode in use is 27A266a (/Applications/Xcode.app/Contents/Developer): `stuntcam up --udid B1` re-records it (no reboot)
+warn dev.x on Boot up latched ((marker: session until <time>)): stuntcam sentinel ls --udid B1
+ok   Launchd (iOS 27.0): launchd
+     boot environment (launchd_sim): unreadable: no launchd_sim for L1
+warn Launchd: no Xcode recorded (armed by an older stuntcam or the scripts?): apps say "restore rules unverified"; `stuntcam up --udid L1` records it
+warn Nothing (iOS 27.0): booted-unarmed
+     boot environment (launchd_sim): unreadable: no launchd_sim for N1
+--- stderr
+--- simctl
+list runtimes -j
+list devices -j
+spawn L1 launchctl getenv DYLD_INSERT_LIBRARIES
+--- files
+sims/B1/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"boot","proto":1,"vars":null}
+sims/B1/config.json
+  | {"proto":1,"xcode_version":"27.0","xcode_build":"27B5","developer_dir":"/Applications/Xcode.app/Contents/Developer","rules_dir":"","source":"up","at":<n>}
+sims/B1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+sims/B1/state/dev.x/latched-aaaaaaaaaaaa
+sims/L1/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"launchd","proto":1,"vars":["DYLD_INSERT_LIBRARIES"]}
+sims/L1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+--- exit 0
+
+=== doctor --json
+$ stuntcam doctor --json
+--- stdout
+{
+  "schema": 1,
+  "version": "0.0.0-dev",
+  "host": "<os>/<arch>",
+  "xcode": {
+    "xcode_version": "27.0",
+    "xcode_build": "27A266a",
+    "developer_dir": "/Applications/Xcode.app/Contents/Developer"
+  },
+  "checks": [
+    {
+      "level": "ok",
+      "msg": "Xcode in use: 27.0 (27A266a) at /Applications/Xcode.app/Contents/Developer"
+    },
+    {
+      "level": "ok",
+      "msg": "restore rules for 27A266a: $T/build/rules/27A266a.json"
+    },
+    {
+      "level": "ok",
+      "msg": "iOS simulator runtimes: 27.0 (24A1), 26.3 (23D1)"
+    },
+    {
+      "level": "ok",
+      "msg": "host directory $T/simcam (simulator processes must be able to read it)"
+    },
+    {
+      "level": "ok",
+      "msg": "host directory writable"
+    },
+    {
+      "level": "ok",
+      "msg": "build: $T/build/aaaaaaaaaaaa"
+    },
+    {
+      "level": "ok",
+      "msg": "libsimcamstub.dylib ad-hoc linker-signed"
+    },
+    {
+      "level": "ok",
+      "msg": "libsimcamloader.dylib ad-hoc linker-signed"
+    },
+    {
+      "level": "ok",
+      "msg": "libsimcam.dylib ad-hoc linker-signed"
+    },
+    {
+      "level": "ok",
+      "msg": "libsimcamrunnerhook.dylib ad-hoc linker-signed"
+    },
+    {
+      "level": "info",
+      "msg": "webcam: this build has no camera helper (in a checkout: helper/build.sh)"
+    },
+    {
+      "level": "info",
+      "msg": "webcam: no camera helper running (`stuntcam source webcam` starts one)"
+    },
+    {
+      "level": "ok",
+      "msg": "Boot up (iOS 27.0): boot"
+    },
+    {
+      "level": "info",
+      "msg": "Boot up boot environment (launchd_sim): stub"
+    },
+    {
+      "level": "warn",
+      "msg": "Boot up was armed for Xcode 27B5 (/Applications/Xcode.app/Contents/Developer) but the Xcode in use is 27A266a (/Applications/Xcode.app/Contents/Developer): `stuntcam up --udid B1` re-records it (no reboot)"
+    },
+    {
+      "level": "warn",
+      "msg": "dev.x on Boot up latched ((marker: session until <time>)): stuntcam sentinel ls --udid B1"
+    },
+    {
+      "level": "ok",
+      "msg": "Launchd (iOS 27.0): launchd"
+    },
+    {
+      "level": "info",
+      "msg": "Launchd boot environment (launchd_sim): unreadable: no launchd_sim for L1"
+    },
+    {
+      "level": "warn",
+      "msg": "Launchd: no Xcode recorded (armed by an older stuntcam or the scripts?): apps say \"restore rules unverified\"; `stuntcam up --udid L1` records it"
+    },
+    {
+      "level": "warn",
+      "msg": "Nothing (iOS 27.0): booted-unarmed"
+    },
+    {
+      "level": "info",
+      "msg": "Nothing boot environment (launchd_sim): unreadable: no launchd_sim for N1"
+    }
+  ],
+  "failed": 0,
+  "booted_sims": [
+    {
+      "UDID": "B1",
+      "Name": "Boot up",
+      "Runtime": "iOS 27.0",
+      "State": "Booted",
+      "Mode": "boot",
+      "Build": "aaaaaaaaaaaa",
+      "Xcode": "27B5",
+      "BootEnv": "stub",
+      "SimDir": "$T/simcam/sims/B1",
+      "ArmedAt": <at>,
+      "Latched": {
+        "dev.x": "(marker: session until <time>)"
+      },
+      "LatchEffect": {
+        "dev.x": "no camera and stock CoreMotion"
+      }
+    },
+    {
+      "UDID": "L1",
+      "Name": "Launchd",
+      "Runtime": "iOS 27.0",
+      "State": "Booted",
+      "Mode": "launchd",
+      "Build": "aaaaaaaaaaaa",
+      "BootEnv": "unreadable: no launchd_sim for L1",
+      "ArmedAt": <at>
+    },
+    {
+      "UDID": "N1",
+      "Name": "Nothing",
+      "Runtime": "iOS 27.0",
+      "State": "Booted",
+      "Mode": "booted-unarmed",
+      "Build": "",
+      "BootEnv": "unreadable: no launchd_sim for N1"
+    }
+  ]
+}
+--- stderr
+--- simctl
+list runtimes -j
+list devices -j
+spawn L1 launchctl getenv DYLD_INSERT_LIBRARIES
+--- files
+sims/B1/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"boot","proto":1,"vars":null}
+sims/B1/config.json
+  | {"proto":1,"xcode_version":"27.0","xcode_build":"27B5","developer_dir":"/Applications/Xcode.app/Contents/Developer","rules_dir":"","source":"up","at":<n>}
+sims/B1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+sims/B1/state/dev.x/latched-aaaaaaaaaaaa
+sims/L1/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"launchd","proto":1,"vars":["DYLD_INSERT_LIBRARIES"]}
+sims/L1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+--- exit 0
+
+=== doctor: no build, no simctl
+$ stuntcam doctor
+--- stdout
+ok   Xcode in use: 27.0 (27A266a) at /Applications/Xcode.app/Contents/Developer
+warn restore rules unverified for Xcode 27A266a; if console/debugger misbehave use --mode launchd (no usable 27A266a.json in $T/simcam/restore-rules; best guess the built-in 27A266a rules)
+FAIL simctl: simctl list runtimes -j: exit status 72: xcrun: error: unable to find utility "simctl"
+ok   host directory $T/simcam (simulator processes must be able to read it)
+ok   host directory writable
+FAIL build:  (no stuntcam build found: run ./build.sh in a stuntcam checkout, pass --build <dir>, or set STUNTCAM_BUILD)
+info webcam: no camera helper running (`stuntcam source webcam` starts one)
+FAIL simctl: simctl list devices -j: exit status 72: xcrun: error: unable to find utility "simctl"
+--- stderr
+stuntcam: 3 check(s) failed
+--- simctl
+--- files
+--- exit 1
+
+=== gc --dry-run
+$ stuntcam gc --dry-run
+--- stdout
+would delete private canary device canary old P1
+would remove state of deleted simulator $T/simcam/sims/GONE
+would remove finished exec run $T/simcam/sims/exec-<run>
+would remove unused build $T/simcam/builds/888888888888
+would remove unused build $T/simcam/builds/999999999999
+would remove stale temp dir $T/simcam/canary/.stage-1
+would remove old unpacked canary $T/simcam/canary/c3c3c3c3c3c3
+would remove old unpacked canary $T/simcam/canary/c4c4c4c4c4c4
+would remove stale temp dir $T/simcam/restore-rules/.old-1
+--- stderr
+--- simctl
+list runtimes -j
+list devices -j
+private-list devices -j
+--- files
+builds/111111111111/libsimcamloader.dylib
+builds/222222222222/libsimcamloader.dylib
+builds/555555555555/libsimcamloader.dylib
+builds/666666666666/libsimcamloader.dylib
+builds/777777777777/libsimcamloader.dylib
+builds/888888888888/libsimcamloader.dylib
+builds/999999999999/libsimcamloader.dylib
+builds/eeeeeeeeeeee/libsimcamloader.dylib
+builds/eeeeeeeeeeee/libsimcamstub.dylib
+canary/c1c1c1c1c1c1/m10canary.app/x
+canary/c2c2c2c2c2c2/m10canary.app/x
+canary/c3c3c3c3c3c3/m10canary.app/x
+canary/c4c4c4c4c4c4/m10canary.app/x
+sims/GONE/current
+  | 1 x
+sims/U1/arm.json
+  | {"proto":1,"mode":"launchd","build":"222222222222","at":<n>}
+sims/U1/current
+  | 1 $T/simcam/builds/111111111111/libsimcamloader.dylib
+sims/exec-<run>/current
+  | 1 $T/simcam/builds/333333333333/libsimcamloader.dylib
+sims/exec-<run>/current
+  | 1 $T/simcam/builds/444444444444/libsimcamloader.dylib
+--- exit 0
+
+=== gc
+$ stuntcam gc
+--- stdout
+deleted private canary device canary old P1
+removed state of deleted simulator $T/simcam/sims/GONE
+removed finished exec run $T/simcam/sims/exec-<run>
+removed unused build $T/simcam/builds/888888888888
+removed unused build $T/simcam/builds/999999999999
+removed stale temp dir $T/simcam/canary/.stage-1
+removed old unpacked canary $T/simcam/canary/c3c3c3c3c3c3
+removed old unpacked canary $T/simcam/canary/c4c4c4c4c4c4
+removed stale temp dir $T/simcam/restore-rules/.old-1
+--- stderr
+--- simctl
+list runtimes -j
+list devices -j
+private-list devices -j
+private-delete P1
+--- files
+builds/111111111111/libsimcamloader.dylib
+builds/222222222222/libsimcamloader.dylib
+builds/555555555555/libsimcamloader.dylib
+builds/666666666666/libsimcamloader.dylib
+builds/777777777777/libsimcamloader.dylib
+builds/eeeeeeeeeeee/libsimcamloader.dylib
+builds/eeeeeeeeeeee/libsimcamstub.dylib
+canary/.lock
+canary/c1c1c1c1c1c1/m10canary.app/x
+canary/c2c2c2c2c2c2/m10canary.app/x
+sims/U1/arm.json
+  | {"proto":1,"mode":"launchd","build":"222222222222","at":<n>}
+sims/U1/current
+  | 1 $T/simcam/builds/111111111111/libsimcamloader.dylib
+sims/exec-<run>/current
+  | 1 $T/simcam/builds/444444444444/libsimcamloader.dylib
+--- exit 0
+
+=== gc --keep-builds 1 --dry-run
+$ stuntcam gc --keep-builds 1 --dry-run
+--- stdout
+would delete private canary device canary old P1
+would remove state of deleted simulator $T/simcam/sims/GONE
+would remove finished exec run $T/simcam/sims/exec-<run>
+would remove unused build $T/simcam/builds/666666666666
+would remove unused build $T/simcam/builds/777777777777
+would remove unused build $T/simcam/builds/888888888888
+would remove unused build $T/simcam/builds/999999999999
+would remove stale temp dir $T/simcam/canary/.stage-1
+would remove old unpacked canary $T/simcam/canary/c3c3c3c3c3c3
+would remove old unpacked canary $T/simcam/canary/c4c4c4c4c4c4
+would remove stale temp dir $T/simcam/restore-rules/.old-1
+--- stderr
+--- simctl
+list runtimes -j
+list devices -j
+private-list devices -j
+--- files
+builds/111111111111/libsimcamloader.dylib
+builds/222222222222/libsimcamloader.dylib
+builds/555555555555/libsimcamloader.dylib
+builds/666666666666/libsimcamloader.dylib
+builds/777777777777/libsimcamloader.dylib
+builds/888888888888/libsimcamloader.dylib
+builds/999999999999/libsimcamloader.dylib
+builds/eeeeeeeeeeee/libsimcamloader.dylib
+builds/eeeeeeeeeeee/libsimcamstub.dylib
+canary/c1c1c1c1c1c1/m10canary.app/x
+canary/c2c2c2c2c2c2/m10canary.app/x
+canary/c3c3c3c3c3c3/m10canary.app/x
+canary/c4c4c4c4c4c4/m10canary.app/x
+sims/GONE/current
+  | 1 x
+sims/U1/arm.json
+  | {"proto":1,"mode":"launchd","build":"222222222222","at":<n>}
+sims/U1/current
+  | 1 $T/simcam/builds/111111111111/libsimcamloader.dylib
+sims/exec-<run>/current
+  | 1 $T/simcam/builds/333333333333/libsimcamloader.dylib
+sims/exec-<run>/current
+  | 1 $T/simcam/builds/444444444444/libsimcamloader.dylib
+--- exit 0
+
+=== gc: no runtimes listed
+$ stuntcam gc --dry-run
+--- stdout
+keeping every simulator's state and the private devices (no simulators or runtimes listed)
+would remove finished exec run $T/simcam/sims/exec-<run>
+would remove unused build $T/simcam/builds/888888888888
+would remove unused build $T/simcam/builds/999999999999
+would remove stale temp dir $T/simcam/canary/.stage-1
+would remove old unpacked canary $T/simcam/canary/c3c3c3c3c3c3
+would remove old unpacked canary $T/simcam/canary/c4c4c4c4c4c4
+would remove stale temp dir $T/simcam/restore-rules/.old-1
+--- stderr
+--- simctl
+list runtimes -j
+list devices -j
+private-list devices -j
+--- files
+builds/111111111111/libsimcamloader.dylib
+builds/222222222222/libsimcamloader.dylib
+builds/555555555555/libsimcamloader.dylib
+builds/666666666666/libsimcamloader.dylib
+builds/777777777777/libsimcamloader.dylib
+builds/888888888888/libsimcamloader.dylib
+builds/999999999999/libsimcamloader.dylib
+builds/eeeeeeeeeeee/libsimcamloader.dylib
+builds/eeeeeeeeeeee/libsimcamstub.dylib
+canary/c1c1c1c1c1c1/m10canary.app/x
+canary/c2c2c2c2c2c2/m10canary.app/x
+canary/c3c3c3c3c3c3/m10canary.app/x
+canary/c4c4c4c4c4c4/m10canary.app/x
+sims/GONE/current
+  | 1 x
+sims/U1/arm.json
+  | {"proto":1,"mode":"launchd","build":"222222222222","at":<n>}
+sims/U1/current
+  | 1 $T/simcam/builds/111111111111/libsimcamloader.dylib
+sims/exec-<run>/current
+  | 1 $T/simcam/builds/333333333333/libsimcamloader.dylib
+sims/exec-<run>/current
+  | 1 $T/simcam/builds/444444444444/libsimcamloader.dylib
+--- exit 0
+
+=== gc: simctl fails
+$ stuntcam gc --dry-run
+--- stdout
+keeping every simulator's state and the private devices (simctl list devices -j: exit status 1: boom)
+would remove finished exec run $T/simcam/sims/exec-<run>
+would remove unused build $T/simcam/builds/888888888888
+would remove unused build $T/simcam/builds/999999999999
+would remove stale temp dir $T/simcam/canary/.stage-1
+would remove old unpacked canary $T/simcam/canary/c3c3c3c3c3c3
+would remove old unpacked canary $T/simcam/canary/c4c4c4c4c4c4
+would remove stale temp dir $T/simcam/restore-rules/.old-1
+--- stderr
+--- simctl
+--- files
+builds/111111111111/libsimcamloader.dylib
+builds/222222222222/libsimcamloader.dylib
+builds/555555555555/libsimcamloader.dylib
+builds/666666666666/libsimcamloader.dylib
+builds/777777777777/libsimcamloader.dylib
+builds/888888888888/libsimcamloader.dylib
+builds/999999999999/libsimcamloader.dylib
+builds/eeeeeeeeeeee/libsimcamloader.dylib
+builds/eeeeeeeeeeee/libsimcamstub.dylib
+canary/c1c1c1c1c1c1/m10canary.app/x
+canary/c2c2c2c2c2c2/m10canary.app/x
+canary/c3c3c3c3c3c3/m10canary.app/x
+canary/c4c4c4c4c4c4/m10canary.app/x
+sims/GONE/current
+  | 1 x
+sims/U1/arm.json
+  | {"proto":1,"mode":"launchd","build":"222222222222","at":<n>}
+sims/U1/current
+  | 1 $T/simcam/builds/111111111111/libsimcamloader.dylib
+sims/exec-<run>/current
+  | 1 $T/simcam/builds/333333333333/libsimcamloader.dylib
+sims/exec-<run>/current
+  | 1 $T/simcam/builds/444444444444/libsimcamloader.dylib
+--- exit 0
+
+=== exec: exit code passed through
+$ stuntcam exec -- sh -c echo out; echo err >&2; exit 3
+--- stdout
+out
+--- stderr
+err
+stuntcam: no app used the camera in the command's simulators
+--- simctl
+list devices -j
+--- files
+builds/aaaaaaaaaaaa/libsimcam.dylib
+builds/aaaaaaaaaaaa/libsimcamloader.dylib
+builds/bbbbbbbbbbbb/libsimcamstub.dylib
+builds/cccccccccccc/libsimcamrunnerhook.dylib
+data/5d45a009b038/profile.plist
+data/9040a7d6cdf7/qr.png
+restore-rules/fb3d81f73460/.complete
+restore-rules/fb3d81f73460/27A266a.json
+sims/exec-<run>/chain.txt
+  | 
+sims/exec-<run>/config.json
+  | {
+  |  "proto": 1,
+  |  "xcode_version": "27.0",
+  |  "xcode_build": "27A266a",
+  |  "developer_dir": "/Applications/Xcode.app/Contents/Developer",
+  |  "rules_dir": "$T/simcam/restore-rules/fb3d81f73460",
+  |  "source": "exec",
+  |  "at": <n>
+  | }
+sims/exec-<run>/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+--- exit 3
+
+=== exec: no --
+$ stuntcam exec sh -c exit 0
+--- stdout
+--- stderr
+stuntcam: no app used the camera in the command's simulators
+--- simctl
+list devices -j
+--- files
+builds/aaaaaaaaaaaa/libsimcam.dylib
+builds/aaaaaaaaaaaa/libsimcamloader.dylib
+builds/bbbbbbbbbbbb/libsimcamstub.dylib
+builds/cccccccccccc/libsimcamrunnerhook.dylib
+data/5d45a009b038/profile.plist
+data/9040a7d6cdf7/qr.png
+restore-rules/fb3d81f73460/.complete
+restore-rules/fb3d81f73460/27A266a.json
+sims/exec-<run>/chain.txt
+  | 
+sims/exec-<run>/config.json
+  | {
+  |  "proto": 1,
+  |  "xcode_version": "27.0",
+  |  "xcode_build": "27A266a",
+  |  "developer_dir": "/Applications/Xcode.app/Contents/Developer",
+  |  "rules_dir": "$T/simcam/restore-rules/fb3d81f73460",
+  |  "source": "exec",
+  |  "at": <n>
+  | }
+sims/exec-<run>/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+--- exit 0
+
+=== exec: command not found
+$ stuntcam exec -- no-such-command-anywhere
+--- stdout
+--- stderr
+stuntcam: exec: "no-such-command-anywhere": executable file not found in $PATH
+--- simctl
+list devices -j
+--- files
+builds/aaaaaaaaaaaa/libsimcam.dylib
+builds/aaaaaaaaaaaa/libsimcamloader.dylib
+builds/bbbbbbbbbbbb/libsimcamstub.dylib
+builds/cccccccccccc/libsimcamrunnerhook.dylib
+data/5d45a009b038/profile.plist
+data/9040a7d6cdf7/qr.png
+restore-rules/fb3d81f73460/.complete
+restore-rules/fb3d81f73460/27A266a.json
+sims/exec-<run>/chain.txt
+  | 
+sims/exec-<run>/config.json
+  | {
+  |  "proto": 1,
+  |  "xcode_version": "27.0",
+  |  "xcode_build": "27A266a",
+  |  "developer_dir": "/Applications/Xcode.app/Contents/Developer",
+  |  "rules_dir": "$T/simcam/restore-rules/fb3d81f73460",
+  |  "source": "exec",
+  |  "at": <n>
+  | }
+sims/exec-<run>/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+--- exit 127
+
+=== exec: not executable
+$ stuntcam exec -- ./noexec
+--- stdout
+--- stderr
+stuntcam: fork/exec ./noexec: permission denied
+--- simctl
+list devices -j
+--- files
+builds/aaaaaaaaaaaa/libsimcam.dylib
+builds/aaaaaaaaaaaa/libsimcamloader.dylib
+builds/bbbbbbbbbbbb/libsimcamstub.dylib
+builds/cccccccccccc/libsimcamrunnerhook.dylib
+data/5d45a009b038/profile.plist
+data/9040a7d6cdf7/qr.png
+restore-rules/fb3d81f73460/.complete
+restore-rules/fb3d81f73460/27A266a.json
+sims/exec-<run>/chain.txt
+  | 
+sims/exec-<run>/config.json
+  | {
+  |  "proto": 1,
+  |  "xcode_version": "27.0",
+  |  "xcode_build": "27A266a",
+  |  "developer_dir": "/Applications/Xcode.app/Contents/Developer",
+  |  "rules_dir": "$T/simcam/restore-rules/fb3d81f73460",
+  |  "source": "exec",
+  |  "at": <n>
+  | }
+sims/exec-<run>/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+--- exit 126
+
+=== exec: killed by a signal
+$ stuntcam exec -- sh -c kill -TERM $$
+--- stdout
+--- stderr
+stuntcam: no app used the camera in the command's simulators
+--- simctl
+list devices -j
+--- files
+builds/aaaaaaaaaaaa/libsimcam.dylib
+builds/aaaaaaaaaaaa/libsimcamloader.dylib
+builds/bbbbbbbbbbbb/libsimcamstub.dylib
+builds/cccccccccccc/libsimcamrunnerhook.dylib
+data/5d45a009b038/profile.plist
+data/9040a7d6cdf7/qr.png
+restore-rules/fb3d81f73460/.complete
+restore-rules/fb3d81f73460/27A266a.json
+sims/exec-<run>/chain.txt
+  | 
+sims/exec-<run>/config.json
+  | {
+  |  "proto": 1,
+  |  "xcode_version": "27.0",
+  |  "xcode_build": "27A266a",
+  |  "developer_dir": "/Applications/Xcode.app/Contents/Developer",
+  |  "rules_dir": "$T/simcam/restore-rules/fb3d81f73460",
+  |  "source": "exec",
+  |  "at": <n>
+  | }
+sims/exec-<run>/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+--- exit 143
+
+=== exec: the environment
+$ stuntcam exec -- xcodebuild build
+--- stdout
+xcodebuild build
+SIMCTL_CHILD_DYLD_INSERT_LIBRARIES=/x/libother.dylib:$T/simcam/builds/bbbbbbbbbbbb/libsimcamstub.dylib
+SIMCTL_CHILD_M2_FAKE=1
+SIMCTL_CHILD_M2_NOLOGDICT=1
+SIMCTL_CHILD_M2_PLIST=$T/simcam/data/5d45a009b038/profile.plist
+SIMCTL_CHILD_M2_SESSION_HOOK=1
+SIMCTL_CHILD_M5_IMAGE=$T/simcam/data/9040a7d6cdf7/qr.png
+SIMCTL_CHILD_SIMCAM_CHAIN=$T/simcam/sims/exec-<run>/chain.txt
+SIMCTL_CHILD_SIMCAM_CONTROL=$T/simcam/sims/exec-<run>/control
+SIMCTL_CHILD_SIMCAM_FIG_SESSION=1
+SIMCTL_CHILD_SIMCAM_FIG_SOURCES=1
+SIMCTL_CHILD_SIMCAM_FIXTURE_IMAGE=$T/simcam/data/9040a7d6cdf7/qr.png
+SIMCTL_CHILD_SIMCAM_OFF_KEY_LOG=1
+SIMCTL_CHILD_SIMCAM_PROFILE=$T/simcam/data/5d45a009b038/profile.plist
+SIMCTL_CHILD_SIMCAM_SIM_DIR=$T/simcam/sims/exec-<run>
+SIMCTL_CHILD_SIMCAM_STATE_DIR=$T/simcam/sims/exec-<run>/state
+--- stderr
+stuntcam: no app used the camera in the command's simulators
+--- simctl
+list devices -j
+--- files
+builds/aaaaaaaaaaaa/libsimcam.dylib
+builds/aaaaaaaaaaaa/libsimcamloader.dylib
+builds/bbbbbbbbbbbb/libsimcamstub.dylib
+builds/cccccccccccc/libsimcamrunnerhook.dylib
+data/5d45a009b038/profile.plist
+data/9040a7d6cdf7/qr.png
+restore-rules/fb3d81f73460/.complete
+restore-rules/fb3d81f73460/27A266a.json
+sims/exec-<run>/chain.txt
+  | 
+sims/exec-<run>/config.json
+  | {
+  |  "proto": 1,
+  |  "xcode_version": "27.0",
+  |  "xcode_build": "27A266a",
+  |  "developer_dir": "/Applications/Xcode.app/Contents/Developer",
+  |  "rules_dir": "$T/simcam/restore-rules/fb3d81f73460",
+  |  "source": "exec",
+  |  "at": <n>
+  | }
+sims/exec-<run>/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+--- exit 0
+
+=== exec: activations counted
+$ stuntcam exec -- sh -c d=$(dirname "$SIMCTL_CHILD_SIMCAM_SIM_DIR"); mkdir -p "$d/U1/state/dev.a" "$SIMCTL_CHILD_SIMCAM_SIM_DIR/state/dev.b"; printf '1 1 activate - b traced=0\n2 1 activate - b traced=0\n3 1 activate - b traced=0\n' > "$d/U1/state/dev.a/events.log"; printf '1 1 activate - b traced=0\n' > "$SIMCTL_CHILD_SIMCAM_SIM_DIR/state/dev.b/events.log" -destination id=u1
+--- stdout
+--- stderr
+stuntcam: iPhone A is booted unarmed; Xcode test launches there get no camera unless the command is `xcodebuild test` itself (the runner hook), and Xcode Run never does (stuntcam up --udid U1 --reboot first)
+stuntcam: the camera was used by dev.a (2 activations), dev.b (1 activation)
+--- simctl
+list devices -j
+--- files
+builds/aaaaaaaaaaaa/libsimcam.dylib
+builds/aaaaaaaaaaaa/libsimcamloader.dylib
+builds/bbbbbbbbbbbb/libsimcamstub.dylib
+builds/cccccccccccc/libsimcamrunnerhook.dylib
+data/5d45a009b038/profile.plist
+data/9040a7d6cdf7/qr.png
+restore-rules/fb3d81f73460/.complete
+restore-rules/fb3d81f73460/27A266a.json
+sims/U1/state/dev.a/events.log
+sims/exec-<run>/chain.txt
+  | 
+sims/exec-<run>/config.json
+  | {
+  |  "proto": 1,
+  |  "xcode_version": "27.0",
+  |  "xcode_build": "27A266a",
+  |  "developer_dir": "/Applications/Xcode.app/Contents/Developer",
+  |  "rules_dir": "$T/simcam/restore-rules/fb3d81f73460",
+  |  "source": "exec",
+  |  "at": <n>
+  | }
+sims/exec-<run>/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+sims/exec-<run>/state/dev.b/events.log
+--- exit 0
+
+=== exec: xcodebuild test, booted unarmed destination
+$ stuntcam exec -- xcodebuild test -destination id=U1
+--- stdout
+xcodebuild test -destination id=U1
+SIMCTL_CHILD_DYLD_INSERT_LIBRARIES=$T/simcam/builds/bbbbbbbbbbbb/libsimcamstub.dylib
+SIMCTL_CHILD_M2_FAKE=1
+SIMCTL_CHILD_M2_NOLOGDICT=1
+SIMCTL_CHILD_M2_PLIST=$T/simcam/data/5d45a009b038/profile.plist
+SIMCTL_CHILD_M2_SESSION_HOOK=1
+SIMCTL_CHILD_M5_IMAGE=$T/simcam/data/9040a7d6cdf7/qr.png
+SIMCTL_CHILD_SIMCAM_CHAIN=$T/simcam/sims/exec-<run>/chain.txt
+SIMCTL_CHILD_SIMCAM_CONTROL=$T/simcam/sims/exec-<run>/control
+SIMCTL_CHILD_SIMCAM_FIG_SESSION=1
+SIMCTL_CHILD_SIMCAM_FIG_SOURCES=1
+SIMCTL_CHILD_SIMCAM_FIXTURE_IMAGE=$T/simcam/data/9040a7d6cdf7/qr.png
+SIMCTL_CHILD_SIMCAM_OFF_KEY_LOG=1
+SIMCTL_CHILD_SIMCAM_PROFILE=$T/simcam/data/5d45a009b038/profile.plist
+SIMCTL_CHILD_SIMCAM_SIM_DIR=$T/simcam/sims/exec-<run>
+SIMCTL_CHILD_SIMCAM_STATE_DIR=$T/simcam/sims/exec-<run>/state
+TEST_RUNNER_DYLD_INSERT_LIBRARIES=/t/libmine.dylib:$T/simcam/builds/cccccccccccc/libsimcamrunnerhook.dylib
+TEST_RUNNER_SIMCAM_HOOK_DIR=$T/simcam/sims/exec-<run>/hook
+TEST_RUNNER_SIMCAM_HOOK_RULES=$T/simcam/restore-rules/fb3d81f73460/27A266a.json
+TEST_RUNNER_SIMCAM_HOOK_STUB=$T/simcam/builds/bbbbbbbbbbbb/libsimcamstub.dylib
+TEST_RUNNER_SIMCAM_LOG=1
+--- stderr
+stuntcam: iPhone A is booted unarmed: UI tests' apps get the camera through the runner hook; a hosted test's host app doesn't (stuntcam up --udid U1 --reboot arms that too)
+stuntcam: runner hook on iPhone A: 2 app launches armed
+stuntcam: runner hook on iPhone A failed dev.z: no stub
+stuntcam: the camera was used by dev.x (1 activation)
+--- simctl
+list devices -j
+--- files
+builds/aaaaaaaaaaaa/libsimcam.dylib
+builds/aaaaaaaaaaaa/libsimcamloader.dylib
+builds/bbbbbbbbbbbb/libsimcamstub.dylib
+builds/cccccccccccc/libsimcamrunnerhook.dylib
+data/5d45a009b038/profile.plist
+data/9040a7d6cdf7/qr.png
+restore-rules/fb3d81f73460/.complete
+restore-rules/fb3d81f73460/27A266a.json
+sims/U1/arm.json
+  | {
+  |  "proto": 1,
+  |  "mode": "env",
+  |  "build": "aaaaaaaaaaaa",
+  |  "at": <n>,
+  |  "vars": null
+  | }
+sims/U1/chain.txt
+  | 
+sims/U1/config.json
+  | {
+  |  "proto": 1,
+  |  "xcode_version": "27.0",
+  |  "xcode_build": "27A266a",
+  |  "developer_dir": "/Applications/Xcode.app/Contents/Developer",
+  |  "rules_dir": "$T/simcam/restore-rules/fb3d81f73460",
+  |  "source": "exec",
+  |  "at": <n>
+  | }
+sims/U1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+sims/U1/state/dev.x/events.log
+sims/exec-<run>/chain.txt
+  | 
+sims/exec-<run>/config.json
+  | {
+  |  "proto": 1,
+  |  "xcode_version": "27.0",
+  |  "xcode_build": "27A266a",
+  |  "developer_dir": "/Applications/Xcode.app/Contents/Developer",
+  |  "rules_dir": "$T/simcam/restore-rules/fb3d81f73460",
+  |  "source": "exec",
+  |  "at": <n>
+  | }
+sims/exec-<run>/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+sims/exec-<run>/hook/U1.env
+  | mode=unarmed
+  | DYLD_INSERT_LIBRARIES=$T/simcam/builds/bbbbbbbbbbbb/libsimcamstub.dylib
+  | SIMCAM_SIM_DIR=$T/simcam/sims/U1
+  | SIMCAM_STATE_DIR=$T/simcam/sims/U1/state
+  | SIMCAM_CHAIN=$T/simcam/sims/U1/chain.txt
+  | SIMCAM_CONTROL=$T/simcam/sims/U1/control
+  | SIMCAM_FIG_SOURCES=1
+  | M2_FAKE=1
+  | SIMCAM_FIG_SESSION=1
+  | M2_SESSION_HOOK=1
+  | SIMCAM_OFF_KEY_LOG=1
+  | M2_NOLOGDICT=1
+  | SIMCAM_PROFILE=$T/simcam/data/5d45a009b038/profile.plist
+  | M2_PLIST=$T/simcam/data/5d45a009b038/profile.plist
+  | SIMCAM_FIXTURE_IMAGE=$T/simcam/data/9040a7d6cdf7/qr.png
+  | M5_IMAGE=$T/simcam/data/9040a7d6cdf7/qr.png
+sims/exec-<run>/hook/U1.log
+--- exit 0
+
+=== exec: xcodebuild test, launchd-armed destination
+$ stuntcam exec -- xcodebuild test -destination id=U1
+--- stdout
+xcodebuild test -destination id=U1
+SIMCTL_CHILD_DYLD_INSERT_LIBRARIES=$T/simcam/builds/bbbbbbbbbbbb/libsimcamstub.dylib
+SIMCTL_CHILD_M2_FAKE=1
+SIMCTL_CHILD_M2_NOLOGDICT=1
+SIMCTL_CHILD_M2_PLIST=$T/simcam/data/5d45a009b038/profile.plist
+SIMCTL_CHILD_M2_SESSION_HOOK=1
+SIMCTL_CHILD_M5_IMAGE=$T/simcam/data/9040a7d6cdf7/qr.png
+SIMCTL_CHILD_SIMCAM_CHAIN=$T/simcam/sims/exec-<run>/chain.txt
+SIMCTL_CHILD_SIMCAM_CONTROL=$T/simcam/sims/exec-<run>/control
+SIMCTL_CHILD_SIMCAM_FIG_SESSION=1
+SIMCTL_CHILD_SIMCAM_FIG_SOURCES=1
+SIMCTL_CHILD_SIMCAM_FIXTURE_IMAGE=$T/simcam/data/9040a7d6cdf7/qr.png
+SIMCTL_CHILD_SIMCAM_OFF_KEY_LOG=1
+SIMCTL_CHILD_SIMCAM_PROFILE=$T/simcam/data/5d45a009b038/profile.plist
+SIMCTL_CHILD_SIMCAM_SIM_DIR=$T/simcam/sims/exec-<run>
+SIMCTL_CHILD_SIMCAM_STATE_DIR=$T/simcam/sims/exec-<run>/state
+TEST_RUNNER_DYLD_INSERT_LIBRARIES=$T/simcam/builds/cccccccccccc/libsimcamrunnerhook.dylib
+TEST_RUNNER_SIMCAM_HOOK_DIR=$T/simcam/sims/exec-<run>/hook
+TEST_RUNNER_SIMCAM_HOOK_RULES=$T/simcam/restore-rules/fb3d81f73460/27A266a.json
+TEST_RUNNER_SIMCAM_HOOK_STUB=$T/simcam/builds/bbbbbbbbbbbb/libsimcamstub.dylib
+--- stderr
+stuntcam: iPhone A is launchd-armed: UI tests' apps get the camera through the runner hook; a hosted test's host app doesn't (stuntcam up --udid U1 --reboot arms that too)
+stuntcam: runner hook on iPhone A: 2 app launches armed
+stuntcam: runner hook on iPhone A failed dev.z: no stub
+stuntcam: the camera was used by dev.x (1 activation)
+--- simctl
+list devices -j
+spawn U1 launchctl getenv DYLD_INSERT_LIBRARIES
+spawn U1 launchctl getenv DYLD_INSERT_LIBRARIES
+--- files
+builds/aaaaaaaaaaaa/libsimcam.dylib
+builds/aaaaaaaaaaaa/libsimcamloader.dylib
+builds/bbbbbbbbbbbb/libsimcamstub.dylib
+builds/cccccccccccc/libsimcamrunnerhook.dylib
+data/5d45a009b038/profile.plist
+data/9040a7d6cdf7/qr.png
+restore-rules/fb3d81f73460/.complete
+restore-rules/fb3d81f73460/27A266a.json
+sims/U1/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"launchd","proto":1,"vars":["DYLD_INSERT_LIBRARIES"]}
+sims/U1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+sims/U1/state/dev.x/events.log
+sims/exec-<run>/chain.txt
+  | 
+sims/exec-<run>/config.json
+  | {
+  |  "proto": 1,
+  |  "xcode_version": "27.0",
+  |  "xcode_build": "27A266a",
+  |  "developer_dir": "/Applications/Xcode.app/Contents/Developer",
+  |  "rules_dir": "$T/simcam/restore-rules/fb3d81f73460",
+  |  "source": "exec",
+  |  "at": <n>
+  | }
+sims/exec-<run>/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+sims/exec-<run>/hook/U1.env
+  | mode=launchd
+  | DYLD_INSERT_LIBRARIES=/h/builds/bbbbbbbbbbbb/libsimcamstub.dylib
+sims/exec-<run>/hook/U1.log
+--- exit 0
+
+=== exec: xcodebuild test, boot-armed destination
+$ stuntcam exec -- xcodebuild test -destination id=U1
+--- stdout
+xcodebuild test -destination id=U1
+SIMCTL_CHILD_DYLD_INSERT_LIBRARIES=$T/simcam/builds/bbbbbbbbbbbb/libsimcamstub.dylib
+SIMCTL_CHILD_M2_FAKE=1
+SIMCTL_CHILD_M2_NOLOGDICT=1
+SIMCTL_CHILD_M2_PLIST=$T/simcam/data/5d45a009b038/profile.plist
+SIMCTL_CHILD_M2_SESSION_HOOK=1
+SIMCTL_CHILD_M5_IMAGE=$T/simcam/data/9040a7d6cdf7/qr.png
+SIMCTL_CHILD_SIMCAM_CHAIN=$T/simcam/sims/exec-<run>/chain.txt
+SIMCTL_CHILD_SIMCAM_CONTROL=$T/simcam/sims/exec-<run>/control
+SIMCTL_CHILD_SIMCAM_FIG_SESSION=1
+SIMCTL_CHILD_SIMCAM_FIG_SOURCES=1
+SIMCTL_CHILD_SIMCAM_FIXTURE_IMAGE=$T/simcam/data/9040a7d6cdf7/qr.png
+SIMCTL_CHILD_SIMCAM_OFF_KEY_LOG=1
+SIMCTL_CHILD_SIMCAM_PROFILE=$T/simcam/data/5d45a009b038/profile.plist
+SIMCTL_CHILD_SIMCAM_SIM_DIR=$T/simcam/sims/exec-<run>
+SIMCTL_CHILD_SIMCAM_STATE_DIR=$T/simcam/sims/exec-<run>/state
+--- stderr
+stuntcam: no app used the camera in the command's simulators
+--- simctl
+list devices -j
+--- files
+builds/aaaaaaaaaaaa/libsimcam.dylib
+builds/aaaaaaaaaaaa/libsimcamloader.dylib
+builds/bbbbbbbbbbbb/libsimcamstub.dylib
+builds/cccccccccccc/libsimcamrunnerhook.dylib
+data/5d45a009b038/profile.plist
+data/9040a7d6cdf7/qr.png
+restore-rules/fb3d81f73460/.complete
+restore-rules/fb3d81f73460/27A266a.json
+sims/U1/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"boot","proto":1,"vars":null}
+sims/U1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+sims/exec-<run>/chain.txt
+  | 
+sims/exec-<run>/config.json
+  | {
+  |  "proto": 1,
+  |  "xcode_version": "27.0",
+  |  "xcode_build": "27A266a",
+  |  "developer_dir": "/Applications/Xcode.app/Contents/Developer",
+  |  "rules_dir": "$T/simcam/restore-rules/fb3d81f73460",
+  |  "source": "exec",
+  |  "at": <n>
+  | }
+sims/exec-<run>/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+sims/exec-<run>/hook/U1.env
+  | mode=boot
+--- exit 0
+
+=== exec: xcodebuild test, env-armed destination after down
+$ stuntcam exec -- xcodebuild test -destination id=U1
+--- stdout
+xcodebuild test -destination id=U1
+SIMCTL_CHILD_DYLD_INSERT_LIBRARIES=$T/simcam/builds/bbbbbbbbbbbb/libsimcamstub.dylib
+SIMCTL_CHILD_M2_FAKE=1
+SIMCTL_CHILD_M2_NOLOGDICT=1
+SIMCTL_CHILD_M2_PLIST=$T/simcam/data/5d45a009b038/profile.plist
+SIMCTL_CHILD_M2_SESSION_HOOK=1
+SIMCTL_CHILD_M5_IMAGE=$T/simcam/data/9040a7d6cdf7/qr.png
+SIMCTL_CHILD_SIMCAM_CHAIN=$T/simcam/sims/exec-<run>/chain.txt
+SIMCTL_CHILD_SIMCAM_CONTROL=$T/simcam/sims/exec-<run>/control
+SIMCTL_CHILD_SIMCAM_FIG_SESSION=1
+SIMCTL_CHILD_SIMCAM_FIG_SOURCES=1
+SIMCTL_CHILD_SIMCAM_FIXTURE_IMAGE=$T/simcam/data/9040a7d6cdf7/qr.png
+SIMCTL_CHILD_SIMCAM_OFF_KEY_LOG=1
+SIMCTL_CHILD_SIMCAM_PROFILE=$T/simcam/data/5d45a009b038/profile.plist
+SIMCTL_CHILD_SIMCAM_SIM_DIR=$T/simcam/sims/exec-<run>
+SIMCTL_CHILD_SIMCAM_STATE_DIR=$T/simcam/sims/exec-<run>/state
+TEST_RUNNER_DYLD_INSERT_LIBRARIES=$T/simcam/builds/cccccccccccc/libsimcamrunnerhook.dylib
+TEST_RUNNER_SIMCAM_HOOK_DIR=$T/simcam/sims/exec-<run>/hook
+TEST_RUNNER_SIMCAM_HOOK_RULES=$T/simcam/restore-rules/fb3d81f73460/27A266a.json
+TEST_RUNNER_SIMCAM_HOOK_STUB=$T/simcam/builds/bbbbbbbbbbbb/libsimcamstub.dylib
+--- stderr
+stuntcam: iPhone A was booted armed and then `stuntcam down`: writing current would re-arm every launch on it, not just yours; `stuntcam up` to re-arm, or reboot it unarmed first; no runner hook there: its test launches get no camera
+stuntcam: no app used the camera in the command's simulators
+--- simctl
+list devices -j
+--- files
+builds/aaaaaaaaaaaa/libsimcam.dylib
+builds/aaaaaaaaaaaa/libsimcamloader.dylib
+builds/bbbbbbbbbbbb/libsimcamstub.dylib
+builds/cccccccccccc/libsimcamrunnerhook.dylib
+data/5d45a009b038/profile.plist
+data/9040a7d6cdf7/qr.png
+restore-rules/fb3d81f73460/.complete
+restore-rules/fb3d81f73460/27A266a.json
+sims/U1/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"boot","proto":1,"vars":null}
+sims/exec-<run>/chain.txt
+  | 
+sims/exec-<run>/config.json
+  | {
+  |  "proto": 1,
+  |  "xcode_version": "27.0",
+  |  "xcode_build": "27A266a",
+  |  "developer_dir": "/Applications/Xcode.app/Contents/Developer",
+  |  "rules_dir": "$T/simcam/restore-rules/fb3d81f73460",
+  |  "source": "exec",
+  |  "at": <n>
+  | }
+sims/exec-<run>/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+--- exit 0
+
+=== exec: xcodebuild test, no runner hook in the build
+$ stuntcam exec -- xcodebuild test -destination id=U1
+--- stdout
+xcodebuild test -destination id=U1
+SIMCTL_CHILD_DYLD_INSERT_LIBRARIES=$T/simcam/builds/bbbbbbbbbbbb/libsimcamstub.dylib
+SIMCTL_CHILD_M2_FAKE=1
+SIMCTL_CHILD_M2_NOLOGDICT=1
+SIMCTL_CHILD_M2_PLIST=$T/simcam/data/5d45a009b038/profile.plist
+SIMCTL_CHILD_M2_SESSION_HOOK=1
+SIMCTL_CHILD_M5_IMAGE=$T/simcam/data/9040a7d6cdf7/qr.png
+SIMCTL_CHILD_SIMCAM_CHAIN=$T/simcam/sims/exec-<run>/chain.txt
+SIMCTL_CHILD_SIMCAM_CONTROL=$T/simcam/sims/exec-<run>/control
+SIMCTL_CHILD_SIMCAM_FIG_SESSION=1
+SIMCTL_CHILD_SIMCAM_FIG_SOURCES=1
+SIMCTL_CHILD_SIMCAM_FIXTURE_IMAGE=$T/simcam/data/9040a7d6cdf7/qr.png
+SIMCTL_CHILD_SIMCAM_OFF_KEY_LOG=1
+SIMCTL_CHILD_SIMCAM_PROFILE=$T/simcam/data/5d45a009b038/profile.plist
+SIMCTL_CHILD_SIMCAM_SIM_DIR=$T/simcam/sims/exec-<run>
+SIMCTL_CHILD_SIMCAM_STATE_DIR=$T/simcam/sims/exec-<run>/state
+--- stderr
+stuntcam: iPhone A is booted unarmed and this build has no runner hook (libsimcamrunnerhook.dylib; rebuild with ./build.sh): the command's test launches there get no camera (stuntcam up --udid U1 --reboot first)
+stuntcam: no app used the camera in the command's simulators
+--- simctl
+list devices -j
+--- files
+builds/aaaaaaaaaaaa/libsimcam.dylib
+builds/aaaaaaaaaaaa/libsimcamloader.dylib
+builds/bbbbbbbbbbbb/libsimcamstub.dylib
+data/5d45a009b038/profile.plist
+data/9040a7d6cdf7/qr.png
+restore-rules/fb3d81f73460/.complete
+restore-rules/fb3d81f73460/27A266a.json
+sims/exec-<run>/chain.txt
+  | 
+sims/exec-<run>/config.json
+  | {
+  |  "proto": 1,
+  |  "xcode_version": "27.0",
+  |  "xcode_build": "27A266a",
+  |  "developer_dir": "/Applications/Xcode.app/Contents/Developer",
+  |  "rules_dir": "$T/simcam/restore-rules/fb3d81f73460",
+  |  "source": "exec",
+  |  "at": <n>
+  | }
+sims/exec-<run>/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+--- exit 0
+
+=== exec: xcodebuild test, also a tvOS destination
+$ stuntcam exec -- xcodebuild test -destination id=U1 -destination id=TV1
+--- stdout
+xcodebuild test -destination id=U1 -destination id=TV1
+SIMCTL_CHILD_DYLD_INSERT_LIBRARIES=$T/simcam/builds/bbbbbbbbbbbb/libsimcamstub.dylib
+SIMCTL_CHILD_M2_FAKE=1
+SIMCTL_CHILD_M2_NOLOGDICT=1
+SIMCTL_CHILD_M2_PLIST=$T/simcam/data/5d45a009b038/profile.plist
+SIMCTL_CHILD_M2_SESSION_HOOK=1
+SIMCTL_CHILD_M5_IMAGE=$T/simcam/data/9040a7d6cdf7/qr.png
+SIMCTL_CHILD_SIMCAM_CHAIN=$T/simcam/sims/exec-<run>/chain.txt
+SIMCTL_CHILD_SIMCAM_CONTROL=$T/simcam/sims/exec-<run>/control
+SIMCTL_CHILD_SIMCAM_FIG_SESSION=1
+SIMCTL_CHILD_SIMCAM_FIG_SOURCES=1
+SIMCTL_CHILD_SIMCAM_FIXTURE_IMAGE=$T/simcam/data/9040a7d6cdf7/qr.png
+SIMCTL_CHILD_SIMCAM_OFF_KEY_LOG=1
+SIMCTL_CHILD_SIMCAM_PROFILE=$T/simcam/data/5d45a009b038/profile.plist
+SIMCTL_CHILD_SIMCAM_SIM_DIR=$T/simcam/sims/exec-<run>
+SIMCTL_CHILD_SIMCAM_STATE_DIR=$T/simcam/sims/exec-<run>/state
+--- stderr
+stuntcam: the command also tests on id=TV1 (Apple TV, tvOS 26.0), and the runner hook is for iOS simulators only: no runner hook, so UI tests' apps on iPhone A get no camera (stuntcam up --udid <sim> --reboot arms them at boot instead)
+stuntcam: no app used the camera in the command's simulators
+--- simctl
+list devices -j
+--- files
+builds/aaaaaaaaaaaa/libsimcam.dylib
+builds/aaaaaaaaaaaa/libsimcamloader.dylib
+builds/bbbbbbbbbbbb/libsimcamstub.dylib
+builds/cccccccccccc/libsimcamrunnerhook.dylib
+data/5d45a009b038/profile.plist
+data/9040a7d6cdf7/qr.png
+restore-rules/fb3d81f73460/.complete
+restore-rules/fb3d81f73460/27A266a.json
+sims/exec-<run>/chain.txt
+  | 
+sims/exec-<run>/config.json
+  | {
+  |  "proto": 1,
+  |  "xcode_version": "27.0",
+  |  "xcode_build": "27A266a",
+  |  "developer_dir": "/Applications/Xcode.app/Contents/Developer",
+  |  "rules_dir": "$T/simcam/restore-rules/fb3d81f73460",
+  |  "source": "exec",
+  |  "at": <n>
+  | }
+sims/exec-<run>/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+--- exit 0
+
+=== exec: xcodebuild test, named destination only
+$ stuntcam exec -- xcodebuild test -destination platform=iOS Simulator,name=iPhone 17
+--- stdout
+xcodebuild test -destination platform=iOS Simulator,name=iPhone 17
+SIMCTL_CHILD_DYLD_INSERT_LIBRARIES=$T/simcam/builds/bbbbbbbbbbbb/libsimcamstub.dylib
+SIMCTL_CHILD_M2_FAKE=1
+SIMCTL_CHILD_M2_NOLOGDICT=1
+SIMCTL_CHILD_M2_PLIST=$T/simcam/data/5d45a009b038/profile.plist
+SIMCTL_CHILD_M2_SESSION_HOOK=1
+SIMCTL_CHILD_M5_IMAGE=$T/simcam/data/9040a7d6cdf7/qr.png
+SIMCTL_CHILD_SIMCAM_CHAIN=$T/simcam/sims/exec-<run>/chain.txt
+SIMCTL_CHILD_SIMCAM_CONTROL=$T/simcam/sims/exec-<run>/control
+SIMCTL_CHILD_SIMCAM_FIG_SESSION=1
+SIMCTL_CHILD_SIMCAM_FIG_SOURCES=1
+SIMCTL_CHILD_SIMCAM_FIXTURE_IMAGE=$T/simcam/data/9040a7d6cdf7/qr.png
+SIMCTL_CHILD_SIMCAM_OFF_KEY_LOG=1
+SIMCTL_CHILD_SIMCAM_PROFILE=$T/simcam/data/5d45a009b038/profile.plist
+SIMCTL_CHILD_SIMCAM_SIM_DIR=$T/simcam/sims/exec-<run>
+SIMCTL_CHILD_SIMCAM_STATE_DIR=$T/simcam/sims/exec-<run>/state
+TEST_RUNNER_DYLD_INSERT_LIBRARIES=$T/simcam/builds/cccccccccccc/libsimcamrunnerhook.dylib
+TEST_RUNNER_SIMCAM_HOOK_DIR=$T/simcam/sims/exec-<run>/hook
+TEST_RUNNER_SIMCAM_HOOK_RULES=$T/simcam/restore-rules/fb3d81f73460/27A266a.json
+TEST_RUNNER_SIMCAM_HOOK_STUB=$T/simcam/builds/bbbbbbbbbbbb/libsimcamstub.dylib
+--- stderr
+stuntcam: -destination "platform=iOS Simulator,name=iPhone 17" names no simulator by id: if it is launchd-armed, UI tests' apps there get the camera through the runner hook; booted unarmed, they don't (name it by id=, or stuntcam up --udid <sim> first)
+stuntcam: no app used the camera in the command's simulators
+--- simctl
+list devices -j
+--- files
+builds/aaaaaaaaaaaa/libsimcam.dylib
+builds/aaaaaaaaaaaa/libsimcamloader.dylib
+builds/bbbbbbbbbbbb/libsimcamstub.dylib
+builds/cccccccccccc/libsimcamrunnerhook.dylib
+data/5d45a009b038/profile.plist
+data/9040a7d6cdf7/qr.png
+restore-rules/fb3d81f73460/.complete
+restore-rules/fb3d81f73460/27A266a.json
+sims/exec-<run>/chain.txt
+  | 
+sims/exec-<run>/config.json
+  | {
+  |  "proto": 1,
+  |  "xcode_version": "27.0",
+  |  "xcode_build": "27A266a",
+  |  "developer_dir": "/Applications/Xcode.app/Contents/Developer",
+  |  "rules_dir": "$T/simcam/restore-rules/fb3d81f73460",
+  |  "source": "exec",
+  |  "at": <n>
+  | }
+sims/exec-<run>/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+--- exit 0
+
+=== exec: xcodebuild test, cleared environment
+$ stuntcam exec -- env -i ./xcodebuild test -destination id=U1
+--- stdout
+xcodebuild test -destination id=U1
+0
+--- stderr
+stuntcam: iPhone A is booted unarmed; Xcode test launches there get no camera unless the command is `xcodebuild test` itself (the runner hook), and Xcode Run never does (stuntcam up --udid U1 --reboot first)
+stuntcam: no app used the camera in the command's simulators
+--- simctl
+list devices -j
+--- files
+builds/aaaaaaaaaaaa/libsimcam.dylib
+builds/aaaaaaaaaaaa/libsimcamloader.dylib
+builds/bbbbbbbbbbbb/libsimcamstub.dylib
+builds/cccccccccccc/libsimcamrunnerhook.dylib
+data/5d45a009b038/profile.plist
+data/9040a7d6cdf7/qr.png
+restore-rules/fb3d81f73460/.complete
+restore-rules/fb3d81f73460/27A266a.json
+sims/exec-<run>/chain.txt
+  | 
+sims/exec-<run>/config.json
+  | {
+  |  "proto": 1,
+  |  "xcode_version": "27.0",
+  |  "xcode_build": "27A266a",
+  |  "developer_dir": "/Applications/Xcode.app/Contents/Developer",
+  |  "rules_dir": "$T/simcam/restore-rules/fb3d81f73460",
+  |  "source": "exec",
+  |  "at": <n>
+  | }
+sims/exec-<run>/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+--- exit 0
+
+=== exec: other command, unarmed and launchd destinations
+$ stuntcam exec -- sh -c true -destination id=U1 -destination id=L1
+--- stdout
+--- stderr
+stuntcam: iPhone A is booted unarmed; Xcode test launches there get no camera unless the command is `xcodebuild test` itself (the runner hook), and Xcode Run never does (stuntcam up --udid U1 --reboot first)
+stuntcam: no app used the camera in the command's simulators
+--- simctl
+list devices -j
+spawn L1 launchctl getenv DYLD_INSERT_LIBRARIES
+--- files
+builds/aaaaaaaaaaaa/libsimcam.dylib
+builds/aaaaaaaaaaaa/libsimcamloader.dylib
+builds/bbbbbbbbbbbb/libsimcamstub.dylib
+builds/cccccccccccc/libsimcamrunnerhook.dylib
+data/5d45a009b038/profile.plist
+data/9040a7d6cdf7/qr.png
+restore-rules/fb3d81f73460/.complete
+restore-rules/fb3d81f73460/27A266a.json
+sims/L1/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"launchd","proto":1,"vars":["DYLD_INSERT_LIBRARIES"]}
+sims/L1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+sims/exec-<run>/chain.txt
+  | 
+sims/exec-<run>/config.json
+  | {
+  |  "proto": 1,
+  |  "xcode_version": "27.0",
+  |  "xcode_build": "27A266a",
+  |  "developer_dir": "/Applications/Xcode.app/Contents/Developer",
+  |  "rules_dir": "$T/simcam/restore-rules/fb3d81f73460",
+  |  "source": "exec",
+  |  "at": <n>
+  | }
+sims/exec-<run>/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+--- exit 0
+
+=== exec: xcodebuild build, unarmed and launchd destinations
+$ stuntcam exec -- xcodebuild build -destination id=U1 -destination id=L1
+--- stdout
+xcodebuild build -destination id=U1 -destination id=L1
+SIMCTL_CHILD_DYLD_INSERT_LIBRARIES=$T/simcam/builds/bbbbbbbbbbbb/libsimcamstub.dylib
+SIMCTL_CHILD_M2_FAKE=1
+SIMCTL_CHILD_M2_NOLOGDICT=1
+SIMCTL_CHILD_M2_PLIST=$T/simcam/data/5d45a009b038/profile.plist
+SIMCTL_CHILD_M2_SESSION_HOOK=1
+SIMCTL_CHILD_M5_IMAGE=$T/simcam/data/9040a7d6cdf7/qr.png
+SIMCTL_CHILD_SIMCAM_CHAIN=$T/simcam/sims/exec-<run>/chain.txt
+SIMCTL_CHILD_SIMCAM_CONTROL=$T/simcam/sims/exec-<run>/control
+SIMCTL_CHILD_SIMCAM_FIG_SESSION=1
+SIMCTL_CHILD_SIMCAM_FIG_SOURCES=1
+SIMCTL_CHILD_SIMCAM_FIXTURE_IMAGE=$T/simcam/data/9040a7d6cdf7/qr.png
+SIMCTL_CHILD_SIMCAM_OFF_KEY_LOG=1
+SIMCTL_CHILD_SIMCAM_PROFILE=$T/simcam/data/5d45a009b038/profile.plist
+SIMCTL_CHILD_SIMCAM_SIM_DIR=$T/simcam/sims/exec-<run>
+SIMCTL_CHILD_SIMCAM_STATE_DIR=$T/simcam/sims/exec-<run>/state
+--- stderr
+stuntcam: iPhone A is booted unarmed; Xcode test launches there get no camera unless the command is `xcodebuild test` itself (the runner hook), and Xcode Run never does (stuntcam up --udid U1 --reboot first)
+stuntcam: iPhone L is launchd-armed; Xcode test launches there get no camera unless the command is `xcodebuild test` itself (the runner hook), and Xcode Run never does (stuntcam up --udid L1 --reboot first)
+stuntcam: no app used the camera in the command's simulators
+--- simctl
+list devices -j
+spawn L1 launchctl getenv DYLD_INSERT_LIBRARIES
+--- files
+builds/aaaaaaaaaaaa/libsimcam.dylib
+builds/aaaaaaaaaaaa/libsimcamloader.dylib
+builds/bbbbbbbbbbbb/libsimcamstub.dylib
+builds/cccccccccccc/libsimcamrunnerhook.dylib
+data/5d45a009b038/profile.plist
+data/9040a7d6cdf7/qr.png
+restore-rules/fb3d81f73460/.complete
+restore-rules/fb3d81f73460/27A266a.json
+sims/L1/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"launchd","proto":1,"vars":["DYLD_INSERT_LIBRARIES"]}
+sims/L1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+sims/exec-<run>/chain.txt
+  | 
+sims/exec-<run>/config.json
+  | {
+  |  "proto": 1,
+  |  "xcode_version": "27.0",
+  |  "xcode_build": "27A266a",
+  |  "developer_dir": "/Applications/Xcode.app/Contents/Developer",
+  |  "rules_dir": "$T/simcam/restore-rules/fb3d81f73460",
+  |  "source": "exec",
+  |  "at": <n>
+  | }
+sims/exec-<run>/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+--- exit 0
+
+=== exec: shut-down destinations booted armed
+$ stuntcam exec -- sh -c true -destination id=S1 -destination id=TV2
+--- stdout
+--- stderr
+stuntcam: booting iPhone S (S1) armed for the command (xcodebuild's own boot would not be)
+stuntcam: Apple TV is a tvOS 26.0 simulator: not booting it armed (stuntcam arms iOS simulators only)
+stuntcam: no app used the camera in the command's simulators
+--- simctl
+list devices -j
+shutdown S1
+boot S1
+bootstatus S1 -b
+spawn S1 launchctl list
+--- files
+builds/aaaaaaaaaaaa/libsimcam.dylib
+builds/aaaaaaaaaaaa/libsimcamloader.dylib
+builds/bbbbbbbbbbbb/libsimcamstub.dylib
+builds/cccccccccccc/libsimcamrunnerhook.dylib
+data/5d45a009b038/profile.plist
+data/9040a7d6cdf7/qr.png
+restore-rules/fb3d81f73460/.complete
+restore-rules/fb3d81f73460/27A266a.json
+sims/S1/arm.json
+  | {
+  |  "proto": 1,
+  |  "mode": "boot",
+  |  "build": "aaaaaaaaaaaa",
+  |  "at": <n>,
+  |  "vars": [
+  |   "DYLD_INSERT_LIBRARIES",
+  |   "SIMCAM_SIM_DIR",
+  |   "SIMCAM_STATE_DIR",
+  |   "SIMCAM_CHAIN",
+  |   "SIMCAM_CONTROL",
+  |   "SIMCAM_FIG_SOURCES",
+  |   "M2_FAKE",
+  |   "SIMCAM_FIG_SESSION",
+  |   "M2_SESSION_HOOK",
+  |   "SIMCAM_OFF_KEY_LOG",
+  |   "M2_NOLOGDICT",
+  |   "SIMCAM_PROFILE",
+  |   "M2_PLIST",
+  |   "SIMCAM_FIXTURE_IMAGE",
+  |   "M5_IMAGE"
+  |  ]
+  | }
+sims/S1/chain.txt
+  | 
+sims/S1/config.json
+  | {
+  |  "proto": 1,
+  |  "xcode_version": "27.0",
+  |  "xcode_build": "27A266a",
+  |  "developer_dir": "/Applications/Xcode.app/Contents/Developer",
+  |  "rules_dir": "$T/simcam/restore-rules/fb3d81f73460",
+  |  "source": "exec",
+  |  "at": <n>
+  | }
+sims/S1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+sims/exec-<run>/chain.txt
+  | 
+sims/exec-<run>/config.json
+  | {
+  |  "proto": 1,
+  |  "xcode_version": "27.0",
+  |  "xcode_build": "27A266a",
+  |  "developer_dir": "/Applications/Xcode.app/Contents/Developer",
+  |  "rules_dir": "$T/simcam/restore-rules/fb3d81f73460",
+  |  "source": "exec",
+  |  "at": <n>
+  | }
+sims/exec-<run>/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+--- exit 0
+
+=== exec: destination being booted
+$ stuntcam exec -- sh -c true -destination id=S1
+--- stdout
+--- stderr
+stuntcam: iPhone S is being booted armed by another stuntcam (pid <pid>); not booting it again
+stuntcam: no app used the camera in the command's simulators
+--- simctl
+list devices -j
+--- files
+builds/aaaaaaaaaaaa/libsimcam.dylib
+builds/aaaaaaaaaaaa/libsimcamloader.dylib
+builds/bbbbbbbbbbbb/libsimcamstub.dylib
+builds/cccccccccccc/libsimcamrunnerhook.dylib
+data/5d45a009b038/profile.plist
+data/9040a7d6cdf7/qr.png
+restore-rules/fb3d81f73460/.complete
+restore-rules/fb3d81f73460/27A266a.json
+sims/S1/arm.json
+  | {"proto":1,"mode":"boot","build":"x","at":<n>,"booting":true,"pid":<n>}
+sims/exec-<run>/chain.txt
+  | 
+sims/exec-<run>/config.json
+  | {
+  |  "proto": 1,
+  |  "xcode_version": "27.0",
+  |  "xcode_build": "27A266a",
+  |  "developer_dir": "/Applications/Xcode.app/Contents/Developer",
+  |  "rules_dir": "$T/simcam/restore-rules/fb3d81f73460",
+  |  "source": "exec",
+  |  "at": <n>
+  | }
+sims/exec-<run>/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+--- exit 0
+
+=== up: booted sim, launchd mode
+$ stuntcam up --skip-verify --grant dev.x
+--- stdout
+simulator: iPhone A (U1, iOS 27.0), the only booted iOS simulator
+Xcode 27.0 (27A266a, /Applications/Xcode.app/Contents/Developer): restore rules verified
+armed (launchd mode, build aaaaaaaaaaaa): apps launched from now on get the camera, except Xcode Run and Xcode tests (they set their own libraries):
+  for those, `stuntcam up --reboot`.
+--- stderr
+--- simctl
+list devices -j
+spawn U1 launchctl getenv DYLD_INSERT_LIBRARIES
+spawn U1 launchctl getenv DYLD_INSERT_LIBRARIES
+spawn U1 launchctl getenv M2_FAKE
+spawn U1 launchctl getenv M2_NOLOGDICT
+spawn U1 launchctl getenv M2_PLIST
+spawn U1 launchctl getenv M2_SESSION_HOOK
+spawn U1 launchctl getenv M5_IMAGE
+spawn U1 launchctl getenv SIMCAM_CHAIN
+spawn U1 launchctl getenv SIMCAM_CONTROL
+spawn U1 launchctl getenv SIMCAM_FIG_SESSION
+spawn U1 launchctl getenv SIMCAM_FIG_SOURCES
+spawn U1 launchctl getenv SIMCAM_FIXTURE_IMAGE
+spawn U1 launchctl getenv SIMCAM_OFF_KEY_LOG
+spawn U1 launchctl getenv SIMCAM_PROFILE
+spawn U1 launchctl getenv SIMCAM_SIM_DIR
+spawn U1 launchctl getenv SIMCAM_STATE_DIR
+spawn U1 launchctl setenv DYLD_INSERT_LIBRARIES /x/libother.dylib:$T/simcam/builds/bbbbbbbbbbbb/libsimcamstub.dylib
+spawn U1 launchctl setenv M2_FAKE 1
+spawn U1 launchctl setenv M2_NOLOGDICT 1
+spawn U1 launchctl setenv M2_PLIST $T/simcam/data/5d45a009b038/profile.plist
+spawn U1 launchctl setenv M2_SESSION_HOOK 1
+spawn U1 launchctl setenv M5_IMAGE $T/simcam/data/9040a7d6cdf7/qr.png
+spawn U1 launchctl setenv SIMCAM_CHAIN $T/simcam/sims/U1/chain.txt
+spawn U1 launchctl setenv SIMCAM_CONTROL $T/simcam/sims/U1/control
+spawn U1 launchctl setenv SIMCAM_FIG_SESSION 1
+spawn U1 launchctl setenv SIMCAM_FIG_SOURCES 1
+spawn U1 launchctl setenv SIMCAM_FIXTURE_IMAGE $T/simcam/data/9040a7d6cdf7/qr.png
+spawn U1 launchctl setenv SIMCAM_OFF_KEY_LOG 1
+spawn U1 launchctl setenv SIMCAM_PROFILE $T/simcam/data/5d45a009b038/profile.plist
+spawn U1 launchctl setenv SIMCAM_SIM_DIR $T/simcam/sims/U1
+spawn U1 launchctl setenv SIMCAM_STATE_DIR $T/simcam/sims/U1/state
+privacy U1 grant camera dev.x
+privacy U1 grant microphone dev.x
+--- files
+builds/aaaaaaaaaaaa/libsimcam.dylib
+builds/aaaaaaaaaaaa/libsimcamloader.dylib
+builds/bbbbbbbbbbbb/libsimcamstub.dylib
+builds/cccccccccccc/libsimcamrunnerhook.dylib
+data/5d45a009b038/profile.plist
+data/9040a7d6cdf7/qr.png
+restore-rules/fb3d81f73460/.complete
+restore-rules/fb3d81f73460/27A266a.json
+sims/U1/arm.json
+  | {
+  |  "proto": 1,
+  |  "mode": "launchd",
+  |  "build": "aaaaaaaaaaaa",
+  |  "at": <n>,
+  |  "vars": [
+  |   "DYLD_INSERT_LIBRARIES",
+  |   "SIMCAM_SIM_DIR",
+  |   "SIMCAM_STATE_DIR",
+  |   "SIMCAM_CHAIN",
+  |   "SIMCAM_CONTROL",
+  |   "SIMCAM_FIG_SOURCES",
+  |   "M2_FAKE",
+  |   "SIMCAM_FIG_SESSION",
+  |   "M2_SESSION_HOOK",
+  |   "SIMCAM_OFF_KEY_LOG",
+  |   "M2_NOLOGDICT",
+  |   "SIMCAM_PROFILE",
+  |   "M2_PLIST",
+  |   "SIMCAM_FIXTURE_IMAGE",
+  |   "M5_IMAGE"
+  |  ]
+  | }
+sims/U1/chain.txt
+  | 
+sims/U1/config.json
+  | {
+  |  "proto": 1,
+  |  "xcode_version": "27.0",
+  |  "xcode_build": "27A266a",
+  |  "developer_dir": "/Applications/Xcode.app/Contents/Developer",
+  |  "rules_dir": "$T/simcam/restore-rules/fb3d81f73460",
+  |  "source": "up",
+  |  "at": <n>
+  | }
+sims/U1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+--- exit 0
+
+=== up: shut-down sim, boot mode
+$ stuntcam up --skip-verify --log --source scene
+--- stdout
+simulator: iPhone A (U1, iOS 27.0), the most recently booted iOS simulator
+Xcode 27.0 (27A266a, /Applications/Xcode.app/Contents/Developer): restore rules verified
+booting it armed
+armed (boot mode, build aaaaaaaaaaaa) until this simulator shuts down: run `stuntcam up` again after a Mac restart, an Erase or quitting the simulators.
+--- stderr
+warning: iPhone A isn't running; `stuntcam up --source …` sets the picture when it boots
+--- simctl
+list devices -j
+shutdown U1
+boot U1
+bootstatus U1 -b
+spawn U1 launchctl list
+--- files
+builds/aaaaaaaaaaaa/libsimcam.dylib
+builds/aaaaaaaaaaaa/libsimcamloader.dylib
+builds/bbbbbbbbbbbb/libsimcamstub.dylib
+builds/cccccccccccc/libsimcamrunnerhook.dylib
+data/5d45a009b038/profile.plist
+data/9040a7d6cdf7/qr.png
+restore-rules/fb3d81f73460/.complete
+restore-rules/fb3d81f73460/27A266a.json
+sims/U1/arm.json
+  | {
+  |  "proto": 1,
+  |  "mode": "boot",
+  |  "build": "aaaaaaaaaaaa",
+  |  "at": <n>,
+  |  "vars": [
+  |   "DYLD_INSERT_LIBRARIES",
+  |   "SIMCAM_SIM_DIR",
+  |   "SIMCAM_STATE_DIR",
+  |   "SIMCAM_CHAIN",
+  |   "SIMCAM_CONTROL",
+  |   "SIMCAM_FIG_SOURCES",
+  |   "M2_FAKE",
+  |   "SIMCAM_FIG_SESSION",
+  |   "M2_SESSION_HOOK",
+  |   "SIMCAM_OFF_KEY_LOG",
+  |   "M2_NOLOGDICT",
+  |   "SIMCAM_PROFILE",
+  |   "M2_PLIST",
+  |   "SIMCAM_FIXTURE_IMAGE",
+  |   "M5_IMAGE",
+  |   "SIMCAM_STUB_LOG",
+  |   "SIMCAM_ENGINE_LOG",
+  |   "M5_LOG",
+  |   "SIMCAM_SOURCE"
+  |  ]
+  | }
+sims/U1/chain.txt
+  | 
+sims/U1/config.json
+  | {
+  |  "proto": 1,
+  |  "xcode_version": "27.0",
+  |  "xcode_build": "27A266a",
+  |  "developer_dir": "/Applications/Xcode.app/Contents/Developer",
+  |  "rules_dir": "$T/simcam/restore-rules/fb3d81f73460",
+  |  "source": "up",
+  |  "at": <n>
+  | }
+sims/U1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+--- exit 0
+
+=== up: already armed this boot
+$ stuntcam up --skip-verify --grant dev.x
+--- stdout
+simulator: iPhone A (U1, iOS 27.0), the only booted iOS simulator
+Xcode 27.0 (27A266a, /Applications/Xcode.app/Contents/Developer): restore rules verified
+already armed in boot mode since this boot; now on build aaaaaaaaaaaa from the next app launch
+--- stderr
+--- simctl
+list devices -j
+privacy U1 grant camera dev.x
+privacy U1 grant microphone dev.x
+--- files
+builds/aaaaaaaaaaaa/libsimcam.dylib
+builds/aaaaaaaaaaaa/libsimcamloader.dylib
+builds/bbbbbbbbbbbb/libsimcamstub.dylib
+builds/cccccccccccc/libsimcamrunnerhook.dylib
+data/5d45a009b038/profile.plist
+data/9040a7d6cdf7/qr.png
+restore-rules/fb3d81f73460/.complete
+restore-rules/fb3d81f73460/27A266a.json
+sims/U1/arm.json
+  | {
+  |  "proto": 1,
+  |  "mode": "boot",
+  |  "build": "aaaaaaaaaaaa",
+  |  "at": <n>,
+  |  "vars": null
+  | }
+sims/U1/chain.txt
+  | 
+sims/U1/config.json
+  | {
+  |  "proto": 1,
+  |  "xcode_version": "27.0",
+  |  "xcode_build": "27A266a",
+  |  "developer_dir": "/Applications/Xcode.app/Contents/Developer",
+  |  "rules_dir": "$T/simcam/restore-rules/fb3d81f73460",
+  |  "source": "up",
+  |  "at": <n>
+  | }
+sims/U1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+--- exit 0
+
+=== up: armed this boot by stuntcam 1.1.0
+$ stuntcam up --skip-verify
+--- stdout
+simulator: iPhone A (U1, iOS 27.0), the only booted iOS simulator
+Xcode 27.0 (27A266a, /Applications/Xcode.app/Contents/Developer): restore rules verified
+already armed in boot mode since this boot; now on build aaaaaaaaaaaa from the next app launch
+--- stderr
+--- simctl
+list devices -j
+--- files
+builds/aaaaaaaaaaaa/libsimcam.dylib
+builds/aaaaaaaaaaaa/libsimcamloader.dylib
+builds/bbbbbbbbbbbb/libsimcamstub.dylib
+builds/cccccccccccc/libsimcamrunnerhook.dylib
+data/5d45a009b038/profile.plist
+data/9040a7d6cdf7/qr.png
+restore-rules/fb3d81f73460/.complete
+restore-rules/fb3d81f73460/27A266a.json
+sims/U1/arm.json
+  | {
+  |  "proto": 1,
+  |  "mode": "boot",
+  |  "build": "aaaaaaaaaaaa",
+  |  "at": <n>,
+  |  "vars": [
+  |   "DYLD_INSERT_LIBRARIES",
+  |   "SIMCAM_SIM_DIR",
+  |   "SIMCAM_STATE_DIR",
+  |   "SIMCAM_CHAIN",
+  |   "SIMCAM_CONTROL",
+  |   "M2_FAKE",
+  |   "M2_SESSION_HOOK",
+  |   "M2_NOLOGDICT",
+  |   "M2_PLIST",
+  |   "M5_IMAGE"
+  |  ]
+  | }
+sims/U1/chain.txt
+  | 
+sims/U1/config.json
+  | {
+  |  "proto": 1,
+  |  "xcode_version": "27.0",
+  |  "xcode_build": "27A266a",
+  |  "developer_dir": "/Applications/Xcode.app/Contents/Developer",
+  |  "rules_dir": "$T/simcam/restore-rules/fb3d81f73460",
+  |  "source": "up",
+  |  "at": <n>
+  | }
+sims/U1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+--- exit 0
+
+=== up: already armed, --source
+$ stuntcam up --skip-verify --source scene
+--- stdout
+simulator: iPhone A (U1, iOS 27.0), the only booted iOS simulator
+--- stderr
+stuntcam: iPhone A is already booted armed: --source/--log are part of its boot environment; add --reboot to change them
+--- simctl
+list devices -j
+--- files
+builds/aaaaaaaaaaaa/libsimcam.dylib
+builds/aaaaaaaaaaaa/libsimcamloader.dylib
+builds/bbbbbbbbbbbb/libsimcamstub.dylib
+builds/cccccccccccc/libsimcamrunnerhook.dylib
+data/5d45a009b038/profile.plist
+data/9040a7d6cdf7/qr.png
+restore-rules/fb3d81f73460/.complete
+restore-rules/fb3d81f73460/27A266a.json
+sims/U1/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"boot","proto":1,"vars":null}
+--- exit 64
+
+=== up: boot-armed, --mode launchd
+$ stuntcam up --mode launchd
+--- stdout
+simulator: iPhone A (U1, iOS 27.0), the only booted iOS simulator
+--- stderr
+stuntcam: iPhone A is booted armed in boot mode, which launchd mode can't change: `stuntcam up` keeps boot mode; for launchd mode, `xcrun simctl shutdown U1` and then `stuntcam up --mode launchd`
+--- simctl
+list devices -j
+--- files
+builds/aaaaaaaaaaaa/libsimcam.dylib
+builds/aaaaaaaaaaaa/libsimcamloader.dylib
+builds/bbbbbbbbbbbb/libsimcamstub.dylib
+builds/cccccccccccc/libsimcamrunnerhook.dylib
+data/5d45a009b038/profile.plist
+data/9040a7d6cdf7/qr.png
+restore-rules/fb3d81f73460/.complete
+restore-rules/fb3d81f73460/27A266a.json
+sims/U1/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"boot","proto":1,"vars":null}
+--- exit 64
+
+=== up: armed under another home
+$ stuntcam up --skip-verify
+--- stdout
+simulator: iPhone A (U1, iOS 27.0), the only booted iOS simulator
+--- stderr
+stuntcam: iPhone A is already boot-armed from another stuntcam home (SIMCAM_HOME differs from $T/simcam), /other/home/sims/U1: its boot environment names that directory, so arming it here would not take effect. `stuntcam up --reboot --udid U1` re-arms it under this home (apps running in it quit); or run stuntcam with the SIMCAM_HOME that armed it
+--- simctl
+list devices -j
+--- files
+builds/aaaaaaaaaaaa/libsimcam.dylib
+builds/aaaaaaaaaaaa/libsimcamloader.dylib
+builds/bbbbbbbbbbbb/libsimcamstub.dylib
+builds/cccccccccccc/libsimcamrunnerhook.dylib
+data/5d45a009b038/profile.plist
+data/9040a7d6cdf7/qr.png
+restore-rules/fb3d81f73460/.complete
+restore-rules/fb3d81f73460/27A266a.json
+--- exit 64
+
+=== up: bad --mode
+$ stuntcam up --skip-verify --mode bogus
+--- stdout
+simulator: iPhone A (U1, iOS 27.0), the only booted iOS simulator
+--- stderr
+stuntcam: --mode must be boot or launchd
+--- simctl
+list devices -j
+--- files
+builds/aaaaaaaaaaaa/libsimcam.dylib
+builds/aaaaaaaaaaaa/libsimcamloader.dylib
+builds/bbbbbbbbbbbb/libsimcamstub.dylib
+builds/cccccccccccc/libsimcamrunnerhook.dylib
+data/5d45a009b038/profile.plist
+data/9040a7d6cdf7/qr.png
+restore-rules/fb3d81f73460/.complete
+restore-rules/fb3d81f73460/27A266a.json
+--- exit 1
+
+=== up: bad --source
+$ stuntcam up --source picture:x
+--- stdout
+--- stderr
+stuntcam: source must be scene, image:PATH or video:PATH (got "picture:x")
+--- simctl
+--- files
+--- exit 64
+
+=== up: being booted
+$ stuntcam up --skip-verify
+--- stdout
+simulator: iPhone A (U1, iOS 27.0), the most recently booted iOS simulator
+--- stderr
+stuntcam: iPhone A is being booted armed by another stuntcam (pid <pid>) right now; try again in a minute, or --reboot
+--- simctl
+list devices -j
+--- files
+builds/aaaaaaaaaaaa/libsimcam.dylib
+builds/aaaaaaaaaaaa/libsimcamloader.dylib
+builds/bbbbbbbbbbbb/libsimcamstub.dylib
+builds/cccccccccccc/libsimcamrunnerhook.dylib
+data/5d45a009b038/profile.plist
+data/9040a7d6cdf7/qr.png
+restore-rules/fb3d81f73460/.complete
+restore-rules/fb3d81f73460/27A266a.json
+sims/U1/arm.json
+  | {"proto":1,"mode":"boot","build":"x","at":<n>,"booting":true,"pid":<n>}
+--- exit 1
+
+=== up: canary can't start
+$ stuntcam up
+--- stdout
+simulator: iPhone A (U1, iOS 27.0), the only booted iOS simulator
+--- stderr
+stuntcam: canary: verify setup: no canary app in this build (scripts/build-fixtures.sh canary in a checkout) (or --skip-verify)
+--- simctl
+list devices -j
+--- files
+builds/aaaaaaaaaaaa/libsimcam.dylib
+builds/aaaaaaaaaaaa/libsimcamloader.dylib
+builds/bbbbbbbbbbbb/libsimcamstub.dylib
+builds/cccccccccccc/libsimcamrunnerhook.dylib
+data/5d45a009b038/profile.plist
+data/9040a7d6cdf7/qr.png
+restore-rules/fb3d81f73460/.complete
+restore-rules/fb3d81f73460/27A266a.json
+--- exit 64
+
+=== verify: can't start
+$ stuntcam verify
+--- stdout
+--- stderr
+stuntcam: verify setup: no canary app in this build (scripts/build-fixtures.sh canary in a checkout)
+--- simctl
+--- files
+builds/aaaaaaaaaaaa/libsimcam.dylib
+builds/aaaaaaaaaaaa/libsimcamloader.dylib
+builds/bbbbbbbbbbbb/libsimcamstub.dylib
+builds/cccccccccccc/libsimcamrunnerhook.dylib
+data/5d45a009b038/profile.plist
+data/9040a7d6cdf7/qr.png
+restore-rules/fb3d81f73460/.complete
+restore-rules/fb3d81f73460/27A266a.json
+--- exit 64
+
+=== down: launchd-armed
+$ stuntcam down
+--- stdout
+iPhone A (U1): new launches no longer load stuntcam; apps already running keep it until they quit
+--- stderr
+--- simctl
+list devices -j
+spawn U1 launchctl getenv DYLD_INSERT_LIBRARIES
+spawn U1 launchctl getenv DYLD_INSERT_LIBRARIES
+spawn U1 launchctl setenv DYLD_INSERT_LIBRARIES /x/libother.dylib
+spawn U1 launchctl unsetenv SIMCAM_SIM_DIR
+--- files
+sims/U1/down
+--- exit 0
+
+=== env
+$ stuntcam env --udid U1
+--- stdout
+# stuntcam for launches on iPhone A (U1); a launch that sets its own DYLD_INSERT_LIBRARIES replaces this one
+export SIMCTL_CHILD_DYLD_INSERT_LIBRARIES='$T/simcam/builds/bbbbbbbbbbbb/libsimcamstub.dylib'
+export SIMCTL_CHILD_SIMCAM_SIM_DIR='$T/simcam/sims/U1'
+export SIMCTL_CHILD_SIMCAM_STATE_DIR='$T/simcam/sims/U1/state'
+export SIMCTL_CHILD_SIMCAM_CHAIN='$T/simcam/sims/U1/chain.txt'
+export SIMCTL_CHILD_SIMCAM_CONTROL='$T/simcam/sims/U1/control'
+export SIMCTL_CHILD_SIMCAM_FIG_SOURCES='1'
+export SIMCTL_CHILD_M2_FAKE='1'
+export SIMCTL_CHILD_SIMCAM_FIG_SESSION='1'
+export SIMCTL_CHILD_M2_SESSION_HOOK='1'
+export SIMCTL_CHILD_SIMCAM_OFF_KEY_LOG='1'
+export SIMCTL_CHILD_M2_NOLOGDICT='1'
+export SIMCTL_CHILD_SIMCAM_PROFILE='$T/simcam/data/5d45a009b038/profile.plist'
+export SIMCTL_CHILD_M2_PLIST='$T/simcam/data/5d45a009b038/profile.plist'
+export SIMCTL_CHILD_SIMCAM_FIXTURE_IMAGE='$T/simcam/data/9040a7d6cdf7/qr.png'
+export SIMCTL_CHILD_M5_IMAGE='$T/simcam/data/9040a7d6cdf7/qr.png'
+--- stderr
+--- simctl
+list devices -j
+--- files
+builds/aaaaaaaaaaaa/libsimcam.dylib
+builds/aaaaaaaaaaaa/libsimcamloader.dylib
+builds/bbbbbbbbbbbb/libsimcamstub.dylib
+builds/cccccccccccc/libsimcamrunnerhook.dylib
+data/5d45a009b038/profile.plist
+data/9040a7d6cdf7/qr.png
+restore-rules/fb3d81f73460/.complete
+restore-rules/fb3d81f73460/27A266a.json
+sims/U1/arm.json
+  | {
+  |  "proto": 1,
+  |  "mode": "env",
+  |  "build": "aaaaaaaaaaaa",
+  |  "at": <n>,
+  |  "vars": null
+  | }
+sims/U1/chain.txt
+  | 
+sims/U1/config.json
+  | {
+  |  "proto": 1,
+  |  "xcode_version": "27.0",
+  |  "xcode_build": "27A266a",
+  |  "developer_dir": "/Applications/Xcode.app/Contents/Developer",
+  |  "rules_dir": "$T/simcam/restore-rules/fb3d81f73460",
+  |  "source": "env",
+  |  "at": <n>
+  | }
+sims/U1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+--- exit 0
+
+=== env: after down
+$ stuntcam env
+--- stdout
+--- stderr
+stuntcam: iPhone A was booted armed and then `stuntcam down`: writing current would re-arm every launch on it, not just yours; `stuntcam up` to re-arm, or reboot it unarmed first
+--- simctl
+list devices -j
+--- files
+builds/aaaaaaaaaaaa/libsimcam.dylib
+builds/aaaaaaaaaaaa/libsimcamloader.dylib
+builds/bbbbbbbbbbbb/libsimcamstub.dylib
+builds/cccccccccccc/libsimcamrunnerhook.dylib
+data/5d45a009b038/profile.plist
+data/9040a7d6cdf7/qr.png
+restore-rules/fb3d81f73460/.complete
+restore-rules/fb3d81f73460/27A266a.json
+sims/U1/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"boot","proto":1,"vars":null}
+--- exit 1
+
+=== swap
+$ stuntcam swap
+--- stdout
+iPhone A now uses build aaaaaaaaaaaa from the next app launch (running apps keep theirs)
+--- stderr
+--- simctl
+list devices -j
+--- files
+builds/aaaaaaaaaaaa/libsimcam.dylib
+builds/aaaaaaaaaaaa/libsimcamloader.dylib
+builds/bbbbbbbbbbbb/libsimcamstub.dylib
+builds/cccccccccccc/libsimcamrunnerhook.dylib
+data/5d45a009b038/profile.plist
+data/9040a7d6cdf7/qr.png
+restore-rules/fb3d81f73460/.complete
+restore-rules/fb3d81f73460/27A266a.json
+sims/U1/arm.json
+  | {
+  |  "proto": 1,
+  |  "mode": "launchd",
+  |  "build": "aaaaaaaaaaaa",
+  |  "at": <n>,
+  |  "vars": null
+  | }
+sims/U1/config.json
+  | {
+  |  "proto": 1,
+  |  "xcode_version": "27.0",
+  |  "xcode_build": "27A266a",
+  |  "developer_dir": "/Applications/Xcode.app/Contents/Developer",
+  |  "rules_dir": "$T/simcam/restore-rules/fb3d81f73460",
+  |  "source": "swap",
+  |  "at": <n>
+  | }
+sims/U1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+--- exit 0
+
+=== swap: not armed
+$ stuntcam swap
+--- stdout
+--- stderr
+stuntcam: iPhone A isn't armed (no current): `stuntcam up` first; swap only changes the build of an armed simulator
+--- simctl
+list devices -j
+--- files
+--- exit 1
+
+=== chain add
+$ stuntcam chain add libextra.dylib
+--- stdout
+chain for iPhone A: 2 libraries (loaded from the next app launch)
+--- stderr
+--- simctl
+list devices -j
+--- files
+sims/U1/chain.txt
+  | /x/liba.dylib
+  | $T/wd/libextra.dylib
+--- exit 0
+
+=== chain add: missing
+$ stuntcam chain add libnone.dylib
+--- stdout
+--- stderr
+stuntcam: $T/wd/libnone.dylib: no such library
+--- simctl
+list devices -j
+--- files
+sims/U1/chain.txt
+  | /x/liba.dylib
+--- exit 1
+
+=== chain add: ours
+$ stuntcam chain add libsimcamx.dylib
+--- stdout
+--- stderr
+stuntcam: stuntcam's own libraries are never chained (the loader skips them)
+--- simctl
+list devices -j
+--- files
+sims/U1/chain.txt
+  | /x/liba.dylib
+--- exit 1
+
+=== chain rm
+$ stuntcam chain rm /x/liba.dylib
+--- stdout
+chain for iPhone A: 0 libraries (loaded from the next app launch)
+--- stderr
+--- simctl
+list devices -j
+--- files
+sims/U1/chain.txt
+  | 
+--- exit 0
+
+=== chain ls
+$ stuntcam chain ls
+--- stdout
+/x/liba.dylib
+--- stderr
+--- simctl
+list devices -j
+--- files
+sims/U1/chain.txt
+  | /x/liba.dylib
+--- exit 0
+
+=== chain add: no LIB
+$ stuntcam chain add
+--- stdout
+--- stderr
+stuntcam: usage: stuntcam chain add [--udid U] LIB
+--- simctl
+list devices -j
+--- files
+sims/U1/chain.txt
+  | /x/liba.dylib
+--- exit 64
+
+=== sentinel ls
+$ stuntcam sentinel ls
+--- stdout
+dev.x: 1 activations since the last clear
+  marker latched-aaaaaaaaaaaa: session until <time> (launches of this build start stock (no camera, stock CoreMotion), no activation)
+  container-tmp fallback $T/devices/U1/data/Containers/Data/Application/dev.x/tmp/simcam-state/dev.x: no events.log
+  marker latched-aaaaaaaaaaaa: activate until <time> (launches of this build start stock (no camera, stock CoreMotion), no activation)
+dev.y: 1 activations since the last clear
+container-tmp fallback not checked: dev.y: app not installed
+--- stderr
+--- simctl
+list devices -j
+get_app_container U1 dev.x data
+get_app_container U1 dev.y data
+--- files
+sims/U1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+sims/U1/state/dev.x/events.log
+sims/U1/state/dev.x/latched-aaaaaaaaaaaa
+sims/U1/state/dev.y/events.log
+--- exit 0
+
+=== sentinel clear
+$ stuntcam sentinel clear
+--- stdout
+dev.x: cleared (state dir); container-tmp fallback $T/devices/U1/data/Containers/Data/Application/dev.x/tmp/simcam-state/dev.x: removed latched-aaaaaaaaaaaa; its next launch gets the camera again
+dev.y: cleared (state dir); its next launch gets the camera again
+container-tmp fallback not checked: dev.y: app not installed
+--- stderr
+--- simctl
+list devices -j
+get_app_container U1 dev.x data
+get_app_container U1 dev.y data
+--- files
+sims/U1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+sims/U1/state/dev.x/events.log
+sims/U1/state/dev.y/events.log
+--- exit 0
+
+=== sentinel clear: shut down
+$ stuntcam sentinel clear --bundle dev.x
+--- stdout
+dev.x: state dir not cleared: mkdir $T/simcam/sims/U1/state/dev.x: not a directory
+container-tmp fallback not checked: simulator not booted (an app that fell back there stays latched: clear again once the simulator is booted)
+--- stderr
+stuntcam: nothing could be cleared for dev.x
+--- simctl
+list devices -j
+--- files
+sims/U1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+sims/U1/state/dev.x
+--- exit 1
+
+=== trace: none
+$ stuntcam trace dev.x
+--- stdout
+--- stderr
+stuntcam: no trace for dev.x on iPhone A: none in $T/simcam/sims/U1/state/dev.x or $T/devices/U1/data/Containers/Data/Application/dev.x/tmp/simcam-state/dev.x; an app writes one once it uses the camera on an armed simulator
+--- simctl
+list devices -j
+get_app_container U1 dev.x data
+--- files
+sims/U1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+sims/U1/state/dev.x/events.log
+sims/U1/state/dev.x/latched-aaaaaaaaaaaa
+sims/U1/state/dev.y/events.log
+--- exit 1
+
+=== source scene
+$ stuntcam source scene
+--- stdout
+iPhone A: source scene (running apps switch within a second; apps launched later start with it)
+--- stderr
+--- simctl
+list devices -j
+spawn U1 launchctl getenv SIMCAM_CONTROL
+--- files
+sims/U1/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"launchd","proto":1,"vars":["DYLD_INSERT_LIBRARIES","SIMCAM_CONTROL"]}
+sims/U1/control
+  | source=scene
+sims/U1/control.lock
+sims/U1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+--- exit 0
+
+=== source image
+$ stuntcam source image:pic.png
+--- stdout
+iPhone A: source image:$T/simcam/data/9040a7d6cdf7/pic.png (running apps switch within a second; apps launched later start with it)
+--- stderr
+--- simctl
+list devices -j
+spawn U1 launchctl getenv SIMCAM_CONTROL
+--- files
+data/9040a7d6cdf7/pic.png
+sims/U1/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"launchd","proto":1,"vars":["DYLD_INSERT_LIBRARIES","SIMCAM_CONTROL"]}
+sims/U1/control
+  | source=image:$T/simcam/data/9040a7d6cdf7/pic.png
+sims/U1/control.lock
+sims/U1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+--- exit 0
+
+=== source: missing image
+$ stuntcam source image:none.png
+--- stdout
+--- stderr
+stuntcam: $T/wd/none.png: no such file
+--- simctl
+list devices -j
+spawn U1 launchctl getenv SIMCAM_CONTROL
+--- files
+sims/U1/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"launchd","proto":1,"vars":["DYLD_INSERT_LIBRARIES","SIMCAM_CONTROL"]}
+sims/U1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+--- exit 64
+
+=== source: webcam without a helper
+$ stuntcam source webcam
+--- stdout
+--- stderr
+stuntcam: this build has no camera helper (in a checkout: helper/build.sh; an installed stuntcam ships one)
+--- simctl
+list devices -j
+spawn U1 launchctl getenv SIMCAM_CONTROL
+--- files
+sims/U1/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"launchd","proto":1,"vars":["DYLD_INSERT_LIBRARIES","SIMCAM_CONTROL"]}
+sims/U1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+--- exit 1
+
+=== source: not armed
+$ stuntcam source scene
+--- stdout
+--- stderr
+stuntcam: iPhone A isn't armed: `stuntcam up` first
+--- simctl
+list devices -j
+--- files
+--- exit 1
+
+=== orient
+$ stuntcam orient landscapeleft
+--- stdout
+iPhone A: orientation landscapeLeft (apps follow within a second, if their UI allows it)
+--- stderr
+--- simctl
+list devices -j
+spawn U1 launchctl getenv SIMCAM_CONTROL
+--- files
+sims/U1/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"launchd","proto":1,"vars":["DYLD_INSERT_LIBRARIES","SIMCAM_CONTROL"]}
+sims/U1/control
+  | orientation=landscapeLeft
+sims/U1/control.lock
+sims/U1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+--- exit 0
+
+=== orient: shut down
+$ stuntcam orient auto
+--- stdout
+--- stderr
+stuntcam: iPhone A isn't running: `stuntcam up` boots it armed, then `stuntcam orient`
+--- simctl
+list devices -j
+--- files
+sims/U1/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"launchd","proto":1,"vars":["DYLD_INSERT_LIBRARIES","SIMCAM_CONTROL"]}
+sims/U1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+--- exit 1
+
+=== service status
+$ stuntcam service status
+--- stdout
+not running
+--- stderr
+--- simctl
+--- launchctl
+print gui/<uid>/dev.stuntcam.service
+--- files
+--- exit 0
+
+=== service uninstall
+$ stuntcam service uninstall
+--- stdout
+uninstalled dev.stuntcam.service (simulators it armed in launchd mode stay armed until `stuntcam down` or a shutdown; its log stays in $T/simcam/logs)
+--- stderr
+--- simctl
+--- launchctl
+bootout gui/<uid>/dev.stuntcam.service
+--- files
+--- exit 0
+

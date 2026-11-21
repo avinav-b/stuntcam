@@ -1,0 +1,20 @@
+{
+ "proto": 1,
+ "mode": "launchd",
+ "build": "b0",
+ "at": 1763300000,
+ "vars": [
+  "DYLD_INSERT_LIBRARIES",
+  "SIMCAM_SIM_DIR",
+  "SIMCAM_STATE_DIR",
+  "SIMCAM_CHAIN",
+  "SIMCAM_CONTROL",
+  "M2_FAKE",
+  "M2_SESSION_HOOK",
+  "M2_NOLOGDICT",
+  "M2_PLIST",
+  "M5_IMAGE",
+  "SIMCAM_STUB_LOG",
+  "M5_LOG"
+ ]
+}

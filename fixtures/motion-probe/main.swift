@@ -150,7 +150,7 @@ final class VC: UIViewController {
 //   still); magneticField zero and uncalibrated; and against a REAL CMAttitude built from the same quaternion with
 //   CoreMotion's own (private) -initWithQuaternion: (a test oracle only): its rotationMatrix, its angles' matrix,
 //   multiplyByInverseOfAttitude:. Then copy, a * a^-1, and coding: the archive is byte-identical to Apple's for the
-//   same q and, with the stand-in active, decodes to an M5Attitude (M1: m1.multiply, m1.isEqual, m1.decodeClass).
+//   same q and, with the stand-in active, decodes to a SimcamAttitude (M1: m1.multiply, m1.isEqual, m1.decodeClass).
 //   24 checks in all. -m1 a|b|c: one M1 step only, then END (a throwaway measurement launch).
 // The rate must be >= 90% of -hz. Lines: "ATT PASS|FAIL <check> ...", then "ATT SUMMARY pass=<n> fail=<n>".
 // -armcam 1: one camera call before the motion calls (the control file's orientation= applies only once the camera arms).
@@ -286,17 +286,17 @@ final class AttitudeProbe {
       // so an app decodes a saved attitude without the engine; it decodes to a real CMAttitude with the same quaternion
       let data = try? NSKeyedArchiver.archivedData(withRootObject: a, requiringSecureCoding: true)
       let appleData = appleAttitude(a.quaternion).flatMap { try? NSKeyedArchiver.archivedData(withRootObject: $0, requiringSecureCoding: true) }
-      let names = data.map { d in ["M5Attitude", "CMAttitude", "kCMAttitudeCodingKeyQW"].filter { d.range(of: Data($0.utf8)) != nil } } ?? []
+      let names = data.map { d in ["SimcamAttitude", "CMAttitude", "kCMAttitudeCodingKeyQW"].filter { d.range(of: Data($0.utf8)) != nil } } ?? []
       R(data != nil && data == appleData, "coding.apple", "archive \(data?.count ?? -1) bytes, Apple's for the same q \(appleData?.count ?? -1) bytes, identical=\(data != nil && data == appleData); names in it: \(names)")
       let back = data.flatMap { try? NSKeyedUnarchiver.unarchivedObject(ofClass: CMAttitude.self, from: $0) }
-      // with the stand-in active the engine maps the name CMAttitude to M5Attitude for every decode (M1, below)
-      R(back.map { NSStringFromClass(type(of: $0)) == "M5Attitude" && qdiff($0.quaternion, a.quaternion) == 0 && a.isEqual($0) } ?? false, "coding.decode",
+      // with the stand-in active the engine maps the name CMAttitude to SimcamAttitude for every decode (M1, below)
+      R(back.map { NSStringFromClass(type(of: $0)) == "SimcamAttitude" && qdiff($0.quaternion, a.quaternion) == 0 && a.isEqual($0) } ?? false, "coding.decode",
         "decoded class=\(back.map { String(describing: type(of: $0)) } ?? "nil") q=\(back.map { qs($0.quaternion) } ?? "nil") |dq|=\(back.map { qdiff($0.quaternion, a.quaternion) } ?? -1)")
       m1(a)
     }
   }
   // M1: an attitude decoded from an archive of the stand-in, used with the stand-in as the ARGUMENT
-  // (Apple's methods may read the argument's private storage, which an M5Attitude doesn't have). -m1 a|b|c runs one step
+  // (Apple's methods may read the argument's private storage, which a SimcamAttitude doesn't have). -m1 a|b|c runs one step
   // only, then ends (a throwaway launch: a crash ends the log after "M1 <step> begin"); no -m1: all three, asserted.
   func m1(_ a: CMAttitude) {
     let only = defs.string(forKey: "m1")
@@ -327,7 +327,7 @@ final class AttitudeProbe {
       P("ATT M1 c begin")
       let da = dec(arch(a)), apple = appleAttitude(a.quaternion), dApple = apple.flatMap { dec(arch($0)) }
       P("ATT M1 c done unarchivedObject(ofClass: CMAttitude.self) of the stand-in's archive: \(cls(da)) q=\(da.map { qs($0.quaternion) } ?? "nil"); of Apple's: \(cls(dApple))")
-      R(da != nil && cls(da) == "M5Attitude" && cls(dApple) == "M5Attitude" && qdiff(da!.quaternion, a.quaternion) == 0 && abs(da!.pitch - a.pitch) < 1e-9 && abs(da!.roll - a.roll) < 1e-9,
+      R(da != nil && cls(da) == "SimcamAttitude" && cls(dApple) == "SimcamAttitude" && qdiff(da!.quaternion, a.quaternion) == 0 && abs(da!.pitch - a.pitch) < 1e-9 && abs(da!.roll - a.roll) < 1e-9,
         "m1.decodeClass", "secure decode of the stand-in's archive: \(cls(da)), of Apple's archive: \(cls(dApple)); q and angles as the sample's")
     }
     if only != nil { finish() }

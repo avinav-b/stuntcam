@@ -47,7 +47,7 @@ if want: rs = [r for r in rs if r["identifier"] == want or r["version"] == want 
 if not rs: sys.exit(1)
 r = sorted(rs, key=lambda r: [int(p) for p in r["version"].split(".")])[-1]
 print(r["identifier"], r["buildversion"], r["version"])' "$WANT") || { echo "verdict inconclusive(no iOS runtime matching '${WANT:-any}')"; exit 2; }
-read RTID RTBUILD RTVER <<<"$RTI"   # not `read <<<"$(…)" || …`: read succeeds on the empty line, so a missing runtime went unnoticed
+read RTID RTBUILD RTVER <<<"$RTI"   # not `read <<<"$(…)" || …`: read succeeds on the empty line, so a missing runtime would go unnoticed
 
 [[ -f $ROOT/build/current_loader.txt && -f $ROOT/build/current_stub.txt ]] || { echo "$0: no build (./build.sh)" >&2; exit 64; }
 BUILD=$(basename "$(dirname "$(cat $ROOT/build/current_loader.txt)")")
@@ -81,27 +81,38 @@ while ! mkdir "$LOCK" 2>/dev/null; do
   [[ -d $LOCK ]] || continue   # released meanwhile (the Go shutdown child's handoff): try mkdir again
   MA=$(mk_age)
   if [[ -n $OP && -n $MA ]] && (( MA <= 80 )) && kill -0 $OP 2>/dev/null && (( EPOCHSECONDS - TW < 80 )); then
-    (( SAID )) || { SAID=1; echo "waiting for the previous verify's device $(awk '{print $1}' "$LOCK/shutdown" 2>/dev/null) to finish shutting down" >&2; }
+    (( SAID )) ||
+      { SAID=1; echo "waiting for the previous verify's device $(awk '{print $1}' "$LOCK/shutdown" 2>/dev/null) to finish shutting down" >&2; }
     sleep 0.2; continue
   fi
   STALE=0; [[ -n $MA ]] && (( MA > 80 )) && STALE=1   # a marker older than the child can live: a dead child's lock
-  if (( ! STALE )) && { [[ -z $OP ]] || kill -0 $OP 2>/dev/null; }; then LOCK=; echo "verdict inconclusive(another verify is using this runtime's device${OP:+, pid $OP})"; exit 2; fi
-  rm -rf "$LOCK"; mkdir "$LOCK" 2>/dev/null || { LOCK=; echo "verdict inconclusive(lock taken over by another verify)"; exit 2; }   # a stale lock (dead owner)
+  if (( ! STALE )) && { [[ -z $OP ]] || kill -0 $OP 2>/dev/null; }; then LOCK=
+    echo "verdict inconclusive(another verify is using this runtime's device${OP:+, pid $OP})"; exit 2; fi
+  rm -rf "$LOCK"; mkdir "$LOCK" 2>/dev/null ||
+    { LOCK=; echo "verdict inconclusive(lock taken over by another verify)"; exit 2; }   # a stale lock (dead owner)
   break
 done
 echo $$ > "$LOCK/pid"
 
 # the device: one per runtime build, in the private set
 NAME=stuntcam-canary-$RTBUILD
-U=$(sc list devices -j | python3 -I -c 'import json,sys; n=sys.argv[1]; print(next((d["udid"] for ds in json.load(sys.stdin)["devices"].values() for d in ds if d["name"] == n), ""))' $NAME)
+U=$(sc list devices -j | python3 -I -c '
+import json, sys
+n = sys.argv[1]
+print(next((d["udid"] for ds in json.load(sys.stdin)["devices"].values() for d in ds if d["name"] == n), ""))' $NAME)
 CREATED=0
 if [[ -z $U ]]; then
   # newest "iPhone <n> Pro" this runtime supports (the newest overall, iPhone 18 Pro, can't be created on 26.3 or 17.5)
-  DT=$(xcrun simctl list runtimes -j | python3 -I -c 'import json,sys,re; r=next(r for r in json.load(sys.stdin)["runtimes"] if r["identifier"] == sys.argv[1]); d=[x for x in r.get("supportedDeviceTypes", []) if re.fullmatch(r"iPhone \d+ Pro", x["name"])]; print(max(d, key=lambda x: int(x["name"].split()[1]))["identifier"])' $RTID) || { echo "verdict inconclusive(no iPhone Pro device type for $RTID)"; exit 2; }
+  DT=$(xcrun simctl list runtimes -j | python3 -I -c '
+import json, sys, re
+r = next(r for r in json.load(sys.stdin)["runtimes"] if r["identifier"] == sys.argv[1])
+d = [x for x in r.get("supportedDeviceTypes", []) if re.fullmatch(r"iPhone \d+ Pro", x["name"])]
+print(max(d, key=lambda x: int(x["name"].split()[1]))["identifier"])' $RTID) ||
+    { echo "verdict inconclusive(no iPhone Pro device type for $RTID)"; exit 2; }
   echo "creating $NAME ($DT, $RTID) in the private set $SET (first use of this runtime: a minute or two)"
   U=$(sc create $NAME $DT $RTID) || { echo "verdict inconclusive(create failed)"; exit 2; }; CREATED=1
 fi
-TC=$SECONDS
+T_CREATED=$SECONDS
 
 # boot armed: same variables as boot.sh, under the private set (simcam_arm_vars writes SIMCAM_HOME/sims/<udid>/current)
 boot_install() {   # -> 0, or prints an inconclusive verdict and exits
@@ -129,12 +140,13 @@ boot_install() {   # -> 0, or prints an inconclusive verdict and exits
     last=$pid; sleep 0.3
   done
   (( stable )) || echo "SpringBoard not stable after 30 s (pid ${pid:-none}); installing anyway" >&2
-  [[ $seq == " $pid" ]] || echo "SpringBoard was not running or changed pid after bootstatus (pids:$seq); waited $((SECONDS - tg)) s before install" >&2
+  [[ $seq == " $pid" ]] ||
+    echo "SpringBoard was not running or changed pid after bootstatus (pids:$seq); waited $((SECONDS - tg)) s before install" >&2
   sc install $U "$APP" || { echo "verdict inconclusive(install failed) key=$KEY"; exit 2; }
   sc privacy $U grant camera $B >/dev/null 2>&1; sc privacy $U grant microphone $B >/dev/null 2>&1
 }
 boot_install
-TB=$SECONDS
+T_BOOTED=$SECONDS
 
 run_canary() {   # -> sets R to the canary's RESULT line (or a synthetic one)
   local log=$SIMCAM_LOGS/verify-$KEY-$RUNID-$1.log i bg=0   # one log per call: a later verify must not overwrite the evidence
@@ -147,11 +159,14 @@ run_canary() {   # -> sets R to the canary's RESULT line (or a synthetic one)
     for i in {1..600}; do sleep 0.1   # 60 s: the canary's budget is 45 s (CANARY_BUDGET) plus launch
       grep -q "RESULT" $log && break
       kill -0 $LP 2>/dev/null || break
-      if (( ! bg )) && grep -q "BG-REQUEST" $log; then bg=1; sc launch $U com.apple.Preferences >/dev/null 2>&1; sleep 1.2; sc launch $U $B >/dev/null 2>&1; fi
+      if (( ! bg )) && grep -q "BG-REQUEST" $log; then bg=1; sc launch $U com.apple.Preferences >/dev/null 2>&1
+        sleep 1.2; sc launch $U $B >/dev/null 2>&1; fi
     done
     grep -qE 'Busy|failed preflight' $log && ! grep -q "CANARY" $log || break
     (( try == 3 )) && REFUSED=1
-    mv $log $log.refused-$try; echo "canary launch refused ($(grep -hE 'reason:|failed to launch' $log.refused-$try | tail -1 | sed 's/^[[:space:]]*//' | cut -c1-120)); launching again in 2 s" >&2; sleep 2
+    mv $log $log.refused-$try
+    echo "canary launch refused ($(grep -hE 'reason:|failed to launch' $log.refused-$try | tail -1 | sed 's/^[[:space:]]*//' | cut -c1-120)); launching again in 2 s" >&2
+    sleep 2
   done
   kill -0 $LP 2>/dev/null && alive=1
   sleep 0.3; kill $LP 2>/dev/null; LP=; sc terminate $U $B 2>/dev/null; sc terminate $U com.apple.Preferences 2>/dev/null
@@ -178,16 +193,22 @@ if [[ $R == *core=INCONCLUSIVE* || $R == *"canary exited without a verdict"* ]];
   fi
 fi
 # a content fail is cached for good, so it is confirmed by one more launch first (the Go CLI's confirmFail)
-FF=; NOSTORE=0; CONF=
+# FIRST_RESULT: the first launch's RESULT line (the fail being confirmed); FAILED_FIRST: that line again, set only when
+# the confirming launch passed (the verdict JSON's failed_first); UNCONFIRMED=1: the confirming launch gave no verdict,
+# so nothing is cached; CONFIRM_NOTE: what the verdict line says about the confirmation
+FAILED_FIRST=; UNCONFIRMED=0; CONFIRM_NOTE=
 if [[ $R == *core=FAIL* && $R != *"canary exited without a verdict"* ]]; then
-  RF=$R; run_canary c
-  if [[ $R == *core=FAIL* && $R != *"canary exited without a verdict"* ]]; then CONF=" (confirmed by a second launch)"
-  elif [[ $R == *core=PASS* ]]; then FF=$RF; CONF=" (the first launch FAILED: $(print -r -- $RF | cut -c1-160); $([[ -n $NOCACHE ]] && echo "not cached: $NOCACHE" || echo "cached for an hour only"))"
-  else NOSTORE=1; CONF=" (not cached: the launch run to confirm this fail gave no verdict: $(print -r -- $R | cut -c1-120))"; R=$RF; fi
+  FIRST_RESULT=$R; run_canary c
+  if [[ $R == *core=FAIL* && $R != *"canary exited without a verdict"* ]]; then CONFIRM_NOTE=" (confirmed by a second launch)"
+  elif [[ $R == *core=PASS* ]]; then FAILED_FIRST=$FIRST_RESULT
+    CONFIRM_NOTE=" (the first launch FAILED: $(print -r -- $FIRST_RESULT | cut -c1-160); $([[ -n $NOCACHE ]] && echo "not cached: $NOCACHE" || echo "cached for an hour only"))"
+  else UNCONFIRMED=1
+    CONFIRM_NOTE=" (not cached: the launch run to confirm this fail gave no verdict: $(print -r -- $R | cut -c1-120))"
+    R=$FIRST_RESULT; fi
 fi
-TR=$SECONDS   # canary= covers every launch: the first, a relaunch and a confirming one
+T_CANARY=$SECONDS   # canary= covers every launch: the first, a relaunch and a confirming one
 (( KEEP )) || sc shutdown $U >/dev/null 2>&1
-TD=$SECONDS
+T_DONE=$SECONDS
 
 case $R in
   *core=PASS*) V=pass; RC=0;;
@@ -195,8 +216,8 @@ case $R in
   *) V="inconclusive($(print -r -- $R | cut -c8-200))"; RC=2;;
 esac
 NEW=; (( CREATED )) && NEW=" (new device)"
-TIMES="create=$((TC - T0))s$NEW boot=$((TB - TC))s canary=$((TR - TB))s total=$((TD - T0))s"
-if (( RC < 2 && ! NOSTORE )) && [[ -z $NOCACHE ]]; then
+TIMES="create=$((T_CREATED - T0))s$NEW boot=$((T_BOOTED - T_CREATED))s canary=$((T_CANARY - T_BOOTED))s total=$((T_DONE - T0))s"
+if (( RC < 2 && ! UNCONFIRMED )) && [[ -z $NOCACHE ]]; then
   python3 -I -c 'import json,sys,time,os,re; k,v,r,rt,b,sb,ch,ph,u,t=sys.argv[1:11]; f=sys.argv[11]; r1=sys.argv[12]; ff=sys.argv[13]
 m=re.search(r" retried:\[(.*?)\](?= core:\[| timing:\[| ext:\[|$)", r)
 d={"proto":1,"key":k,"verdict":v,"result":r,"runtime_build":rt,"engine_build":b,"stub_build":sb,"canary_sha":ch,"profile_sha":ph,"device":u,"times":t,"at":int(time.time())}
@@ -205,8 +226,8 @@ if r1: d["relaunched"]=r1[:300]   # a pass after a whole relaunch is short-lived
 if ff: d["failed_first"]=ff[:300]   # a pass after an unconfirmed content fail: short-lived (Result.FailedFirst)
 json.dump(d, open(f + ".tmp","w"), indent=1)
 os.replace(f + ".tmp", f)' \
-    "$KEY" "$V" "$R" "$RTBUILD" "$BUILD" "$STUBB" "$CH" "$PH" "$U" "$TIMES" "$VF" "$RL" "$FF"
+    "$KEY" "$V" "$R" "$RTBUILD" "$BUILD" "$STUBB" "$CH" "$PH" "$U" "$TIMES" "$VF" "$RL" "$FAILED_FIRST"
 fi
 FIRST=; [[ -n $RL ]] && FIRST=" (first run: $(print -r -- $RL | cut -c1-120))"
-echo "verdict $V key=$KEY runtime=$RTVER ($RTBUILD) device=$U $TIMES$FIRST$CONF"
+echo "verdict $V key=$KEY runtime=$RTVER ($RTBUILD) device=$U $TIMES$FIRST$CONFIRM_NOTE"
 exit $RC

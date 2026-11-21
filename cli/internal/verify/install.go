@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/avinav-b/stuntcam/cli/internal/artifacts"
 	"github.com/avinav-b/stuntcam/cli/internal/home"
 )
 
@@ -32,15 +33,15 @@ func CanaryRecordFile(udid string) string {
 }
 
 type canaryRecord struct {
-	Hash      string `json:"hash"`      // BundleHash of the installed app
+	Hash      string `json:"hash"`      // bundleSHA256 of the installed app
 	Container string `json:"container"` // its host path, under the device's data dir
 	Granted   bool   `json:"granted"`   // camera + microphone granted after that install
 	At        int64  `json:"at"`
 }
 
-// BundleHash is the SHA-256 of an app bundle's files: each regular file's path (relative, sorted) and contents; symlinks
+// bundleSHA256 is the SHA-256 of an app bundle's files: each regular file's path (relative, sorted) and contents; symlinks
 // by their target. Directories alone don't count.
-func BundleHash(app string) (string, error) {
+func bundleSHA256(app string) (string, error) {
 	type ent struct{ rel, link string }
 	var es []ent
 	err := filepath.WalkDir(app, func(p string, d fs.DirEntry, err error) error {
@@ -105,7 +106,8 @@ func tccGranted(deviceDir string) bool {
 	if _, err := os.Stat(db); err != nil {
 		return false
 	}
-	q := "SELECT service FROM access WHERE client='" + CanaryBundle + "' AND auth_value=2 AND service IN ('kTCCServiceCamera','kTCCServiceMicrophone')"
+	q := "SELECT service FROM access WHERE client='" + CanaryBundle + "' AND auth_value=2 " +
+		"AND service IN ('kTCCServiceCamera','kTCCServiceMicrophone')"
 	cmd := exec.Command("/usr/bin/sqlite3", "-readonly", "file:"+db+"?mode=ro", q)
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	out, err := runBounded(cmd, 5*time.Second)
@@ -146,7 +148,7 @@ type installPlan struct {
 }
 
 func planInstall(deviceDir, udid, canary string) installPlan {
-	want, err := BundleHash(canary)
+	want, err := bundleSHA256(canary)
 	if err != nil {
 		return installPlan{Install: true, Grant: true, Why: "canary hash: " + err.Error(), canary: canary}
 	}
@@ -161,18 +163,19 @@ func planInstall(deviceDir, udid, canary string) installPlan {
 	case !haveRec:
 		p.Why = "no install record: installing the canary"
 	default:
-		got, err := BundleHash(inst)
+		got, err := bundleSHA256(inst)
 		switch {
 		case err != nil:
 			p.Why = "installed canary unreadable: reinstalling"
 		case got != want:
-			p.Why = "installed canary differs from this build's (" + short(got) + " != " + short(want) + "): reinstalling"
+			p.Why = "installed canary differs from this build's (" +
+				artifacts.ShortHash(got) + " != " + artifacts.ShortHash(want) + "): reinstalling"
 		case rec.Hash != want || rec.Container != inst:
 			p.Why = "install record differs from the installed canary: reinstalling"
 		default:
 			p.Install = false
 			p.Grant = !(rec.Granted && tccGranted(deviceDir))
-			p.Why = "canary " + short(want) + " already installed"
+			p.Why = "canary " + artifacts.ShortHash(want) + " already installed"
 			if p.Grant {
 				p.Why += "; granting camera + microphone"
 			} else {
@@ -183,13 +186,6 @@ func planInstall(deviceDir, udid, canary string) installPlan {
 	return p
 }
 
-func short(h string) string {
-	if len(h) > 12 {
-		return h[:12]
-	}
-	return h
-}
-
 // recordInstall writes the install record after an install (and grants) succeeded, from the installed copy itself.
 func recordInstall(deviceDir, udid, want string, granted bool) error {
 	inst := installedCanary(deviceDir)
@@ -197,7 +193,7 @@ func recordInstall(deviceDir, udid, want string, granted bool) error {
 		_ = os.Remove(CanaryRecordFile(udid))
 		return nil
 	}
-	if got, err := BundleHash(inst); err != nil || got != want {
+	if got, err := bundleSHA256(inst); err != nil || got != want {
 		_ = os.Remove(CanaryRecordFile(udid)) // not what we installed: the next verify reinstalls
 		return nil
 	}

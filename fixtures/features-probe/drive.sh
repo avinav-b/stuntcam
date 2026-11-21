@@ -13,7 +13,7 @@ OUT=$SIMCAM_RESULTS/features-$RT-$INJ-$WHAT-$TAG; rm -rf $OUT; mkdir -p $OUT
 hlog() { printf 'HOST| %.3f %s\n' $(( EPOCHREALTIME - 978307200 )) "$*" >> $OUT/host.log; }
 typeset -a ARGS; ARGS=(-mode $MODE); [[ $MODE == feature ]] && ARGS+=(-feature $FEAT -camera $CAM -nocatch $NOCATCH)
 [[ -n ${MOVIE_SECONDS:-} ]] && ARGS+=(-seconds $MOVIE_SECONDS)   # movie length (default 3 s)
-# XENV="VAR=val ..." adds SIMCTL_CHILD_VAR=val to the launch, as scripts/run.sh does (e.g. XENV=M15_OLD_BRACKET=1)
+# XENV="VAR=val ..." adds SIMCTL_CHILD_VAR=val to the launch, as scripts/run.sh does (e.g. XENV=SIMCAM_OFF_BRACKET_UNSUPPORTED=1)
 typeset -a ENVS; ENVS=(); for kv in ${=XENV:-}; do ENVS+=(SIMCTL_CHILD_$kv); done
 xcrun simctl terminate $UDID $B 2>/dev/null
 xcrun simctl privacy $UDID grant camera $B 2>/dev/null; xcrun simctl privacy $UDID grant microphone $B 2>/dev/null

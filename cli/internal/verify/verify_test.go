@@ -37,7 +37,7 @@ func TestClassify(t *testing.T) {
 	}
 }
 
-// the canary's retried:[…] field sits before core:[, so verdicts and fail texts are what they were
+// the canary's retried:[…] field sits before core:[ and doesn't change the verdict or the fail text
 func TestClassifyRetried(t *testing.T) {
 	r := "RESULT core=PASS ext=PASS t=16.7s retried:[photo-4x3: longest frame gap during the photo 215 ms (<= 100 ms, 4 frames) -> retry ok]"
 	if st, v := Classify(r); st != Pass || v != "pass" {
@@ -97,11 +97,11 @@ func TestLock(t *testing.T) {
 	t.Setenv("SIMCAM_HOME", t.TempDir())
 	os.MkdirAll(home.Root(), 0o755)
 	d := lockDir("23D8133")
-	if ok, why := acquire(d); !ok {
-		t.Fatal(why)
+	if err := acquire(d); err != nil {
+		t.Fatal(err)
 	}
 	// held by a live process (this one, as seen by a second caller)
-	if ok, _ := acquire(d); ok {
+	if acquire(d) == nil {
 		t.Fatal("acquired twice")
 	}
 	release(d)
@@ -111,8 +111,8 @@ func TestLock(t *testing.T) {
 	// a dead owner's lock is taken over; someone else's live lock is not released by us
 	os.Mkdir(d, 0o755)
 	os.WriteFile(filepath.Join(d, "pid"), []byte("999999\n"), 0o644)
-	if ok, why := acquire(d); !ok {
-		t.Fatal("stale lock not taken over: " + why)
+	if err := acquire(d); err != nil {
+		t.Fatal("stale lock not taken over: ", err)
 	}
 	os.WriteFile(filepath.Join(d, "pid"), []byte("1\n"), 0o644)
 	release(d)
@@ -129,15 +129,15 @@ func TestProPhonesNewestFirst(t *testing.T) {
 }
 
 func TestFinalNeedsTwoCrashes(t *testing.T) {
-	crash := "RESULT core=FAIL ext=FAIL core:[" + crashText + "; last: x]"
-	inc := "RESULT core=INCONCLUSIVE (no verdict in 60 s; last: x)"
-	if st, _ := Classify(Final(inc, crash)); st != Inconclusive {
+	crash := canaryRun{outcome: exitedNoVerdict, detail: "x", ran: true}
+	inc := canaryRun{outcome: noVerdictInTime, detail: "x", ran: true}
+	if st, _ := finalRun(inc, crash).verdict(); st != Inconclusive {
 		t.Error("one crash after an inconclusive run became", st)
 	}
-	if st, _ := Classify(Final(crash, crash)); st != Fail {
+	if st, _ := finalRun(crash, crash).verdict(); st != Fail {
 		t.Error("two crashes:", st)
 	}
-	if st, _ := Classify(Final(crash, "RESULT core=PASS ext=PASS")); st != Pass {
+	if st, _ := finalRun(crash, printed("RESULT core=PASS ext=PASS")).verdict(); st != Pass {
 		t.Error("crash then pass:", st)
 	}
 }

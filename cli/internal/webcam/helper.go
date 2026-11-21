@@ -8,10 +8,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/avinav-b/stuntcam/cli/internal/home"
 )
 
 // Env is everything the helper's lifecycle touches outside this package; tests replace the functions.
@@ -336,7 +338,7 @@ func (e *Env) Switch(udid string, ids []string, inUse func(udid string) bool) er
 	}
 	var errs []string
 	for _, id := range old {
-		if containsStr(ids, id) {
+		if slices.Contains(ids, id) {
 			continue
 		}
 		var users []string
@@ -363,28 +365,12 @@ func (e *Env) Switch(udid string, ids []string, inUse func(udid string) bool) er
 	return nil
 }
 
-func containsStr(xs []string, x string) bool {
-	for _, v := range xs {
-		if v == x {
-			return true
-		}
-	}
-	return false
-}
-
+// writeAtomic writes one of the webcam's own files (0600, its directory 0700) atomically.
 func writeAtomic(p string, b []byte) error {
 	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
 		return err
 	}
-	tmp := p + ".tmp." + strconv.Itoa(os.Getpid())
-	if err := os.WriteFile(tmp, b, 0o600); err != nil {
-		return err
-	}
-	if err := os.Rename(tmp, p); err != nil {
-		os.Remove(tmp)
-		return err
-	}
-	return nil
+	return home.WriteAtomicPerm(p, b, 0o600)
 }
 
 // PidFiles lists the camera hashes that have a pid file.

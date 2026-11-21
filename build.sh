@@ -21,14 +21,14 @@ set -euo pipefail
 # the physical path (pwd -P): the linker writes the debug map's object paths with symlinks resolved (/tmp is
 # /private/tmp), so -oso_prefix and the prefix maps must use that form or a clone under a symlinked path leaks it (and
 # gets another engine hash)
-ROOT="$(cd "$(dirname "$0")" && pwd -P)"; cd "$ROOT"; source $ROOT/scripts/env.sh
+ROOT="$(cd "$(dirname "$0")" && pwd -P)"; cd "$ROOT"; source $ROOT/scripts/env.sh; source $ROOT/scripts/common.sh
 
 VARIANT=normal; SAN=()
 for a in "$@"; do
   case $a in
     --tsan) VARIANT=tsan; SAN=(-fsanitize=thread);;
     --asan) VARIANT=asan; SAN=(-fsanitize=address);;
-    -h|--help) sed -n '3,16p' "$0"; exit 0;;
+    -h|--help) print_usage "$0"; exit 0;;
     *) echo "build.sh: unknown argument: $a (expected --tsan or --asan)" >&2; exit 2;;
   esac
 done
@@ -83,8 +83,12 @@ K=$(shasum $TMP/libsimcamrunnerhook.dylib | cut -c1-12); mkdir -p build/$K; cp $
 
 # copies the simulator loads from (cp keeps the bytes, so the ad-hoc linker signature stays valid)
 SB=$SIMCAM_HOME/builds; mkdir -p $SB/$H $SB/$S $SB/$K
-cp build/$H/libsimcam.dylib build/$H/libsimcamloader.dylib $SB/$H/; cp build/$S/libsimcamstub.dylib $SB/$S/; cp build/$K/libsimcamrunnerhook.dylib $SB/$K/
-cmp -s build/$H/libsimcam.dylib $SB/$H/libsimcam.dylib && cmp -s build/$H/libsimcamloader.dylib $SB/$H/libsimcamloader.dylib && cmp -s build/$S/libsimcamstub.dylib $SB/$S/libsimcamstub.dylib && cmp -s build/$K/libsimcamrunnerhook.dylib $SB/$K/libsimcamrunnerhook.dylib
+cp build/$H/libsimcam.dylib build/$H/libsimcamloader.dylib $SB/$H/; cp build/$S/libsimcamstub.dylib $SB/$S/
+cp build/$K/libsimcamrunnerhook.dylib $SB/$K/
+cmp -s build/$H/libsimcam.dylib $SB/$H/libsimcam.dylib &&
+  cmp -s build/$H/libsimcamloader.dylib $SB/$H/libsimcamloader.dylib &&
+  cmp -s build/$S/libsimcamstub.dylib $SB/$S/libsimcamstub.dylib &&
+  cmp -s build/$K/libsimcamrunnerhook.dylib $SB/$K/libsimcamrunnerhook.dylib
 
 echo $SB/$H/libsimcam.dylib > build/current_dylib.txt
 echo $SB/$H/libsimcam.dylib > build/${VARIANT}_dylib.txt

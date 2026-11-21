@@ -1,0 +1,1197 @@
+== real
+{
+ "schema": 1,
+ "udid": "UDID",
+ "simulator": "iPhone",
+ "bundle": "dev.simcam.spike.m10canary",
+ "pid": 61256,
+ "running": true,
+ "build": "b818f3a60d01",
+ "file": "/s/trace-61256.txt",
+ "location": "state-dir",
+ "written": "2026-11-14T11:53:13.946587Z",
+ "written_ns": 1794657193946587000,
+ "recorded": 55,
+ "ring_size": 64,
+ "timebase": {
+  "numer": 125,
+  "denom": 3
+ },
+ "ops": [
+  {
+   "index": 0,
+   "op": "activate",
+   "wall": "2026-11-14T11:52:59.979862Z",
+   "wall_ns": 1794657179979862000,
+   "mach": 11703709729695,
+   "host_ns": 487654572070625,
+   "settings_id": null,
+   "arg": 0,
+   "delta_ms": null
+  },
+  {
+   "index": 1,
+   "op": "session-start",
+   "wall": "2026-11-14T11:53:00.049991Z",
+   "wall_ns": 1794657180049991000,
+   "mach": 11703711412764,
+   "host_ns": 487654642198500,
+   "settings_id": null,
+   "arg": 2,
+   "delta_ms": null
+  },
+  {
+   "index": 2,
+   "op": "shutter",
+   "wall": "2026-11-14T11:53:01.084734Z",
+   "wall_ns": 1794657181084734000,
+   "mach": 11703736246185,
+   "host_ns": 487655676924375,
+   "settings_id": 3,
+   "arg": 0,
+   "delta_ms": 0
+  },
+  {
+   "index": 3,
+   "op": "slot12",
+   "wall": "2026-11-14T11:53:01.084999Z",
+   "wall_ns": 1794657181084999000,
+   "mach": 11703736252544,
+   "host_ns": 487655677189333,
+   "settings_id": 3,
+   "arg": 0,
+   "delta_ms": 0.265
+  },
+  {
+   "index": 4,
+   "op": "will-capture",
+   "wall": "2026-11-14T11:53:01.085664Z",
+   "wall_ns": 1794657181085664000,
+   "mach": 11703736268500,
+   "host_ns": 487655677854166,
+   "settings_id": 3,
+   "arg": 0,
+   "delta_ms": 0.93
+  },
+  {
+   "index": 5,
+   "op": "timestamp",
+   "wall": "2026-11-14T11:53:01.085664584Z",
+   "wall_ns": 1794657181085664584,
+   "mach": 11703736268519,
+   "host_ns": 487655677854958,
+   "settings_id": 3,
+   "arg": 487655677854958,
+   "delta_ms": 0.931
+  },
+  {
+   "index": 6,
+   "op": "did-capture",
+   "wall": "2026-11-14T11:53:01.085666Z",
+   "wall_ns": 1794657181085666000,
+   "mach": 11703736268536,
+   "host_ns": 487655677855666,
+   "settings_id": 3,
+   "arg": 0,
+   "delta_ms": 0.931
+  },
+  {
+   "index": 7,
+   "op": "encode-start",
+   "wall": "2026-11-14T11:53:01.085679Z",
+   "wall_ns": 1794657181085679000,
+   "mach": 11703736268847,
+   "host_ns": 487655677868625,
+   "settings_id": 3,
+   "arg": 0,
+   "delta_ms": 0.944
+  },
+  {
+   "index": 8,
+   "op": "encoded",
+   "wall": "2026-11-14T11:53:01.354359Z",
+   "wall_ns": 1794657181354359000,
+   "mach": 11703742717054,
+   "host_ns": 487655946543916,
+   "settings_id": 3,
+   "arg": 317001,
+   "delta_ms": 269.62
+  },
+  {
+   "index": 9,
+   "op": "still-complete",
+   "wall": "2026-11-14T11:53:01.354428Z",
+   "wall_ns": 1794657181354428000,
+   "mach": 11703742718726,
+   "host_ns": 487655946613583,
+   "settings_id": 3,
+   "arg": 0,
+   "delta_ms": 269.689
+  },
+  {
+   "index": 10,
+   "op": "did-finish",
+   "wall": "2026-11-14T11:53:01.354793Z",
+   "wall_ns": 1794657181354793000,
+   "mach": 11703742727480,
+   "host_ns": 487655946978333,
+   "settings_id": 3,
+   "arg": 0,
+   "delta_ms": 270.054
+  },
+  {
+   "index": 11,
+   "op": "shutter",
+   "wall": "2026-11-14T11:53:01.672513Z",
+   "wall_ns": 1794657181672513000,
+   "mach": 11703750352629,
+   "host_ns": 487656264692875,
+   "settings_id": 4,
+   "arg": 0,
+   "delta_ms": 0
+  },
+  {
+   "index": 12,
+   "op": "slot12",
+   "wall": "2026-11-14T11:53:01.672618Z",
+   "wall_ns": 1794657181672618000,
+   "mach": 11703750355171,
+   "host_ns": 487656264798791,
+   "settings_id": 4,
+   "arg": 0,
+   "delta_ms": 0.106
+  },
+  {
+   "index": 13,
+   "op": "will-capture",
+   "wall": "2026-11-14T11:53:01.672764Z",
+   "wall_ns": 1794657181672764000,
+   "mach": 11703750358655,
+   "host_ns": 487656264943958,
+   "settings_id": 4,
+   "arg": 0,
+   "delta_ms": 0.251
+  },
+  {
+   "index": 14,
+   "op": "timestamp",
+   "wall": "2026-11-14T11:53:01.672764667Z",
+   "wall_ns": 1794657181672764667,
+   "mach": 11703750358676,
+   "host_ns": 487656264944833,
+   "settings_id": 4,
+   "arg": 487656264944833,
+   "delta_ms": 0.252
+  },
+  {
+   "index": 15,
+   "op": "did-capture",
+   "wall": "2026-11-14T11:53:01.672765Z",
+   "wall_ns": 1794657181672765000,
+   "mach": 11703750358696,
+   "host_ns": 487656264945666,
+   "settings_id": 4,
+   "arg": 0,
+   "delta_ms": 0.253
+  },
+  {
+   "index": 16,
+   "op": "encode-start",
+   "wall": "2026-11-14T11:53:01.672781Z",
+   "wall_ns": 1794657181672781000,
+   "mach": 11703750359075,
+   "host_ns": 487656264961458,
+   "settings_id": 4,
+   "arg": 0,
+   "delta_ms": 0.269
+  },
+  {
+   "index": 17,
+   "op": "encoded",
+   "wall": "2026-11-14T11:53:01.981907Z",
+   "wall_ns": 1794657181981907000,
+   "mach": 11703757777962,
+   "host_ns": 487656574081750,
+   "settings_id": 4,
+   "arg": 392023,
+   "delta_ms": 309.389
+  },
+  {
+   "index": 18,
+   "op": "still-complete",
+   "wall": "2026-11-14T11:53:01.981959Z",
+   "wall_ns": 1794657181981959000,
+   "mach": 11703757779213,
+   "host_ns": 487656574133875,
+   "settings_id": 4,
+   "arg": 0,
+   "delta_ms": 309.441
+  },
+  {
+   "index": 19,
+   "op": "did-finish",
+   "wall": "2026-11-14T11:53:01.982339Z",
+   "wall_ns": 1794657181982339000,
+   "mach": 11703757788334,
+   "host_ns": 487656574513916,
+   "settings_id": 4,
+   "arg": 0,
+   "delta_ms": 309.821
+  },
+  {
+   "index": 20,
+   "op": "shutter",
+   "wall": "2026-11-14T11:53:02.298217Z",
+   "wall_ns": 1794657182298217000,
+   "mach": 11703765369280,
+   "host_ns": 487656890386666,
+   "settings_id": 5,
+   "arg": 0,
+   "delta_ms": 0
+  },
+  {
+   "index": 21,
+   "op": "slot12",
+   "wall": "2026-11-14T11:53:02.298337Z",
+   "wall_ns": 1794657182298337000,
+   "mach": 11703765372161,
+   "host_ns": 487656890506708,
+   "settings_id": 5,
+   "arg": 0,
+   "delta_ms": 0.12
+  },
+  {
+   "index": 22,
+   "op": "will-capture",
+   "wall": "2026-11-14T11:53:02.298486Z",
+   "wall_ns": 1794657182298486000,
+   "mach": 11703765375755,
+   "host_ns": 487656890656458,
+   "settings_id": 5,
+   "arg": 0,
+   "delta_ms": 0.27
+  },
+  {
+   "index": 23,
+   "op": "timestamp",
+   "wall": "2026-11-14T11:53:02.298486709Z",
+   "wall_ns": 1794657182298486709,
+   "mach": 11703765375765,
+   "host_ns": 487656890656875,
+   "settings_id": 5,
+   "arg": 487656890656875,
+   "delta_ms": 0.27
+  },
+  {
+   "index": 24,
+   "op": "did-capture",
+   "wall": "2026-11-14T11:53:02.298487Z",
+   "wall_ns": 1794657182298487000,
+   "mach": 11703765375783,
+   "host_ns": 487656890657625,
+   "settings_id": 5,
+   "arg": 0,
+   "delta_ms": 0.271
+  },
+  {
+   "index": 25,
+   "op": "encode-start",
+   "wall": "2026-11-14T11:53:02.298503Z",
+   "wall_ns": 1794657182298503000,
+   "mach": 11703765376145,
+   "host_ns": 487656890672708,
+   "settings_id": 5,
+   "arg": 0,
+   "delta_ms": 0.286
+  },
+  {
+   "index": 26,
+   "op": "encoded",
+   "wall": "2026-11-14T11:53:02.615254Z",
+   "wall_ns": 1794657182615254000,
+   "mach": 11703772978049,
+   "host_ns": 487657207418708,
+   "settings_id": 5,
+   "arg": 23378,
+   "delta_ms": 317.032
+  },
+  {
+   "index": 27,
+   "op": "still-complete",
+   "wall": "2026-11-14T11:53:02.619141Z",
+   "wall_ns": 1794657182619141000,
+   "mach": 11703773071334,
+   "host_ns": 487657211305583,
+   "settings_id": 5,
+   "arg": 0,
+   "delta_ms": 320.919
+  },
+  {
+   "index": 28,
+   "op": "did-finish",
+   "wall": "2026-11-14T11:53:02.619527Z",
+   "wall_ns": 1794657182619527000,
+   "mach": 11703773080598,
+   "host_ns": 487657211691583,
+   "settings_id": 5,
+   "arg": 0,
+   "delta_ms": 321.305
+  },
+  {
+   "index": 29,
+   "op": "movie-start",
+   "wall": "2026-11-14T11:53:05.074549Z",
+   "wall_ns": 1794657185074549000,
+   "mach": 11703832000152,
+   "host_ns": 487659666673000,
+   "settings_id": 1,
+   "arg": 0,
+   "delta_ms": null
+  },
+  {
+   "index": 30,
+   "op": "movie-stop",
+   "wall": "2026-11-14T11:53:06.672089Z",
+   "wall_ns": 1794657186672089000,
+   "mach": 11703870340486,
+   "host_ns": 487661264186916,
+   "settings_id": 1,
+   "arg": 0,
+   "delta_ms": null
+  },
+  {
+   "index": 31,
+   "op": "shutter",
+   "wall": "2026-11-14T11:53:06.69457Z",
+   "wall_ns": 1794657186694570000,
+   "mach": 11703870880031,
+   "host_ns": 487661286667958,
+   "settings_id": 6,
+   "arg": 0,
+   "delta_ms": 0
+  },
+  {
+   "index": 32,
+   "op": "slot12",
+   "wall": "2026-11-14T11:53:06.694678Z",
+   "wall_ns": 1794657186694678000,
+   "mach": 11703870882621,
+   "host_ns": 487661286775875,
+   "settings_id": 6,
+   "arg": 0,
+   "delta_ms": 0.108
+  },
+  {
+   "index": 33,
+   "op": "session-stop",
+   "wall": "2026-11-14T11:53:06.694802Z",
+   "wall_ns": 1794657186694802000,
+   "mach": 11703870885598,
+   "host_ns": 487661286899916,
+   "settings_id": null,
+   "arg": 0,
+   "delta_ms": null
+  },
+  {
+   "index": 34,
+   "op": "will-capture",
+   "wall": "2026-11-14T11:53:06.694877Z",
+   "wall_ns": 1794657186694877000,
+   "mach": 11703870887392,
+   "host_ns": 487661286974666,
+   "settings_id": 6,
+   "arg": 0,
+   "delta_ms": 0.307
+  },
+  {
+   "index": 35,
+   "op": "timestamp",
+   "wall": "2026-11-14T11:53:06.694879625Z",
+   "wall_ns": 1794657186694879625,
+   "mach": 11703870887445,
+   "host_ns": 487661286976875,
+   "settings_id": 6,
+   "arg": 487661286976875,
+   "delta_ms": 0.309
+  },
+  {
+   "index": 36,
+   "op": "did-capture",
+   "wall": "2026-11-14T11:53:06.69488Z",
+   "wall_ns": 1794657186694880000,
+   "mach": 11703870887469,
+   "host_ns": 487661286977875,
+   "settings_id": 6,
+   "arg": 0,
+   "delta_ms": 0.31
+  },
+  {
+   "index": 37,
+   "op": "encode-start",
+   "wall": "2026-11-14T11:53:06.694915Z",
+   "wall_ns": 1794657186694915000,
+   "mach": 11703870888310,
+   "host_ns": 487661287012916,
+   "settings_id": 6,
+   "arg": 0,
+   "delta_ms": 0.345
+  },
+  {
+   "index": 38,
+   "op": "encoded",
+   "wall": "2026-11-14T11:53:06.839371Z",
+   "wall_ns": 1794657186839371000,
+   "mach": 11703874355181,
+   "host_ns": 487661431465875,
+   "settings_id": 6,
+   "arg": 136430,
+   "delta_ms": 144.798
+  },
+  {
+   "index": 39,
+   "op": "still-complete",
+   "wall": "2026-11-14T11:53:06.839419Z",
+   "wall_ns": 1794657186839419000,
+   "mach": 11703874356340,
+   "host_ns": 487661431514166,
+   "settings_id": 6,
+   "arg": 0,
+   "delta_ms": 144.846
+  },
+  {
+   "index": 40,
+   "op": "did-finish",
+   "wall": "2026-11-14T11:53:06.841096Z",
+   "wall_ns": 1794657186841096000,
+   "mach": 11703874396598,
+   "host_ns": 487661433191583,
+   "settings_id": 6,
+   "arg": 0,
+   "delta_ms": 146.524
+  },
+  {
+   "index": 41,
+   "op": "session-start",
+   "wall": "2026-11-14T11:53:06.843038Z",
+   "wall_ns": 1794657186843038000,
+   "mach": 11703874443203,
+   "host_ns": 487661435133458,
+   "settings_id": null,
+   "arg": 10,
+   "delta_ms": null
+  },
+  {
+   "index": 42,
+   "op": "session-stop",
+   "wall": "2026-11-14T11:53:08.334246Z",
+   "wall_ns": 1794657188334246000,
+   "mach": 11703910231607,
+   "host_ns": 487662926316958,
+   "settings_id": null,
+   "arg": 0,
+   "delta_ms": null
+  },
+  {
+   "index": 43,
+   "op": "session-start",
+   "wall": "2026-11-14T11:53:08.710858Z",
+   "wall_ns": 1794657188710858000,
+   "mach": 11703919270148,
+   "host_ns": 487663302922833,
+   "settings_id": null,
+   "arg": 12,
+   "delta_ms": null
+  },
+  {
+   "index": 44,
+   "op": "session-stop",
+   "wall": "2026-11-14T11:53:09.556859Z",
+   "wall_ns": 1794657189556859000,
+   "mach": 11703939573826,
+   "host_ns": 487664148909416,
+   "settings_id": null,
+   "arg": 0,
+   "delta_ms": null
+  },
+  {
+   "index": 45,
+   "op": "session-start",
+   "wall": "2026-11-14T11:53:09.876611Z",
+   "wall_ns": 1794657189876611000,
+   "mach": 11703947247752,
+   "host_ns": 487664468656333,
+   "settings_id": null,
+   "arg": 18,
+   "delta_ms": null
+  },
+  {
+   "index": 46,
+   "op": "session-stop",
+   "wall": "2026-11-14T11:53:10.604654Z",
+   "wall_ns": 1794657190604654000,
+   "mach": 11703964720494,
+   "host_ns": 487665196687250,
+   "settings_id": null,
+   "arg": 0,
+   "delta_ms": null
+  },
+  {
+   "index": 47,
+   "op": "session-start",
+   "wall": "2026-11-14T11:53:10.769591Z",
+   "wall_ns": 1794657190769591000,
+   "mach": 11703968678913,
+   "host_ns": 487665361621375,
+   "settings_id": null,
+   "arg": 22,
+   "delta_ms": null
+  },
+  {
+   "index": 48,
+   "op": "session-stop",
+   "wall": "2026-11-14T11:53:11.196946Z",
+   "wall_ns": 1794657191196946000,
+   "mach": 11703978935268,
+   "host_ns": 487665788969500,
+   "settings_id": null,
+   "arg": 0,
+   "delta_ms": null
+  },
+  {
+   "index": 49,
+   "op": "session-start",
+   "wall": "2026-11-14T11:53:11.356305Z",
+   "wall_ns": 1794657191356305000,
+   "mach": 11703982759821,
+   "host_ns": 487665948325875,
+   "settings_id": null,
+   "arg": 26,
+   "delta_ms": null
+  },
+  {
+   "index": 50,
+   "op": "session-stop",
+   "wall": "2026-11-14T11:53:11.779732Z",
+   "wall_ns": 1794657191779732000,
+   "mach": 11703992921912,
+   "host_ns": 487666371746333,
+   "settings_id": null,
+   "arg": 0,
+   "delta_ms": null
+  },
+  {
+   "index": 51,
+   "op": "session-start",
+   "wall": "2026-11-14T11:53:12.149723Z",
+   "wall_ns": 1794657192149723000,
+   "mach": 11704001801537,
+   "host_ns": 487666741730708,
+   "settings_id": null,
+   "arg": 30,
+   "delta_ms": null
+  },
+  {
+   "index": 52,
+   "op": "session-stop",
+   "wall": "2026-11-14T11:53:12.904802Z",
+   "wall_ns": 1794657192904802000,
+   "mach": 11704019923137,
+   "host_ns": 487667496797375,
+   "settings_id": null,
+   "arg": 0,
+   "delta_ms": null
+  },
+  {
+   "index": 53,
+   "op": "session-start",
+   "wall": "2026-11-14T11:53:12.943672Z",
+   "wall_ns": 1794657192943672000,
+   "mach": 11704020855996,
+   "host_ns": 487667535666500,
+   "settings_id": null,
+   "arg": 33,
+   "delta_ms": null
+  },
+  {
+   "index": 54,
+   "op": "session-stop",
+   "wall": "2026-11-14T11:53:13.945221Z",
+   "wall_ns": 1794657193945221000,
+   "mach": 11704044892777,
+   "host_ns": 487668537199041,
+   "settings_id": null,
+   "arg": 0,
+   "delta_ms": null
+  }
+ ],
+ "photos": [
+  {
+   "settings_id": 3,
+   "stages": [
+    "shutter",
+    "slot12",
+    "will-capture",
+    "timestamp",
+    "did-capture",
+    "encode-start",
+    "encoded",
+    "still-complete",
+    "did-finish"
+   ],
+   "in_order": true,
+   "monotonic": true,
+   "complete": true,
+   "error": 0,
+   "host_ns": {
+    "did-capture": 487655677855666,
+    "did-finish": 487655946978333,
+    "encode-start": 487655677868625,
+    "encoded": 487655946543916,
+    "shutter": 487655676924375,
+    "slot12": 487655677189333,
+    "still-complete": 487655946613583,
+    "timestamp": 487655677854958,
+    "will-capture": 487655677854166
+   },
+   "ms": {
+    "did-capture": 0.931,
+    "did-finish": 270.054,
+    "encode-start": 0.944,
+    "encoded": 269.62,
+    "shutter": 0,
+    "slot12": 0.265,
+    "still-complete": 269.689,
+    "timestamp": 0.931,
+    "will-capture": 0.93
+   },
+   "timestamp_minus_slot12_ms": 0.666,
+   "timestamp_s": 487655.677854958
+  },
+  {
+   "settings_id": 4,
+   "stages": [
+    "shutter",
+    "slot12",
+    "will-capture",
+    "timestamp",
+    "did-capture",
+    "encode-start",
+    "encoded",
+    "still-complete",
+    "did-finish"
+   ],
+   "in_order": true,
+   "monotonic": true,
+   "complete": true,
+   "error": 0,
+   "host_ns": {
+    "did-capture": 487656264945666,
+    "did-finish": 487656574513916,
+    "encode-start": 487656264961458,
+    "encoded": 487656574081750,
+    "shutter": 487656264692875,
+    "slot12": 487656264798791,
+    "still-complete": 487656574133875,
+    "timestamp": 487656264944833,
+    "will-capture": 487656264943958
+   },
+   "ms": {
+    "did-capture": 0.253,
+    "did-finish": 309.821,
+    "encode-start": 0.269,
+    "encoded": 309.389,
+    "shutter": 0,
+    "slot12": 0.106,
+    "still-complete": 309.441,
+    "timestamp": 0.252,
+    "will-capture": 0.251
+   },
+   "timestamp_minus_slot12_ms": 0.146,
+   "timestamp_s": 487656.264944833
+  },
+  {
+   "settings_id": 5,
+   "stages": [
+    "shutter",
+    "slot12",
+    "will-capture",
+    "timestamp",
+    "did-capture",
+    "encode-start",
+    "encoded",
+    "still-complete",
+    "did-finish"
+   ],
+   "in_order": true,
+   "monotonic": true,
+   "complete": true,
+   "error": 0,
+   "host_ns": {
+    "did-capture": 487656890657625,
+    "did-finish": 487657211691583,
+    "encode-start": 487656890672708,
+    "encoded": 487657207418708,
+    "shutter": 487656890386666,
+    "slot12": 487656890506708,
+    "still-complete": 487657211305583,
+    "timestamp": 487656890656875,
+    "will-capture": 487656890656458
+   },
+   "ms": {
+    "did-capture": 0.271,
+    "did-finish": 321.305,
+    "encode-start": 0.286,
+    "encoded": 317.032,
+    "shutter": 0,
+    "slot12": 0.12,
+    "still-complete": 320.919,
+    "timestamp": 0.27,
+    "will-capture": 0.27
+   },
+   "timestamp_minus_slot12_ms": 0.15,
+   "timestamp_s": 487656.890656875
+  },
+  {
+   "settings_id": 6,
+   "stages": [
+    "shutter",
+    "slot12",
+    "will-capture",
+    "timestamp",
+    "did-capture",
+    "encode-start",
+    "encoded",
+    "still-complete",
+    "did-finish"
+   ],
+   "in_order": true,
+   "monotonic": true,
+   "complete": true,
+   "error": 0,
+   "host_ns": {
+    "did-capture": 487661286977875,
+    "did-finish": 487661433191583,
+    "encode-start": 487661287012916,
+    "encoded": 487661431465875,
+    "shutter": 487661286667958,
+    "slot12": 487661286775875,
+    "still-complete": 487661431514166,
+    "timestamp": 487661286976875,
+    "will-capture": 487661286974666
+   },
+   "ms": {
+    "did-capture": 0.31,
+    "did-finish": 146.524,
+    "encode-start": 0.345,
+    "encoded": 144.798,
+    "shutter": 0,
+    "slot12": 0.108,
+    "still-complete": 144.846,
+    "timestamp": 0.309,
+    "will-capture": 0.307
+   },
+   "timestamp_minus_slot12_ms": 0.201,
+   "timestamp_s": 487661.286976875
+  }
+ ],
+ "others": [
+  {
+   "pid": 9,
+   "file": "/t/trace-9.txt",
+   "location": "container-tmp",
+   "written": "2026-11-14T11:50:00Z"
+  }
+ ]
+}
+dev.simcam.spike.m10canary pid 61256 (running) on iPhone (UDID), build b818f3a60d01
+/s/trace-61256.txt (state dir), written 2026-11-14 11:53:13.946 (1 min ago); 55 ops recorded, the last 55 shown
+    #  op              host time          Δ ms  settings  
+    0  activate        11:52:59.979                    -  
+    1  session-start   11:53:00.049                    -  configuration 2
+    2  shutter         11:53:01.084      0.000         3  
+    3  slot12          11:53:01.084      0.265         3  
+    4  will-capture    11:53:01.085      0.930         3  
+    5  timestamp       11:53:01.085      0.931         3  photo timestamp 487655.677855 s
+    6  did-capture     11:53:01.085      0.931         3  
+    7  encode-start    11:53:01.085      0.944         3  
+    8  encoded         11:53:01.354    269.620         3  317001 bytes
+    9  still-complete  11:53:01.354    269.689         3  
+   10  did-finish      11:53:01.354    270.054         3  
+   11  shutter         11:53:01.672      0.000         4  
+   12  slot12          11:53:01.672      0.106         4  
+   13  will-capture    11:53:01.672      0.251         4  
+   14  timestamp       11:53:01.672      0.252         4  photo timestamp 487656.264945 s
+   15  did-capture     11:53:01.672      0.253         4  
+   16  encode-start    11:53:01.672      0.269         4  
+   17  encoded         11:53:01.981    309.389         4  392023 bytes
+   18  still-complete  11:53:01.981    309.441         4  
+   19  did-finish      11:53:01.982    309.821         4  
+   20  shutter         11:53:02.298      0.000         5  
+   21  slot12          11:53:02.298      0.120         5  
+   22  will-capture    11:53:02.298      0.270         5  
+   23  timestamp       11:53:02.298      0.270         5  photo timestamp 487656.890657 s
+   24  did-capture     11:53:02.298      0.271         5  
+   25  encode-start    11:53:02.298      0.286         5  
+   26  encoded         11:53:02.615    317.032         5  23378 bytes
+   27  still-complete  11:53:02.619    320.919         5  
+   28  did-finish      11:53:02.619    321.305         5  
+   29  movie-start     11:53:05.074                    1  
+   30  movie-stop      11:53:06.672                    1  
+   31  shutter         11:53:06.694      0.000         6  
+   32  slot12          11:53:06.694      0.108         6  
+   33  session-stop    11:53:06.694                    -  
+   34  will-capture    11:53:06.694      0.307         6  
+   35  timestamp       11:53:06.694      0.309         6  photo timestamp 487661.286977 s
+   36  did-capture     11:53:06.694      0.310         6  
+   37  encode-start    11:53:06.694      0.345         6  
+   38  encoded         11:53:06.839    144.798         6  136430 bytes
+   39  still-complete  11:53:06.839    144.846         6  
+   40  did-finish      11:53:06.841    146.524         6  
+   41  session-start   11:53:06.843                    -  configuration 10
+   42  session-stop    11:53:08.334                    -  
+   43  session-start   11:53:08.710                    -  configuration 12
+   44  session-stop    11:53:09.556                    -  
+   45  session-start   11:53:09.876                    -  configuration 18
+   46  session-stop    11:53:10.604                    -  
+   47  session-start   11:53:10.769                    -  configuration 22
+   48  session-stop    11:53:11.196                    -  
+   49  session-start   11:53:11.356                    -  configuration 26
+   50  session-stop    11:53:11.779                    -  
+   51  session-start   11:53:12.149                    -  configuration 30
+   52  session-stop    11:53:12.904                    -  
+   53  session-start   11:53:12.943                    -  configuration 33
+   54  session-stop    11:53:13.945                    -  
+photos: 4, 4 complete with every stage in order and host times monotonic
+  3: slot12 +0.3 ms, timestamp - slot12 0.7 ms, still-complete +269.7 ms, did-finish +270.1 ms
+  4: slot12 +0.1 ms, timestamp - slot12 0.1 ms, still-complete +309.4 ms, did-finish +309.8 ms
+  5: slot12 +0.1 ms, timestamp - slot12 0.1 ms, still-complete +320.9 ms, did-finish +321.3 ms
+  6: slot12 +0.1 ms, timestamp - slot12 0.2 ms, still-complete +144.8 ms, did-finish +146.5 ms
+older trace: pid 9, written 2026-11-14 11:50:00 (--pid 9)
+== odd
+{
+ "schema": 1,
+ "udid": "UDID",
+ "simulator": "iPhone",
+ "bundle": "b",
+ "pid": 2,
+ "running": false,
+ "build": "x",
+ "file": "",
+ "location": "",
+ "written": "2026-11-14T11:53:13.946587Z",
+ "written_ns": 1794657193946587000,
+ "recorded": 30,
+ "ring_size": 64,
+ "timebase": {
+  "numer": 125,
+  "denom": 3
+ },
+ "ops": [
+  {
+   "index": 0,
+   "op": "activate",
+   "wall": "2026-11-14T11:53:00Z",
+   "wall_ns": 1794657180000000000,
+   "mach": 100,
+   "host_ns": 4166,
+   "settings_id": null,
+   "arg": 0,
+   "delta_ms": null
+  },
+  {
+   "index": 1,
+   "op": "slot12",
+   "wall": "2026-11-14T11:53:00.000001Z",
+   "wall_ns": 1794657180000001000,
+   "mach": 1000,
+   "host_ns": 41666,
+   "settings_id": 1,
+   "arg": 0,
+   "delta_ms": 0
+  },
+  {
+   "index": 2,
+   "op": "timestamp",
+   "wall": "2026-11-14T11:53:00.000002Z",
+   "wall_ns": 1794657180000002000,
+   "mach": 1100,
+   "host_ns": 45833,
+   "settings_id": 1,
+   "arg": 4870,
+   "delta_ms": 0.004
+  },
+  {
+   "index": 3,
+   "op": "still-complete",
+   "wall": "2026-11-14T11:53:00.000003Z",
+   "wall_ns": 1794657180000003000,
+   "mach": 1200,
+   "host_ns": 50000,
+   "settings_id": 1,
+   "arg": 0,
+   "delta_ms": 0.008
+  },
+  {
+   "index": 4,
+   "op": "shutter",
+   "wall": "2026-11-14T11:53:00.000004Z",
+   "wall_ns": 1794657180000004000,
+   "mach": 2000,
+   "host_ns": 83333,
+   "settings_id": 2,
+   "arg": 0,
+   "delta_ms": 0
+  },
+  {
+   "index": 5,
+   "op": "slot12",
+   "wall": "2026-11-14T11:53:00.000005Z",
+   "wall_ns": 1794657180000005000,
+   "mach": 1900,
+   "host_ns": 79166,
+   "settings_id": 2,
+   "arg": 0,
+   "delta_ms": -0.004
+  },
+  {
+   "index": 6,
+   "op": "slot12",
+   "wall": "2026-11-14T11:53:00.000006Z",
+   "wall_ns": 1794657180000006000,
+   "mach": 2100,
+   "host_ns": 87500,
+   "settings_id": 2,
+   "arg": 0,
+   "delta_ms": 0.004
+  },
+  {
+   "index": 7,
+   "op": "shutter",
+   "wall": "2026-11-14T11:53:00.000007Z",
+   "wall_ns": 1794657180000007000,
+   "mach": 3000,
+   "host_ns": 125000,
+   "settings_id": 3,
+   "arg": 0,
+   "delta_ms": 0
+  },
+  {
+   "index": 8,
+   "op": "slot12",
+   "wall": "2026-11-14T11:53:00.000008Z",
+   "wall_ns": 1794657180000008000,
+   "mach": 3100,
+   "host_ns": 129166,
+   "settings_id": 3,
+   "arg": 0,
+   "delta_ms": 0.004
+  },
+  {
+   "index": 9,
+   "op": "timestamp",
+   "wall": "2026-11-14T11:53:00.000009Z",
+   "wall_ns": 1794657180000009000,
+   "mach": 3200,
+   "host_ns": 133333,
+   "settings_id": 3,
+   "arg": 9,
+   "delta_ms": 0.008
+  },
+  {
+   "index": 10,
+   "op": "still-complete",
+   "wall": "2026-11-14T11:53:00.00001Z",
+   "wall_ns": 1794657180000010000,
+   "mach": 3300,
+   "host_ns": 137500,
+   "settings_id": 3,
+   "arg": -16800,
+   "delta_ms": 0.013
+  },
+  {
+   "index": 11,
+   "op": "encoded",
+   "wall": "2026-11-14T11:53:00.000011Z",
+   "wall_ns": 1794657180000011000,
+   "mach": 3400,
+   "host_ns": 141666,
+   "settings_id": 4,
+   "arg": 512,
+   "delta_ms": null
+  },
+  {
+   "index": 12,
+   "op": "movie-stop",
+   "wall": "2026-11-14T11:53:00.000012Z",
+   "wall_ns": 1794657180000012000,
+   "mach": 3500,
+   "host_ns": 145833,
+   "settings_id": 7,
+   "arg": 3,
+   "delta_ms": null
+  },
+  {
+   "index": 13,
+   "op": "crash",
+   "wall": "2026-11-14T11:53:00.000013Z",
+   "wall_ns": 1794657180000013000,
+   "mach": 3600,
+   "host_ns": 150000,
+   "settings_id": null,
+   "arg": 11,
+   "delta_ms": null
+  },
+  {
+   "index": 14,
+   "op": "session-start",
+   "wall": "2026-11-14T11:53:00.000014Z",
+   "wall_ns": 1794657180000014000,
+   "mach": 3700,
+   "host_ns": 154166,
+   "settings_id": null,
+   "arg": 2,
+   "delta_ms": null
+  }
+ ],
+ "photos": [
+  {
+   "settings_id": 1,
+   "stages": [
+    "slot12",
+    "timestamp",
+    "still-complete"
+   ],
+   "in_order": true,
+   "monotonic": true,
+   "complete": false,
+   "error": 0,
+   "host_ns": {
+    "slot12": 41666,
+    "still-complete": 50000,
+    "timestamp": 45833
+   },
+   "ms": {
+    "slot12": 0,
+    "still-complete": 0.008,
+    "timestamp": 0.004
+   },
+   "timestamp_minus_slot12_ms": 0.004,
+   "timestamp_s": 0.00000487
+  },
+  {
+   "settings_id": 2,
+   "stages": [
+    "shutter",
+    "slot12",
+    "slot12"
+   ],
+   "in_order": false,
+   "monotonic": false,
+   "complete": false,
+   "error": 0,
+   "host_ns": {
+    "shutter": 83333,
+    "slot12": 87500
+   },
+   "ms": {
+    "shutter": 0,
+    "slot12": 0.004
+   },
+   "timestamp_minus_slot12_ms": null,
+   "timestamp_s": null
+  },
+  {
+   "settings_id": 3,
+   "stages": [
+    "shutter",
+    "slot12",
+    "timestamp",
+    "still-complete"
+   ],
+   "in_order": true,
+   "monotonic": true,
+   "complete": true,
+   "error": -16800,
+   "host_ns": {
+    "shutter": 125000,
+    "slot12": 129166,
+    "still-complete": 137500,
+    "timestamp": 133333
+   },
+   "ms": {
+    "shutter": 0,
+    "slot12": 0.004,
+    "still-complete": 0.013,
+    "timestamp": 0.008
+   },
+   "timestamp_minus_slot12_ms": null,
+   "timestamp_s": null
+  },
+  {
+   "settings_id": 4,
+   "stages": [
+    "encoded"
+   ],
+   "in_order": true,
+   "monotonic": true,
+   "complete": false,
+   "error": 0,
+   "host_ns": {
+    "encoded": 141666
+   },
+   "ms": {},
+   "timestamp_minus_slot12_ms": null,
+   "timestamp_s": null
+  }
+ ],
+ "others": []
+}
+b pid 2 (not running) on iPhone (UDID), build x
+ (), written 2026-11-14 11:53:13.946 (1 min ago); 30 ops recorded, the last 15 shown
+    #  op              host time          Δ ms  settings  
+    0  activate        11:53:00.000                    -  
+    1  slot12          11:53:00.000      0.000         1  
+    2  timestamp       11:53:00.000      0.004         1  photo timestamp 0.000005 s
+    3  still-complete  11:53:00.000      0.008         1  
+    4  shutter         11:53:00.000      0.000         2  
+    5  slot12          11:53:00.000     -0.004         2  
+    6  slot12          11:53:00.000      0.004         2  
+    7  shutter         11:53:00.000      0.000         3  
+    8  slot12          11:53:00.000      0.004         3  
+    9  timestamp       11:53:00.000      0.008         3  photo timestamp 0.000000 s
+   10  still-complete  11:53:00.000      0.013         3  error -16800
+   11  encoded         11:53:00.000                    4  512 bytes
+   12  movie-stop      11:53:00.000                    7  status 3
+   13  crash           11:53:00.000                    -  signal 11
+   14  session-start   11:53:00.000                    -  configuration 2
+photos: 4, 1 complete with every stage in order and host times monotonic
+  1: slot12 +0.0 ms, timestamp - slot12 0.0 ms, still-complete +0.0 ms, incomplete (in flight, overwritten, or failed before the shutter hook)
+  2: slot12 +0.0 ms, incomplete (in flight, overwritten, or failed before the shutter hook), OUT OF ORDER, TIME WENT BACK
+  3: slot12 +0.0 ms, still-complete +0.0 ms, error -16800
+  4: incomplete (in flight, overwritten, or failed before the shutter hook)
+== empty
+{
+ "schema": 1,
+ "udid": "UDID",
+ "simulator": "iPhone",
+ "bundle": "",
+ "pid": 0,
+ "running": null,
+ "build": "",
+ "file": "",
+ "location": "",
+ "written": "1970-01-01T00:00:00Z",
+ "written_ns": 0,
+ "recorded": 0,
+ "ring_size": 64,
+ "timebase": {
+  "numer": 1,
+  "denom": 1
+ },
+ "ops": [],
+ "photos": [],
+ "others": []
+}
+ pid 0 (running state unknown) on iPhone (UDID), build 
+ (), written 1970-01-01 00:00:00.000 (1 min ago); 0 ops recorded, the last 0 shown
+    #  op              host time          Δ ms  settings  
