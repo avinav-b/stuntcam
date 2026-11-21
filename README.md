@@ -2,6 +2,8 @@
 
 A camera for the iOS Simulator. Your app's camera code runs unmodified, through Apple's own AVFoundation.
 
+<p align="center"><img src="docs/demo.webp" width="320" alt="A camera app in the iOS Simulator shows a cat video, then scans the QR code on a café table"></p>
+
 ```sh
 npx stuntcam up
 ```
