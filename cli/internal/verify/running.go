@@ -32,40 +32,47 @@ func (r *running) cleanup() {
 
 func (r *running) cleanupLocked() {
 	if r.cmd != nil && r.cmd.Process != nil {
-		_ = r.cmd.Process.Signal(syscall.SIGTERM)
+		_ = r.cmd.Process.Signal(syscall.SIGTERM) // best effort cleanup: it may have exited already
 	}
+
 	if r.udid != "" && !r.keep {
-		_ = r.ctl.Shutdown(r.udid)
+		_ = r.ctl.Shutdown(r.udid) // best effort cleanup: fine if already shut down
 	}
+
 	if r.lock != "" {
 		release(r.lock)
 		r.lock = ""
 	}
 }
 
-// settleShutdown shuts the device down again if a boot that was past cancelling brings it up after all. It watches for up
-// to d and returns once no simctl call is still in flight (a boot that ignored Interrupt's SIGINT) and the device has
-// stayed shut down for 2 s.
-func settleShutdown(c simctl.Ctl, udid string, d time.Duration) {
+// settledDownFor is how long settleShutdown wants the device to stay shut down.
+const settledDownFor = 2 * time.Second
+
+// settleShutdown shuts the device down again if a boot that was past cancelling brings it up after all. It watches for
+// up to limit and returns once no simctl call is still in flight (a boot that ignored Interrupt's SIGINT) and the
+// device has stayed shut down for settledDownFor.
+func settleShutdown(ctl simctl.Ctl, udid string, limit time.Duration) {
 	var downSince time.Time
-	for end := time.Now().Add(d); time.Now().Before(end); time.Sleep(500 * time.Millisecond) {
-		ds, err := c.Devices()
+	for end := time.Now().Add(limit); time.Now().Before(end); time.Sleep(devicePoll) {
+		devices, err := ctl.Devices()
 		if err != nil {
 			continue
 		}
+
 		down := true
-		for _, x := range ds {
-			if x.UDID == udid && x.State != "Shutdown" {
+		for _, listed := range devices {
+			if listed.UDID == udid && listed.State != simctl.Shutdown {
 				down = false
-				_ = c.Shutdown(udid)
+				_ = ctl.Shutdown(udid) // the loop checks the state again
 			}
 		}
+
 		switch {
 		case !down || simctl.Busy():
 			downSince = time.Time{}
 		case downSince.IsZero():
 			downSince = time.Now()
-		case time.Since(downSince) >= 2*time.Second:
+		case time.Since(downSince) >= settledDownFor:
 			return
 		}
 	}
@@ -90,6 +97,7 @@ func (r *running) onSignal() (stop func()) {
 		case <-stopped:
 		}
 	}()
+
 	return func() {
 		signal.Stop(sigs)
 		close(stopped)
@@ -107,13 +115,15 @@ func (r *running) interrupted() {
 	if r.udid != "" && !r.keep {
 		settleShutdown(r.ctl, r.udid, interruptSettleWait)
 		if simctl.Busy() {
-			fmt.Fprintf(os.Stderr, "warning: a simctl call ignored the interrupt; the private canary device may still boot: "+
-				"xcrun simctl --set %s shutdown %s\n", shellArg(home.Devices()), r.udid)
+			fmt.Fprintf(os.Stderr, "warning: a simctl call ignored the interrupt; the private canary device may "+
+				"still boot: xcrun simctl --set %s shutdown %s\n", shellArg(home.Devices()), r.udid)
 		}
 	}
+
 	if lock != "" {
 		release(lock)
 	}
+
 	fmt.Println("verdict inconclusive(interrupted)")
 	os.Exit(exitInterrupted)
 }

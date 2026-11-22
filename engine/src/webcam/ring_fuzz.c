@@ -32,7 +32,9 @@ static void reads(uint8_t *map, const scw_geom *g, const uint8_t *ops, size_t no
     scw_slot_read sr;
     scw_peek(map, g, &pk);
     scw_is_live(&pk, rd64((const uint8_t *)h + 96));
-    if (scw_read_latest(map, g, last, dst, dbpr, dlen, &sr) == SCW_OK) last = sr.seq;
+    if (scw_read_latest(map, g, last, dst, dbpr, dlen, &sr) == SCW_OK) {
+        last = sr.seq;
+    }
     // script: 11-byte ops (kind, offset16, value64)
     for (size_t i = 0; i + 11 <= nops; i += 11) {
         uint8_t kind = ops[i] % 6;
@@ -48,7 +50,9 @@ static void reads(uint8_t *map, const scw_geom *g, const uint8_t *ops, size_t no
             break;
         }
         case 3:
-            if (scw_read_latest(map, g, last, dst, dbpr, dlen, &sr) == SCW_OK) last = sr.seq;
+            if (scw_read_latest(map, g, last, dst, dbpr, dlen, &sr) == SCW_OK) {
+                last = sr.seq;
+            }
             scw_peek(map, g, &pk);
             scw_is_live(&pk, v);
             break;
@@ -58,12 +62,16 @@ static void reads(uint8_t *map, const scw_geom *g, const uint8_t *ops, size_t no
                 sink ^= sr.pixels[(size_t)g->bpr0 * g->height - 1];
                 (void)sink;
                 memcpy(map + (off % (SCW_HDR - 7)), &v, 8);
-                if (scw_slot_end(map, g, &sr) == SCW_OK) last = sr.seq;
+                if (scw_slot_end(map, g, &sr) == SCW_OK) {
+                    last = sr.seq;
+                }
             }
             break;
         case 5: {                                                                     // re-validate the mutated header
             scw_geom g2; uint32_t fv;
-            if (scw_validate(map, g->mapBytes, ACC12, 2, &g2, &fv) == SCW_OK && g2.mapBytes != g->mapBytes) abort();
+            if (scw_validate(map, g->mapBytes, ACC12, 2, &g2, &fv) == SCW_OK && g2.mapBytes != g->mapBytes) {
+                abort();
+            }
             break;
         }
         }
@@ -73,10 +81,14 @@ static void reads(uint8_t *map, const scw_geom *g, const uint8_t *ops, size_t no
 
 static void target_raw(const uint8_t *d, size_t n) {
     uint8_t *map = malloc(n ? n : 1);
-    if (n) memcpy(map, d, n);
+    if (n) {
+        memcpy(map, d, n);
+    }
     scw_geom g; uint32_t fv;
     if (scw_validate(map, n, ACC1, 1, &g, &fv) == SCW_OK) {
-        if (g.totalBytes > n || g.mapBytes != n) abort();
+        if (g.totalBytes > n || g.mapBytes != n) {
+            abort();
+        }
         reads(map, &g, NULL, 0);
     }
     scw_validate(map, n, ACC12, 2, &g, &fv);
@@ -91,14 +103,20 @@ static void target_sized(const uint8_t *d, size_t n) {
     const scw_header *h = (const scw_header *)hdr;
     int8_t delta = n > SCW_HDR ? (int8_t)d[SCW_HDR] : 0;
     uint64_t claim = h->totalBytes;
-    if (claim > (8u << 20)) claim = SCW_HDR + (claim & 0xffff);
+    if (claim > (8u << 20)) {
+        claim = SCW_HDR + (claim & 0xffff);
+    }
     int64_t len = (int64_t)claim + (int64_t)delta * 64;
-    if (len < 0) len = 0;
+    if (len < 0) {
+        len = 0;
+    }
     uint8_t *map = calloc(1, (size_t)len ? (size_t)len : 1);
     memcpy(map, hdr, (size_t)len < SCW_HDR ? (size_t)len : SCW_HDR);
     scw_geom g; uint32_t fv;
     if (scw_validate(map, (uint64_t)len, ACC1, 1, &g, &fv) == SCW_OK) {
-        if (g.totalBytes > (uint64_t)len) abort();
+        if (g.totalBytes > (uint64_t)len) {
+            abort();
+        }
         const uint8_t *ops = n > SCW_HDR + 1 ? d + SCW_HDR + 1 : NULL;
         reads(map, &g, ops, ops ? n - SCW_HDR - 1 : 0);
     }
@@ -107,21 +125,28 @@ static void target_sized(const uint8_t *d, size_t n) {
 
 static void target_pid(const uint8_t *d, size_t n) {
     char *t = malloc(n ? n : 1);
-    if (n) memcpy(t, d, n);
+    if (n) {
+        memcpy(t, d, n);
+    }
     scw_pidfile p, q;
     if (scw_pidfile_parse(t, n, &p) == SCW_OK) {
         char buf[1024];
         int k = scw_pidfile_format(buf, sizeof buf, &p);
-        if (k <= 0 || scw_pidfile_parse(buf, (size_t)k, &q) != SCW_OK) abort();
-        if (q.pid != p.pid || strcmp(q.sha, p.sha) || q.nrings != p.nrings || q.auth != p.auth || q.state != p.state ||
-            strcmp(q.camera, p.camera) || q.started != p.started || memcmp(q.rings, p.rings, sizeof q.rings))
+        if (k <= 0 || scw_pidfile_parse(buf, (size_t)k, &q) != SCW_OK) {
             abort();
+        }
+        if (q.pid != p.pid || strcmp(q.sha, p.sha) || q.nrings != p.nrings || q.auth != p.auth || q.state != p.state ||
+            strcmp(q.camera, p.camera) || q.started != p.started || memcmp(q.rings, p.rings, sizeof q.rings)) {
+            abort();
+        }
     }
     free(t);
 }
 
 static void target_names(const uint8_t *d, size_t n) {
-    if (n < 12) return;
+    if (n < 12) {
+        return;
+    }
     unsigned long uid = (unsigned long)rd64(d);
     uint32_t ver; memcpy(&ver, d + 8, 4);
     size_t split = n > 12 ? 12 + (d[12] % (n - 12 + 1)) : 12;
@@ -130,9 +155,13 @@ static void target_names(const uint8_t *d, size_t n) {
     memcpy(uq, d + split, n - split);
     char hash[9], name[64], small[8];
     scw_cam_hash(home, uq, hash);
-    if (strlen(hash) != 8) abort();
+    if (strlen(hash) != 8) {
+        abort();
+    }
     int k = scw_shm_name(name, sizeof name, uid, hash, ver);
-    if (k > (int)SCW_NAME_MAX) abort();
+    if (k > (int)SCW_NAME_MAX) {
+        abort();
+    }
     scw_shm_name(small, sizeof small, uid, hash, ver);
     scw_shm_name(name, sizeof name, uid, home, ver);   // arbitrary text as the hash: must be refused or bounded
     uint32_t acc[16];
@@ -140,7 +169,9 @@ static void target_names(const uint8_t *d, size_t n) {
     memcpy(acc, d + 12, na * 4);
     char msg[160];
     int m = scw_version_message(msg, sizeof msg, ver, acc, na);
-    if (m < 0) abort();
+    if (m < 0) {
+        abort();
+    }
     scw_version_message(small, sizeof small, ver, acc, na);
     scw_pick_version(acc, na, ACC12, 2);
     scw_strerror((int)ver); scw_state_name(ver); scw_auth_name((int)ver);
@@ -148,16 +179,22 @@ static void target_names(const uint8_t *d, size_t n) {
 }
 
 static void target_writer(const uint8_t *d, size_t n) {
-    if (n < 5) return;
+    if (n < 5) {
+        return;
+    }
     uint32_t w = 1 + d[0] % 64, h = 1 + d[1] % 64, nslots = d[2] >= 250 ? d[2] - 250 : 1 + d[2] % 8;
     uint32_t bpr = w * 4 + (d[3] % 8) * 4;
     uint64_t total = scw_object_bytes(h, bpr, nslots ? nslots : 1, NULL);
     int64_t len = (int64_t)total + (int64_t)(int8_t)d[4] * 16;
-    if (len < 0) len = 0;
+    if (len < 0) {
+        len = 0;
+    }
     uint8_t *map = calloc(1, (size_t)len ? (size_t)len : 1);
     scw_writer wr;
     if (scw_writer_init(&wr, map, (uint64_t)len, w, h, bpr, nslots, 0x77, 30000, 1, "fuzz") != SCW_OK) {
-        if (scw_writer_begin(&wr, 1)) abort();                    // a failed init leaves a writer that writes nothing
+        if (scw_writer_begin(&wr, 1)) {
+            abort();   // a failed init leaves a writer that writes nothing
+        }
         free(map);
         return;
     }
@@ -174,37 +211,59 @@ static void target_writer(const uint8_t *d, size_t n) {
         case 0: memcpy(map + (off % (SCW_HDR - 7)), &v, 8); break;               // hostile header bytes
         case 1: {                                                                   // hostile slot record
             scw_slot *s = &hd->slot[off % SCW_MAX_SLOTS];
-            if (off & 0x100) s->gen = v; else if (off & 0x200) s->seq = v; else hd->latest = v;
+            if (off & 0x100) {
+                s->gen = v;
+            } else if (off & 0x200) {
+                s->seq = v;
+            } else {
+                hd->latest = v;
+            }
             break;
         }
         case 2: case 3: {                                                           // a frame (2 complete, 3 left busy)
             uint64_t seq = v % 5 == 0 ? wr.lastSeq : wr.lastSeq + 1 + (v >> 8) % 3;
             uint8_t *p = scw_writer_begin(&wr, seq);
             if (p) {
-                if (off & 1) memcpy(map + ((off >> 1) % (SCW_HDR - 7)), &v, 8);     // rewritten mid-frame
+                if (off & 1) {
+                    memcpy(map + ((off >> 1) % (SCW_HDR - 7)), &v, 8);   // rewritten mid-frame
+                }
                 memset(p, (int)(seq & 0xff), (size_t)wr.bpr0 * wr.height);
-                if (kind == 2) scw_writer_end(&wr, v & 0x10000 ? seq + 1 : seq, v, v, 0);
+                if (kind == 2) {
+                    scw_writer_end(&wr, v & 0x10000 ? seq + 1 : seq, v, v, 0);
+                }
             }
             break;
         }
         case 4: scw_writer_end(&wr, v, v, v, (uint32_t)v); break;
         case 5: scw_writer_clear(&wr); break;
-        case 6: if (off & 1) scw_writer_beat(&wr, v); else scw_writer_state(&wr, (uint32_t)(v % 10)); break;
+        case 6:
+            if (off & 1) {
+                scw_writer_beat(&wr, v);
+            } else {
+                scw_writer_state(&wr, (uint32_t)(v % 10));
+            }
+            break;
         case 7: {                                                                   // a reader over the result
             scw_geom g; uint32_t fv;
-            if (scw_validate(map, (uint64_t)len, ACC1, 1, &g, &fv) == SCW_OK) reads(map, &g, NULL, 0);
+            if (scw_validate(map, (uint64_t)len, ACC1, 1, &g, &fv) == SCW_OK) {
+                reads(map, &g, NULL, 0);
+            }
             break;
         }
         }
-        if (wr.h != saved.h || wr.mapBytes != saved.mapBytes || wr.nslots != saved.nslots || wr.slotBytes != saved.slotBytes ||
-            wr.bpr0 != saved.bpr0 || wr.height != saved.height || wr.epoch != saved.epoch || wr.lastSeq < saved.lastSeq)
+        if (wr.header != saved.header || wr.mapBytes != saved.mapBytes || wr.nslots != saved.nslots ||
+            wr.slotBytes != saved.slotBytes || wr.bpr0 != saved.bpr0 || wr.height != saved.height ||
+            wr.epoch != saved.epoch || wr.lastSeq < saved.lastSeq) {
             abort();
+        }
     }
     free(map);
 }
 
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
-    if (size < 1) return 0;
+    if (size < 1) {
+        return 0;
+    }
     const uint8_t *d = data + 1;
     size_t n = size - 1;
     switch (data[0] % 5) {
@@ -298,7 +357,9 @@ static const uint64_t interesting[] = {0, 1, 2, 3, 4, 7, 8, 9, 0x7f, 0x80, 0xff,
     (1ull << 30) + 1, 1ull << 40, 1ull << 63, 0xfffffffffffff000ull, UINT64_MAX, SCW_MAGIC, SCW_FORMAT_BGRA};
 
 static void mutate(uint8_t *p, size_t n) {
-    if (!n) return;
+    if (!n) {
+        return;
+    }
     int k = 1 + (int)(next() % 4);
     for (int i = 0; i < k; i++) {
         size_t at = next() % n;
@@ -309,7 +370,9 @@ static void mutate(uint8_t *p, size_t n) {
             uint64_t v = interesting[next() % (sizeof interesting / sizeof interesting[0])];
             size_t w = next() % 2 ? 4 : 8;
             at = 1 + ((at / w) * w) % (n > w + 1 ? n - w - 1 : 1);
-            if (at + w <= n) memcpy(p + at, &v, w);
+            if (at + w <= n) {
+                memcpy(p + at, &v, w);
+            }
             break;
         }
         case 3: if (n > 2) { size_t b = next() % n; p[at] = p[b]; } break;
@@ -321,9 +384,14 @@ static void mutate(uint8_t *p, size_t n) {
 int main(int argc, char **argv) {
     double seconds = 60;
     for (int i = 1; i < argc; i++) {
-        if (!strcmp(argv[i], "--write-seeds") && i + 1 < argc) return write_seeds(argv[i + 1]);
-        if (!strncmp(argv[i], "-seconds", 8) && i + 1 < argc) seconds = atof(argv[++i]);
-        else if (!strncmp(argv[i], "-seed", 5) && i + 1 < argc) rng = strtoull(argv[++i], NULL, 0) | 1;
+        if (!strcmp(argv[i], "--write-seeds") && i + 1 < argc) {
+            return write_seeds(argv[i + 1]);
+        }
+        if (!strncmp(argv[i], "-seconds", 8) && i + 1 < argc) {
+            seconds = atof(argv[++i]);
+        } else if (!strncmp(argv[i], "-seed", 5) && i + 1 < argc) {
+            rng = strtoull(argv[++i], NULL, 0) | 1;
+        }
     }
     buf_t pool[8];
     int np = 0;
@@ -342,12 +410,16 @@ int main(int argc, char **argv) {
     for (;;) {
         buf_t *s = &pool[next() % np];
         size_t n = s->n;
-        if (next() % 8 == 0) n = next() % (s->n + 64);           // truncate or extend
+        if (next() % 8 == 0) {
+            n = next() % (s->n + 64);   // truncate or extend
+        }
         if (n > cap) { cap = n; work = realloc(work, cap); }
         memset(work, 0, n);
         memcpy(work, s->p, n < s->n ? n : s->n);
         mutate(work, n);
-        if (n && work) work[0] = s->p[0];                         // keep the target
+        if (n && work) {
+            work[0] = s->p[0];   // keep the target
+        }
         uint8_t *exact = malloc(n ? n : 1);
         memcpy(exact, work, n);
         LLVMFuzzerTestOneInput(exact, n);
@@ -359,7 +431,9 @@ int main(int argc, char **argv) {
         }
     }
     free(work);
-    for (int i = 0; i < np; i++) free(pool[i].p);
+    for (int i = 0; i < np; i++) {
+        free(pool[i].p);
+    }
     return 0;
 }
 #elif defined(SCW_FUZZ_SEEDS)

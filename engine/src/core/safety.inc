@@ -1,41 +1,26 @@
 // SPDX-License-Identifier: Apache-2.0
-// Part of simcam.m (single translation unit; included in order): pause-aware op watchdog and crash sentinel
-// (design §5.4).
-// This file: the overview below, the shared sentinel state, the thread-specific feature key, the async-signal-safe
-// event writer, ops and the watchdog. The rest of the sentinel, included right after it, in this order:
+// Part of simcam.m (single translation unit; included in order): pause-aware op watchdog and crash sentinel.
+//
+// Provides: SentinelOpBegin, SentinelOpEnd, SentinelLatched, the op slots (providers/pump.inc, providers/photo.inc)
+//           SentinelFeatureEnter, SentinelFeatureLeave, SentinelFeatureClearUnless, SentinelFeatureRestoreUnless,
+//           SENTINEL_FEATURE_SCOPE, SENTINEL_MOTION_SCOPE, the feature key (client/motion.inc, core/lazy.inc)
+//           SentinelFormatEvent, SentinelWriteEvent, kEventField*, the events file (core/trace.inc)
+//           SentinelSessionErrorAllowed, kSentinelLatchStatus, kSentinelLatchAuto (providers/, core/control.inc)
+// Owns:     gSentinel, the sentinel's state, kFeatureNames and kMotionFeatureKey, all defined in core/sentinel.h (which
+//           says who owns what)
+// Uses:     core/trace.inc, core/control.inc (TraceCrash, TraceLatch, SessInjectRuntimeError, MovieStopAll, which
+//           core/trace.h and core/control.h declare)
+//
+// The sentinel stops a camera feature that hangs or crashes from doing it again. Ops bracket the work the engine owns,
+// and the watchdog turns an op past its deadline into a hang. The crash handler attributes a crash to a feature. Two
+// hangs of one feature in this process latch it at once; two crashes or hangs in recent activations latch it at the
+// next activation. Each rule is stated next to the code that applies it.
+// This file holds the shared state, the thread-specific feature key, the async-signal-safe event writer, the ops and
+// the watchdog. The rest of the sentinel is included right after it, in this order:
 //   core/crash_handler.inc      image ranges, the minimal and full signal handlers
 //   core/markers.inc            load-time state and the latched-*/preflight-fail-* markers
 //   core/events_file.inc        the trim, the locked append, the record queue's writer
-//   core/sentinel_activate.inc  PREPARE 1 (read the past, decide latches) and START 1-3
-//
-// Ops. SCOpBegin(feature, timeout) / SCOpEnd(op) bracket work the engine owns (configure/start/stop, a photo until its
-// still-complete is posted). A watchdog thread ticks every 250 ms and measures deadlines on an *active* clock:
-//   - a gap > 1 s between ticks means the process was stopped (debugger, suspension, Mac sleep): every inflight
-//     deadline restarts and the clock advances by one tick only;
-//   - while P_TRACED, an expired op is recorded as unknown-hang and never counted;
-//   - with TSan/ASan loaded, timeouts are x10.
-// An expired op is a hang, recorded for the next activation. Two hangs of one feature in this process latch it
-// in-process (SCLatched), and the latch error-completes (design §5.4 table) with SC_LATCH_STATUS, which apps get as
-// AVFoundation's generic -11800 with that OSStatus underneath: photo -> every photo not yet encoded fails; movie ->
-// active recordings stop with it and new ones fail at once; session -> running sessions get a runtime error and stop,
-// and a latched startRunning gets at most one runtime error per 5 s (design §5.4; in between it is stopped without
-// one). Before any session exists a latch means stock (the activation-time latch, below). Not wired yet: no movie op is
-// bracketed with SCOpBegin("movie"), so the movie latch can only come from an earlier activation's events (TODO.md).
-//
-// Sentinel. A chained SIGSEGV/BUS/ILL/ABRT/TRAP/FPE handler attributes a crash, async-signal-safely, against image
-// ranges cached at activation: the PC is in our image (feature = the inflight op's, else "provider"), or an op is
-// inflight and the PC is in AVFCapture/AVFoundation/CMCapture/CoreMedia/CoreVideo/IOSurface/ImageIO/VideoToolbox
-// (feature = the op's). Anything else is recorded as "crash-other" and never counted. It appends one line to the events
-// file, then re-raises.
-//
-// Events file: $SIMCAM_STATE_DIR/<bundle id>/events.log (else <container tmp>/simcam-state/…), one line per event:
-//   <epoch> <activation#> <kind> <feature> <build> <detail>
-// kinds: activate (detail traced=0|1), exit, op-begin, op-end, hang, unknown-hang, crash, crash-traced (never counted),
-// crash-other (never counted), clear.
-// At activation: two crash/hang events of one feature with this build, within the last 20 activations and 24 h, latch
-// it: the gate stays closed (no camera) and one stderr line says why. A previous traced activation that ended with an
-// op inflight and no crash/exit line prints "last debug run ended inside <feature> op"; it is never counted.
-// SIMCAM_SENTINEL=0 disables ops, watchdog and sentinel; SIMCAM_SENTINEL=clear appends a clear line (forgets the past).
+//   core/sentinel_activate.inc  PREPARE's sentinel step (read the past, decide latches) and the sentinel's START step
 #include <pthread.h>
 #include <time.h>
 #include <fcntl.h>
@@ -53,223 +38,302 @@
 #include <dirent.h>
 #include <errno.h>
 #include <sys/file.h>
+#include "sentinel.h"
+#include "trace.h"
+#include "control.h"
 
-#define SC_MAXOPS 64
-// the OSStatus a latch error-completes with (under AVFoundation's generic -11800); also the default status of the
-// control file's photo-error / movie-error test events
-#define SC_LATCH_STATUS (-16800)
-#define SC_STRIKES_TO_LATCH 2      // crashes/hangs of one feature (in this process, or in the window) that latch it
-#define SC_WINDOW_SECONDS 86400    // 24 h: the latch window, and how long a marker is valid
-#define SC_WINDOW_ACTIVATIONS 20   // the latch window's other bound: the last 20 activations
-static void SessInjectRuntimeError(int status, BOOL serverDied);   // core/control.inc
-static void MovieStopAll(int status);                // core/control.inc
-static void TRCrash(int sig);                                // core/trace.inc (async-signal-safe)
-static void TRLatch(int fi);                                 // core/trace.inc
-// design §5.4: a latched session gets at most one runtime error per 5 s, whoever posts it (the watchdog at latch time,
-// or a latched startRunning). Returns YES and stamps the time if one may be posted now.
-static _Atomic uint64_t gSCSessErrAt;
-// SessInjectRuntimeError(SC_LATCH_AUTO): the session latch's stop. Whether it carries the runtime error is decided on
-// the pump queue when it finds a running session, so a latch that fires with no session running doesn't use up the 5 s
-// window.
-#define SC_LATCH_AUTO INT_MIN
-static BOOL SCSessionErrorAllowed(void) {
-    uint64_t now = clock_gettime_nsec_np(CLOCK_MONOTONIC), prev = atomic_load(&gSCSessErrAt);
-    if (prev && now - prev < 5 * NSEC_PER_SEC) return NO;
-    return atomic_compare_exchange_strong(&gSCSessErrAt, &prev, now);
-}
-typedef struct {
-    _Atomic int used;       // the slot holds an inflight op
-    const char *feature;    // what a hang or crash in this op counts against (gSCFeatures)
-    uint64_t deadline;      // on the active clock (gSCActiveNs)
-    uint64_t timeout;       // the op's timeout (ns, sanitizer-scaled)
-    int expired;            // the watchdog has recorded this op's hang
-} SCOp;
-static SCOp gSCOps[SC_MAXOPS];
-static os_unfair_lock gSCLock = OS_UNFAIR_LOCK_INIT;
-static _Atomic uint64_t gSCActiveNs;          // active clock (ns), advanced by the watchdog
-static _Atomic int gSCOn, gSCTraced;
-static double gSCScale = 1;
-static int gSCFd = -1, gSCAct;                // events fd (O_APPEND), this activation's number
-static char gSCBuild[32] = "-", gSCPath[1024];
-// PREPARE 1: which gSCDir events.log opened in (0 state dir, 1 container tmp); this build's marker goes only there
-static int gSCIdx = -1;
-// `activate` (a timeout, crash or exception during activation) is a feature like the others: two strikes latch the
-// camera. `motion` (a crash in the CoreMotion stand-in, attributed through the thread-specific feature key below)
-// latches CoreMotion only: it never closes the camera, it only writes latched-motion-<build>.
-enum {   // indexes into gSCFeatures
-    SC_FSESSION = 0, SC_FPHOTO, SC_FMOVIE, SC_FPROVIDER, SC_FENGINE, SC_FACTIVATE, SC_FMOTION,
-    SC_NFEAT
-};
-static const char *gSCFeatures[SC_NFEAT] = {"session", "photo", "movie", "provider", "engine", "activate", "motion"};
-static _Atomic int gSCHangs[SC_NFEAT], gSCLatchedNow[SC_NFEAT];
-static int SCFeatureIndex(const char *f) {
-    for (int i = 0; i < SC_NFEAT; i++)
-        if (!strcmp(gSCFeatures[i], f)) return i;
-    return SC_FENGINE;
-}
-static BOOL SCClosesCamera(int fi) { return fi != SC_FMOTION; }
+#define kSentinelMaxDigits 24   // room for the decimal digits of an unsigned long
 
-// ---- the thread-specific feature key (design §5.4 provider path (b)) ----
-// Created at load. Every motion entry point saves the key's value, sets `motion` and restores the saved value on exit
-// (never clears it, so a value set further up the same thread survives); around the call into the app's handler the key
-// is saved, cleared and restored the same way, so a fault in app code never counts. SCOnSignal reads it first (a
-// lock-free TSD read). SIMCAM_OFF_MOTION_KEY=1 (ledger L59) never creates it: a motion fault in our image is then
-// `provider`, which closes the camera.
-static const char kSCMotion[] = "motion";
-static pthread_key_t gSCFeatKey;
-static _Atomic int gSCFeatKeyOn;
-static void SCFeatKeyInit(void) {
-    if (getenv(ENV_OFF_MOTION_KEY)) return;
-    if (pthread_key_create(&gSCFeatKey, NULL) == 0) atomic_store(&gSCFeatKeyOn, 1);
+// What a latch does and the latch windows are stated in core/sentinel.h, with the constants other fragments use.
+static BOOL SentinelSessionErrorAllowed(void) {
+    uint64_t now = clock_gettime_nsec_np(CLOCK_MONOTONIC);
+    uint64_t prev = atomic_load(&gSentinel.sessionErrorAtNs);
+    if (prev && now - prev < kSentinelSessionErrorIntervalNs) {
+        return NO;
+    }
+    return atomic_compare_exchange_strong(&gSentinel.sessionErrorAtNs, &prev, now);
 }
-static inline void *SCFeatEnter(const char *f) {   // returns the saved value for SCFeatLeave
-    if (!atomic_load_explicit(&gSCFeatKeyOn, memory_order_relaxed)) return NULL;
-    void *saved = pthread_getspecific(gSCFeatKey);
-    if (saved != (void *)f) pthread_setspecific(gSCFeatKey, f);
+
+static int SentinelFeatureIndex(const char *feature) {
+    for (int i = 0; i < kFeatureCount; i++) {
+        if (!strcmp(kFeatureNames[i], feature)) {
+            return i;
+        }
+    }
+    return kFeatureEngine;
+}
+
+static BOOL SentinelClosesCamera(int featureIndex) { return featureIndex != kFeatureMotion; }
+
+// ---- the thread-specific feature key: a fault on a thread inside a motion entry point counts as `motion`, ahead of
+// any inflight op ----
+// Each motion entry point saves the key, sets `motion` and restores it on exit, so a value set further up the thread
+// survives; around the app's handler it is saved, cleared and restored, so a fault in app code never counts.
+// SentinelOnSignal reads it first. SIMCAM_OFF_MOTION_KEY=1 never creates the key (it is made at load), so a motion
+// fault in our image counts as `provider`, which closes the camera.
+static void SentinelFeatureKeyInit(void) {
+    if (!MotionKeyOn()) {
+        return;
+    }
+    if (pthread_key_create(&gSentinel.featureKey.key, NULL) == 0) {
+        atomic_store(&gSentinel.featureKey.on, 1);
+    }
+}
+
+static inline void *SentinelFeatureEnter(const char *feature) {   // returns the saved value for SentinelFeatureLeave
+    if (!atomic_load_explicit(&gSentinel.featureKey.on, memory_order_relaxed)) {
+        return NULL;
+    }
+    void *saved = pthread_getspecific(gSentinel.featureKey.key);
+    // pthread_setspecific fails only for an invalid key or with no memory left: a fault then counts as the inflight
+    // op's, as without the key
+    if (saved != (void *)feature) {
+        (void)pthread_setspecific(gSentinel.featureKey.key, feature);
+    }
     return saved;
 }
-static inline void SCFeatLeave(void *sv) {
-    if (!atomic_load_explicit(&gSCFeatKeyOn, memory_order_relaxed)) return;
-    if (pthread_getspecific(gSCFeatKey) != sv) pthread_setspecific(gSCFeatKey, sv);
+
+static inline void SentinelFeatureLeave(void *saved) {
+    if (!atomic_load_explicit(&gSentinel.featureKey.on, memory_order_relaxed)) {
+        return;
+    }
+    if (pthread_getspecific(gSentinel.featureKey.key) != saved) {
+        (void)pthread_setspecific(gSentinel.featureKey.key, saved);   // as in SentinelFeatureEnter
+    }
 }
-static inline void SCFeatLeaveP(void **sv) { SCFeatLeave(*sv); }
-// a motion entry point: `motion` on this thread until the enclosing scope ends (restored on every exit path)
-#define SC_MOTION_SCOPE void *_scMotionSaved __attribute__((cleanup(SCFeatLeaveP), unused)) = SCFeatEnter(kSCMotion)
+
+static inline void SentinelFeatureLeaveCleanup(void **savedSlot) { SentinelFeatureLeave(*savedSlot); }
+
+// Code that must not count as the thread's feature (app code reached from a motion entry point, or the orientation
+// tracker, which is camera code) runs with the key cleared: SentinelFeatureClearUnless(keep) before it,
+// SentinelFeatureRestoreUnless(keep, saved) after. `keep` is the off switch that leaves the key set there instead.
+static inline void *SentinelFeatureClearUnless(BOOL keep) { return keep ? NULL : SentinelFeatureEnter(NULL); }
+
+static inline void SentinelFeatureRestoreUnless(BOOL keep, void *saved) {
+    if (!keep) {
+        SentinelFeatureLeave(saved);
+    }
+}
 
 // ---- async-signal-safe event writer (no stdio, no malloc) ----
-// SCPutS / SCPutU append a string / an unsigned decimal to b (n bytes used of cap, one kept for the caller's '\n') and
-// return the new length.
-static int SCPutS(char *b, int n, int cap, const char *s) {
-    while (s && *s && n < cap - 1) b[n++] = *s++;
-    return n;
+// SentinelPutString and SentinelPutUnsigned append a string or an unsigned decimal to buf, which has len bytes used of
+// cap (one byte is kept free for the caller's '\n'), and return the new length.
+static int SentinelPutString(char *buf, int len, int cap, const char *text) {
+    while (text && *text && len < cap - 1) {
+        buf[len++] = *text++;
+    }
+    return len;
 }
-static int SCPutU(char *b, int n, int cap, unsigned long v) {
-    char digits[24];
-    int k = 0;
+
+static int SentinelPutUnsigned(char *buf, int len, int cap, unsigned long value) {
+    char digits[kSentinelMaxDigits];
+    int count = 0;
     do {
-        digits[k++] = '0' + v % 10;
-        v /= 10;
-    } while (v && k < 24);
-    while (k && n < cap - 1) b[n++] = digits[--k];
-    return n;
+        digits[count++] = '0' + value % 10;
+        value /= 10;
+    } while (value && count < kSentinelMaxDigits);
+    while (count && len < cap - 1) {
+        buf[len++] = digits[--count];
+    }
+    return len;
 }
-// one events-file line: "<epoch> <activation#> <kind> <feature> <build> <detail>[<num>]\n" (num < 0: none)
-static int SCFormat(char *b, int cap, long act, const char *kind, const char *feature, const char *detail, long num) {
-    int n = 0;
-    n = SCPutU(b, n, cap, (unsigned long)time(NULL));
-    n = SCPutS(b, n, cap, " ");
-    n = SCPutU(b, n, cap, (unsigned long)act);
-    n = SCPutS(b, n, cap, " ");
-    n = SCPutS(b, n, cap, kind);
-    n = SCPutS(b, n, cap, " ");
-    n = SCPutS(b, n, cap, feature ? feature : "-");
-    n = SCPutS(b, n, cap, " ");
-    n = SCPutS(b, n, cap, gSCBuild);
-    n = SCPutS(b, n, cap, " ");
-    n = SCPutS(b, n, cap, detail ? detail : "");
-    if (num >= 0) n = SCPutU(b, n, cap, (unsigned long)num);
-    b[n++] = '\n';
-    return n;
+
+// The events file, $SIMCAM_STATE_DIR/<bundle id>/events.log (else <container tmp>/simcam-state/…), has one line per
+// event:
+//   <epoch> <activation#> <kind> <feature> <build> <detail>[<num>]
+// The kinds are activate (detail traced=0|1), exit, op-begin, op-end, hang, unknown-hang, crash, crash-traced and
+// crash-other (neither is ever counted), and clear (the past before it is forgotten).
+// SentinelFormatEvent formats one line. A negative num adds no number.
+static int SentinelFormatEvent(char *buf, int cap, long act, const char *kind, const char *feature, const char *detail,
+                               long num) {
+    int len = 0;
+    len = SentinelPutUnsigned(buf, len, cap, (unsigned long)time(NULL));
+    len = SentinelPutString(buf, len, cap, " ");
+    len = SentinelPutUnsigned(buf, len, cap, (unsigned long)act);
+    len = SentinelPutString(buf, len, cap, " ");
+    len = SentinelPutString(buf, len, cap, kind);
+    len = SentinelPutString(buf, len, cap, " ");
+    len = SentinelPutString(buf, len, cap, feature ? feature : "-");
+    len = SentinelPutString(buf, len, cap, " ");
+    len = SentinelPutString(buf, len, cap, gSentinel.build);
+    len = SentinelPutString(buf, len, cap, " ");
+    len = SentinelPutString(buf, len, cap, detail ? detail : "");
+    if (num >= 0) {
+        len = SentinelPutUnsigned(buf, len, cap, (unsigned long)num);
+    }
+    buf[len++] = '\n';
+    return len;
 }
-static void SCEventRaw(const char *kind, const char *feature, const char *detail, long num) {
-    int fd = gSCFd;
-    if (fd < 0) return;
-    char b[256];
-    int n = SCFormat(b, sizeof b, gSCAct, kind, feature, detail, num);
-    // also called from the crash handler: nothing async-signal-safe to do about a failed write, so the line is lost
-    (void)write(fd, b, n);
+
+static void SentinelWriteEvent(const char *kind, const char *feature, const char *detail, long num) {
+    int fd = gSentinel.events.fd;
+    if (fd < 0) {
+        return;
+    }
+    char line[kSentinelEventLineBytes];
+    int len = SentinelFormatEvent(line, sizeof line, gSentinel.events.activationNumber, kind, feature, detail, num);
+    // also called from the crash handler: nothing async-signal-safe can be done about a failed write, so the line is
+    // lost
+    (void)write(fd, line, len);
 }
 
 // ---- ops ----
-static int SCOpBegin(const char *feature, double timeoutSec) {
-    if (!atomic_load(&gSCOn)) return -1;
-    os_unfair_lock_lock(&gSCLock);
+// SentinelOpBegin(feature, timeout) and SentinelOpEnd(slot) bracket work the engine owns: configure, start and stop,
+// and a photo until its still-complete is posted. The watchdog below turns an op past its deadline into a hang, which
+// the events file keeps for the next activation. The timeout is gSentinel.scale times longer: ten with TSan or ASan
+// loaded.
+static int SentinelOpBegin(const char *feature, double timeoutSec) {
+    if (!atomic_load(&gSentinel.live)) {
+        return -1;
+    }
+    os_unfair_lock_lock(&gSentinel.ops.lock);
     int slot = -1;
-    for (int i = 0; i < SC_MAXOPS; i++) {
-        if (!atomic_load(&gSCOps[i].used)) {
+
+    for (int i = 0; i < kSentinelMaxOps; i++) {
+        if (!atomic_load(&gSentinel.ops.slots[i].used)) {
             slot = i;
             break;
         }
     }
+
     if (slot >= 0) {
-        SCOp *o = &gSCOps[slot];
-        o->feature = feature;
-        o->timeout = (uint64_t)(timeoutSec * gSCScale * NSEC_PER_SEC);
-        o->expired = 0;
-        o->deadline = atomic_load(&gSCActiveNs) + o->timeout;
-        atomic_store(&o->used, 1);
+        SentinelOp *op = &gSentinel.ops.slots[slot];
+        op->feature = feature;
+        op->timeout = (uint64_t)(timeoutSec * gSentinel.scale * NSEC_PER_SEC);
+        op->expired = 0;
+        op->deadline = atomic_load(&gSentinel.ops.activeClockNs) + op->timeout;
+        atomic_store(&op->used, 1);
     }
-    os_unfair_lock_unlock(&gSCLock);
-    if (slot >= 0) SCEventRaw("op-begin", feature, "slot=", slot);
+
+    os_unfair_lock_unlock(&gSentinel.ops.lock);
+    if (slot >= 0) {
+        SentinelWriteEvent("op-begin", feature, "slot=", slot);
+    }
     return slot;
 }
-static void SCOpEnd(int slot) {
-    if (slot < 0 || slot >= SC_MAXOPS) return;
-    const char *f = gSCOps[slot].feature;
-    os_unfair_lock_lock(&gSCLock);
-    atomic_store(&gSCOps[slot].used, 0);
-    os_unfair_lock_unlock(&gSCLock);
-    SCEventRaw("op-end", f, "slot=", slot);
-}
-static BOOL SCLatched(const char *feature) { return atomic_load(&gSCLatchedNow[SCFeatureIndex(feature)]) != 0; }
 
-static BOOL SCIsTraced(void) {
-    struct kinfo_proc kp;
-    size_t len = sizeof kp;
-    int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid()};
-    return sysctl(mib, 4, &kp, &len, NULL, 0) == 0 && (kp.kp_proc.p_flag & P_TRACED);
+static void SentinelOpEnd(int slot) {
+    if (slot < 0 || slot >= kSentinelMaxOps) {
+        return;
+    }
+    const char *feature = gSentinel.ops.slots[slot].feature;
+    os_unfair_lock_lock(&gSentinel.ops.lock);
+    atomic_store(&gSentinel.ops.slots[slot].used, 0);
+    os_unfair_lock_unlock(&gSentinel.ops.lock);
+    SentinelWriteEvent("op-end", feature, "slot=", slot);
 }
-static void *SCWatchdog(void *arg) {
-    pthread_setname_np("simcam.watchdog");
-    const uint64_t tick = 250 * NSEC_PER_MSEC;
-    uint64_t last = clock_gettime_nsec_np(CLOCK_MONOTONIC);   // includes Mac sleep, so sleep shows up as a gap
-    for (;;) @autoreleasepool {
-        struct timespec ts = {0, (long)tick};
-        nanosleep(&ts, NULL);
-        uint64_t now = clock_gettime_nsec_np(CLOCK_MONOTONIC), gap = now - last;
-        last = now;
-        int traced = SCIsTraced();
-        if (traced != atomic_load(&gSCTraced)) {
-            atomic_store(&gSCTraced, traced);
-            LOG(@"watchdog: debugger %s", traced ? "attached" : "detached");
-        }
-        // a gap over 1 s (stopped, suspended or asleep) advances the active clock by one tick only
-        uint64_t active = atomic_fetch_add(&gSCActiveNs, gap > NSEC_PER_SEC ? tick : gap) +
-                          (gap > NSEC_PER_SEC ? tick : gap);
-        os_unfair_lock_lock(&gSCLock);
-        if (gap > NSEC_PER_SEC) {   // stopped, suspended or asleep: restart every deadline
-            for (int i = 0; i < SC_MAXOPS; i++)
-                if (atomic_load(&gSCOps[i].used)) gSCOps[i].deadline = active + gSCOps[i].timeout;
-        }
-        const char *expired[SC_MAXOPS];
-        int nExpired = 0;
-        for (int i = 0; i < SC_MAXOPS; i++) {
-            SCOp *o = &gSCOps[i];
-            if (atomic_load(&o->used) && !o->expired && active > o->deadline) {
-                o->expired = 1;
-                expired[nExpired++] = o->feature;
-            }
-        }
-        os_unfair_lock_unlock(&gSCLock);
-        if (gap > NSEC_PER_SEC) LOG(@"watchdog: process was stopped for %.1f s; deadlines restarted", gap / 1e9);
-        for (int i = 0; i < nExpired; i++) {
-            if (traced) {
-                SCEventRaw("unknown-hang", expired[i], "traced", -1);
-                LOG(@"watchdog: %s op over its deadline while a debugger is attached (not counted)", expired[i]);
-                continue;
-            }
-            int fi = SCFeatureIndex(expired[i]), n = atomic_fetch_add(&gSCHangs[fi], 1) + 1;
-            SCEventRaw("hang", expired[i], "n=", n);
-            LOG(@"watchdog: %s op hung (%d in this process)", expired[i], n);
-            if (n >= SC_STRIKES_TO_LATCH && !atomic_exchange(&gSCLatchedNow[fi], 1)) {
-                LOG(@"watchdog: %s latched after %d hangs", expired[i], n);
-                TRLatch(fi);
-                // session: running sessions stop, with the error if allowed; movie: active recordings stop
-                if (fi == SC_FSESSION) SessInjectRuntimeError(SC_LATCH_AUTO, NO);
-                else if (fi == SC_FMOVIE) MovieStopAll(SC_LATCH_STATUS);
-                fprintf(stderr, "simcam: %s latched after %d hangs in this process\n", expired[i], n);
+
+static BOOL SentinelLatched(const char *feature) {
+    return atomic_load(&gSentinel.latchedNow[SentinelFeatureIndex(feature)]) != 0;
+}
+
+static BOOL ProcessIsTraced(void) {
+    struct kinfo_proc procInfo;
+    size_t len = sizeof procInfo;
+    int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid()};
+    return sysctl(mib, 4, &procInfo, &len, NULL, 0) == 0 && (procInfo.kp_proc.p_flag & P_TRACED);
+}
+
+// ---- the watchdog ----
+// A thread that ticks every 250 ms and measures the ops' deadlines on an active clock. A gap of more than 1 s between
+// ticks means the process was stopped (debugger, suspension, Mac sleep): every inflight deadline restarts, and the
+// clock advances by one tick only. While the process is traced (P_TRACED), an expired op is recorded as unknown-hang
+// and never counted.
+#define kSentinelWatchdogTickNs (250 * NSEC_PER_MSEC)
+
+// The debugger check, every tick: a change is logged. Hangs while traced are noted, not counted.
+static int SentinelWatchdogNoteTraced(void) {
+    int traced = ProcessIsTraced();
+    if (traced != atomic_load(&gSentinel.traced)) {
+        atomic_store(&gSentinel.traced, traced);
+        LOG(@"watchdog: debugger %s", traced ? "attached" : "detached");
+    }
+    return traced;
+}
+
+// Under the ops lock: after a stop, restarts every deadline; then marks the ops now over their deadline as expired
+// (each once) and puts their features in expired. Returns how many.
+static int SentinelWatchdogCollectExpired(uint64_t active, BOOL stopped, const char *expired[kSentinelMaxOps]) {
+    os_unfair_lock_lock(&gSentinel.ops.lock);
+    if (stopped) {
+        for (int i = 0; i < kSentinelMaxOps; i++) {
+            if (atomic_load(&gSentinel.ops.slots[i].used)) {
+                gSentinel.ops.slots[i].deadline = active + gSentinel.ops.slots[i].timeout;
             }
         }
     }
+    int nExpired = 0;
+    for (int i = 0; i < kSentinelMaxOps; i++) {
+        SentinelOp *op = &gSentinel.ops.slots[i];
+        if (atomic_load(&op->used) && !op->expired && active > op->deadline) {
+            op->expired = 1;
+            expired[nExpired++] = op->feature;
+        }
+    }
+    os_unfair_lock_unlock(&gSentinel.ops.lock);
+    return nExpired;
+}
+
+// An op over its deadline: a hang of its feature, which latches at kSentinelStrikesToLatch hangs in this process.
+static void SentinelWatchdogHang(const char *feature, int traced) {
+    if (traced) {
+        SentinelWriteEvent("unknown-hang", feature, "traced", -1);
+        LOG(@"watchdog: %s op over its deadline while a debugger is attached (not counted)", feature);
+        return;
+    }
+    int featureIndex = SentinelFeatureIndex(feature);
+    int hangs = atomic_fetch_add(&gSentinel.hangs[featureIndex], 1) + 1;
+    SentinelWriteEvent("hang", feature, "n=", hangs);
+    LOG(@"watchdog: %s op hung (%d in this process)", feature, hangs);
+    if (hangs < kSentinelStrikesToLatch || atomic_exchange(&gSentinel.latchedNow[featureIndex], 1)) {
+        return;
+    }
+    LOG(@"watchdog: %s latched after %d hangs", feature, hangs);
+    TraceLatch(featureIndex);
+    // a session latch stops running sessions, with the runtime error if one is allowed; a movie latch stops active
+    // recordings
+    if (featureIndex == kFeatureSession) {
+        SessInjectRuntimeError(kSentinelLatchAuto, NO);
+    } else if (featureIndex == kFeatureMovie) {
+        // Not reached yet: no movie op is bracketed with SentinelOpBegin("movie"), so a movie latch can only come from
+        // an earlier activation's events (TODO.md).
+        MovieStopAll(kSentinelLatchStatus);
+    }
+    fprintf(stderr, "simcam: %s latched after %d hangs in this process\n", feature, hangs);
+}
+
+// One tick: sleep, check for a debugger, move the active clock on, and count the ops that ran over their deadline.
+// *last is the previous tick's monotonic time.
+static void SentinelWatchdogTick(uint64_t *last) {
+    struct timespec ts = {0, (long)kSentinelWatchdogTickNs};
+    nanosleep(&ts, NULL);
+    uint64_t now = clock_gettime_nsec_np(CLOCK_MONOTONIC);
+    uint64_t gap = now - *last;
+    *last = now;
+    int traced = SentinelWatchdogNoteTraced();
+    // a gap over 1 s means the process was stopped, suspended or asleep: the active clock advances by one tick only
+    BOOL stopped = gap > NSEC_PER_SEC;
+    uint64_t advance = stopped ? kSentinelWatchdogTickNs : gap;
+    uint64_t active = atomic_fetch_add(&gSentinel.ops.activeClockNs, advance) + advance;
+    const char *expired[kSentinelMaxOps];
+    int nExpired = SentinelWatchdogCollectExpired(active, stopped, expired);
+    if (stopped) {
+        LOG(@"watchdog: process was stopped for %.1f s; deadlines restarted", gap / 1e9);
+    }
+    for (int i = 0; i < nExpired; i++) {
+        SentinelWatchdogHang(expired[i], traced);
+    }
+}
+
+// The watchdog thread, started by SentinelStart: one SentinelWatchdogTick every 250 ms, for the life of the process.
+static void *SentinelWatchdog(void *arg) {
+    (void)pthread_setname_np("simcam.watchdog");   // the name is only for debuggers and crash reports
+    uint64_t last = clock_gettime_nsec_np(CLOCK_MONOTONIC);   // includes Mac sleep, so sleep shows up as a gap
+    for (;;) {
+        @autoreleasepool {
+            SentinelWatchdogTick(&last);
+        }
+    }
+
     return NULL;
 }

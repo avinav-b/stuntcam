@@ -3,6 +3,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"path/filepath"
@@ -19,185 +20,233 @@ func cmdSentinel(args []string) error {
 	if len(args) == 0 || (args[0] != "ls" && args[0] != "clear") {
 		return usagef("usage: stuntcam sentinel ls|clear [--udid U] [--bundle B] (the action comes first)")
 	}
-	fs := flag.NewFlagSet("sentinel", flag.ContinueOnError)
-	udid := fs.String("udid", "", "simulator UDID")
-	bundle := fs.String("bundle", "", "one app (default: every app with records on this simulator)")
-	if err := parse(fs, args[1:], 0); err != nil {
+
+	flags := flag.NewFlagSet("sentinel", flag.ContinueOnError)
+	udid := flags.String("udid", "", "simulator UDID")
+	bundle := flags.String("bundle", "", "one app (default: every app with records on this simulator)")
+	if err := parse(flags, args[1:], 0); err != nil {
 		return err
 	}
-	d, _, err := pickSim(*udid)
+
+	device, _, err := pickSim(*udid)
 	if err != nil {
 		return err
 	}
+
 	cur := ""
-	if _, l, err := home.ReadCurrent(d.UDID); err == nil {
-		cur = filepath.Base(filepath.Dir(l))
+	if _, loaderPath, err := home.ReadCurrent(device.UDID); err == nil {
+		cur = filepath.Base(filepath.Dir(loaderPath))
 	}
-	bundles := state.Bundles(d.UDID)
+
+	bundles := state.Bundles(device.UDID)
 	if *bundle != "" {
 		bundles = []string{*bundle}
 	}
+
 	sort.Strings(bundles)
 	switch args[0] {
 	case "ls":
-		sentinelList(d, cur, bundles)
+		sentinelList(device, cur, bundles)
 		return nil
 	case "clear":
-		return sentinelClear(d, bundles)
+		return sentinelClear(device, bundles)
 	}
+
 	return fmt.Errorf("unknown sentinel action %q", args[0])
 }
 
 // sentinelList prints each app's records (state dir, then container-tmp fallback), the sim's preflight-fail markers and
 // the apps whose fallback couldn't be checked.
-func sentinelList(d simctl.Device, cur string, bundles []string) {
+func sentinelList(device simctl.Device, cur string, bundles []string) {
+	finder := newFallbackFinder(device)
 	unchecked := map[string]string{}
-	for _, b := range bundles {
-		if why := listBundle(d, b, cur); why != "" {
-			unchecked[b] = why
+	for _, bundle := range bundles {
+		if reason := listBundle(device, finder, bundle, cur); reason != nil {
+			unchecked[bundle] = reason.Error()
 		}
 	}
-	for _, p := range state.PreflightFails(d.UDID) { // per sim, not per bundle
-		fmt.Printf("sim: %s\n", preflightLine(p))
+
+	for _, fail := range state.PreflightFails(device.UDID) { // per sim, not per bundle
+		fmt.Printf("sim: %s\n", preflightLine(fail))
 	}
+
 	if len(unchecked) > 0 {
 		fmt.Printf("container-tmp fallback not checked: %s\n", uncheckedText(unchecked))
 	}
 }
 
 // listBundle prints one app's records for build cur ("" (not armed): the last activation's build) and returns why its
-// container-tmp fallback couldn't be checked ("" if it was).
-func listBundle(d simctl.Device, b, cur string) string {
-	a, err := state.Load(d.UDID, b, cur)
+// container-tmp fallback couldn't be checked (nil if it was).
+func listBundle(device simctl.Device, finder *fallbackFinder, bundle, cur string) error {
+	app, err := state.Load(device.UDID, bundle, cur)
 	if err == nil {
-		fmt.Printf("%s: %d activations since the last clear", b, a.Activations)
-		if f := a.LatchedFeatures(); len(f) > 0 {
-			fmt.Printf(", LATCHED %s (%s)", strings.Join(f, ","), state.Effect(f))
+		fmt.Printf("%s: %d activations since the last clear", bundle, app.Activations)
+		if latched := app.LatchedFeatures(); len(latched) > 0 {
+			fmt.Printf(", LATCHED %s (%s)", strings.Join(latched, ","), state.Effect(latched))
 		}
+
 		fmt.Println()
-		printSentinel(a, state.Markers(d.UDID, b))
+		printSentinel(app, state.Markers(device.UDID, bundle))
 	}
-	f, why := fallbackOf(d, b)
-	if why != "" {
-		return why
+
+	fallback, reason := finder.find(bundle)
+	if reason != nil {
+		return reason
 	}
-	fb := f.Read(b, cur)
-	if fb.Empty() {
-		return ""
+
+	found := fallback.Read(bundle, cur)
+	if found.Empty() {
+		return nil
 	}
+
 	if err != nil {
-		fmt.Printf("%s: no records in the state dir\n", b)
+		fmt.Printf("%s: no records in the state dir\n", bundle)
 	}
-	fmt.Printf("  container-tmp fallback %s:", f.Dir)
-	if fb.Events {
-		fmt.Printf(" %d activations since the last clear", fb.App.Activations)
-		if lf := fb.App.LatchedFeatures(); len(lf) > 0 { // conditional, as in status
-			fmt.Printf(", LATCHED %s if the app again can't open its state dir (%s)", strings.Join(lf, ","), state.Effect(lf))
+
+	fmt.Printf("  container-tmp fallback %s:", fallback.Dir)
+	if found.Events {
+		fmt.Printf(" %d activations since the last clear", found.App.Activations)
+		if latched := found.App.LatchedFeatures(); len(latched) > 0 { // conditional, as in status
+			fmt.Printf(", LATCHED %s if the app again can't open its state dir (%s)", strings.Join(latched, ","),
+				state.Effect(latched))
 		}
 	} else {
 		fmt.Printf(" no events.log")
 	}
+
 	fmt.Println()
-	printSentinel(fb.App, fb.Markers)
-	for _, p := range fb.PreflightFails {
-		fmt.Printf("  %s\n", preflightLine(p))
+	printSentinel(found.App, found.Markers)
+	for _, fail := range found.PreflightFails {
+		fmt.Printf("  %s\n", preflightLine(fail))
 	}
-	return ""
+
+	return nil
 }
 
 // sentinelClear clears each app's records and fails when an app had nothing cleared, or a location the engine reads
 // was left latched or unchecked for a reason other than "not booted"/"not installed": scripts must not read success.
-func sentinelClear(d simctl.Device, bundles []string) error {
+func sentinelClear(device simctl.Device, bundles []string) error {
+	finder := newFallbackFinder(device)
 	unchecked := map[string]string{}
+	hint := ""
 	var failed, incomplete []string
-	for _, b := range bundles {
-		why, nothing, partly := clearBundle(d, b)
-		if why != "" {
-			unchecked[b] = why
+	for _, bundle := range bundles {
+		result := clearBundle(device, finder, bundle)
+		if result.fallbackUnchecked != nil {
+			unchecked[bundle] = result.fallbackUnchecked.Error()
 		}
-		if nothing {
-			failed = append(failed, b)
+
+		if errors.Is(result.fallbackUnchecked, errNotBooted) {
+			hint = " (an app that fell back there stays latched: clear again once the simulator is booted)"
 		}
-		if partly {
-			incomplete = append(incomplete, b)
+
+		if result.nothingCleared {
+			failed = append(failed, bundle)
+		}
+
+		if result.incomplete {
+			incomplete = append(incomplete, bundle)
 		}
 	}
+
 	if len(unchecked) > 0 {
-		hint := ""
-		for _, w := range unchecked {
-			if w == "simulator not booted" {
-				hint = " (an app that fell back there stays latched: clear again once the simulator is booted)"
-			}
-		}
 		fmt.Printf("container-tmp fallback not checked: %s%s\n", uncheckedText(unchecked), hint)
 	}
+
 	if len(failed) > 0 {
 		return fmt.Errorf("nothing could be cleared for %s", strings.Join(failed, ", "))
 	}
+
 	if len(incomplete) > 0 {
 		return fmt.Errorf("not fully cleared for %s (see above)", strings.Join(incomplete, ", "))
 	}
+
 	return nil
 }
 
-// clearBundle clears one app's state dir and container-tmp fallback and prints one line saying what it did. why: why
-// the fallback wasn't checked; nothing: neither location was cleared; partly: a location the engine reads was reached
-// and left latched, or couldn't be checked for a reason other than "not booted"/"not installed".
-func clearBundle(d simctl.Device, b string) (why string, nothing, partly bool) {
-	stateErr := state.Clear(d.UDID, b, "stuntcam sentinel clear")
-	f, why := fallbackOf(d, b)
+// clearResult is what clearBundle did for one app.
+type clearResult struct {
+	// fallbackUnchecked says why the container-tmp fallback wasn't checked (nil if it was).
+	fallbackUnchecked error
+	// nothingCleared is true when neither the state dir nor the fallback was cleared.
+	nothingCleared bool
+	// incomplete is true when a location the engine reads was reached and left latched, or couldn't be checked for a
+	// reason other than "simulator not booted" or "app not installed".
+	incomplete bool
+}
+
+// clearBundle clears one app's state dir and container-tmp fallback and prints one line saying what it did.
+func clearBundle(device simctl.Device, finder *fallbackFinder, bundle string) clearResult {
+	stateErr := state.Clear(device.UDID, bundle, "stuntcam sentinel clear")
+	fallback, uncheckedReason := finder.find(bundle)
 	var done []string
 	var fallbackErr error
-	if why == "" {
-		done, fallbackErr = f.Clear("stuntcam sentinel clear")
+	if uncheckedReason == nil {
+		done, fallbackErr = fallback.Clear("stuntcam sentinel clear")
 	}
+
 	var msg []string
 	if stateErr == nil {
 		msg = append(msg, "cleared (state dir)")
 	} else {
 		msg = append(msg, "state dir not cleared: "+stateErr.Error())
 	}
+
 	if len(done) > 0 {
-		msg = append(msg, fmt.Sprintf("container-tmp fallback %s: %s", f.Dir, strings.Join(done, ", ")))
+		msg = append(msg, fmt.Sprintf("container-tmp fallback %s: %s", fallback.Dir, strings.Join(done, ", ")))
 	}
+
 	if fallbackErr != nil {
-		msg = append(msg, fmt.Sprintf("container-tmp fallback %s not fully cleared: %v", f.Dir, fallbackErr))
+		msg = append(msg, fmt.Sprintf("container-tmp fallback %s not fully cleared: %v", fallback.Dir, fallbackErr))
 	}
-	nothing = stateErr != nil && len(done) == 0
-	partly = fallbackErr != nil || (why != "" && why != "app not installed" && why != "simulator not booted") ||
-		(stateErr != nil && !stateDirBlocked(stateErr))
-	// the camera claim holds when every location the engine reads was reached (no container: nothing there)
-	if stateErr == nil && fallbackErr == nil && (why == "" || why == "app not installed") {
+
+	// "Not booted" and "not installed" don't fail the clear: the summary says to clear again once the simulator is
+	// booted, and an app that isn't installed has no container to clear.
+	uncheckedUnexpectedly := uncheckedReason != nil && !errors.Is(uncheckedReason, errNotInstalled) &&
+		!errors.Is(uncheckedReason, errNotBooted)
+	// A state dir the engine can't open either (stateDirBlocked) leaves the engine on the fallback, which was reached.
+	stateDirFailed := stateErr != nil && !stateDirBlocked(stateErr)
+	// The camera claim holds when every location the engine reads was reached (no container: nothing there).
+	if stateErr == nil && fallbackErr == nil && (uncheckedReason == nil || errors.Is(uncheckedReason, errNotInstalled)) {
 		msg = append(msg, "its next launch gets the camera again")
 	}
-	fmt.Printf("%s: %s\n", b, strings.Join(msg, "; "))
-	return why, nothing, partly
+
+	fmt.Printf("%s: %s\n", bundle, strings.Join(msg, "; "))
+	return clearResult{
+		fallbackUnchecked: uncheckedReason,
+		nothingCleared:    stateErr != nil && len(done) == 0,
+		incomplete:        fallbackErr != nil || uncheckedUnexpectedly || stateDirFailed,
+	}
 }
 
 // printSentinel prints the counted events, the debug-end note and the markers of one location.
-func printSentinel(a state.App, ms []state.Marker) {
-	for _, e := range a.Counted {
-		fmt.Printf("  %s %s %s (activation %d, build %s) %s\n", time.Unix(e.At, 0).Format("2006-01-02 15:04:05"), e.Kind,
-			e.Feature, e.Activation, e.Build, e.Detail)
+func printSentinel(app state.App, markers []state.Marker) {
+	for _, event := range app.Counted {
+		fmt.Printf("  %s %s %s (activation %d, build %s) %s\n", time.Unix(event.At, 0).Format("2006-01-02 15:04:05"),
+			event.Kind, event.Feature, event.Activation, event.Build, event.Detail)
 	}
-	if a.UnknownDebugEnd != "" {
+
+	if app.UnknownDebugEnd != "" {
 		fmt.Printf("  last debug run ended inside a %s op (not counted; if stuntcam crashed there, report it)\n",
-			a.UnknownDebugEnd)
+			app.UnknownDebugEnd)
 	}
-	for _, m := range ms {
-		v := "expired"
-		if m.Valid(time.Now()) {
-			v = m.Effect()
+
+	for _, marker := range markers {
+		effect := "expired"
+		if marker.Valid(time.Now()) {
+			effect = marker.Effect()
 		}
-		fmt.Printf("  marker %s: %s until %s (%s)\n", m.Name(), m.Features, m.Until.Format("2006-01-02 15:04:05"), v)
+
+		fmt.Printf("  marker %s: %s until %s (%s)\n", marker.Name(), marker.Features,
+			marker.Until.Format("2006-01-02 15:04:05"), effect)
 	}
 }
 
-func preflightLine(p state.PreflightFail) string {
-	v := "expired"
-	if p.Valid(time.Now()) {
-		v = "launches of this build get stock CoreMotion; the camera runs its own preflight"
+func preflightLine(fail state.PreflightFail) string {
+	effect := "expired"
+	if fail.Valid(time.Now()) {
+		effect = "launches of this build get stock CoreMotion; the camera runs its own preflight"
 	}
-	return fmt.Sprintf("marker preflight-fail-%s: %s until %s (%s)", p.Build, p.What,
-		p.Until.Format("2006-01-02 15:04:05"), v)
+	return fmt.Sprintf("marker preflight-fail-%s: %s until %s (%s)", fail.Build, fail.What,
+		fail.Until.Format("2006-01-02 15:04:05"), effect)
 }

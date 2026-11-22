@@ -187,9 +187,9 @@ func TestStaleShutdownMarker(t *testing.T) {
 func TestRedoSkippedInstall(t *testing.T) {
 	t.Setenv("SIMCAM_HOME", t.TempDir())
 	var got []installPlan
-	old := installGrantFn
-	defer func() { installGrantFn = old }()
-	installGrantFn = func(_ simctl.Ctl, _ string, p installPlan) error { got = append(got, p); return nil }
+	old := installGrant
+	defer func() { installGrant = old }()
+	installGrant = func(_ simctl.Ctl, _ string, p installPlan) error { got = append(got, p); return nil }
 	rec := CanaryRecordFile("U")
 	os.MkdirAll(filepath.Dir(rec), 0o755)
 
@@ -219,7 +219,7 @@ func TestRedoSkippedInstall(t *testing.T) {
 			t.Fatalf("%s: the install record was removed", c.name)
 		}
 	}
-	installGrantFn = func(simctl.Ctl, string, installPlan) error { return fmt.Errorf("install failed: x") }
+	installGrant = func(simctl.Ctl, string, installPlan) error { return fmt.Errorf("install failed: x") }
 	p := installPlan{}
 	if _, err := redoSkippedInstall(simctl.Ctl{}, "U", &p, false); err == nil {
 		t.Fatal("install error swallowed")
@@ -247,20 +247,31 @@ func TestRetriedPassCache(t *testing.T) {
 	put("fail-old", "fail(x)", rl, "", 48*time.Hour)
 	put("sh-old", "pass", "", "RESULT core=PASS ext=PASS t=19.2s retried:["+rl+"]", 2*time.Hour)
 
-	if c := cached("fresh", now); !c.usable || !c.result.RetriedPass() || c.result.Retried != rl {
-		t.Fatalf("fresh retried pass: usable=%v %+v", c.usable, c.result)
+	tests := []struct {
+		name, key string
+		ok        func(c cacheEntry) bool
+	}{
+		{"fresh retried pass is used", "fresh", func(c cacheEntry) bool {
+			return c.usable && c.result.RetriedPass() && c.result.Retried == rl
+		}},
+		{"old retried pass expires", "old", func(c cacheEntry) bool {
+			return !c.usable && strings.Contains(c.why, "canary retry")
+		}},
+		{"plain pass never expires", "plain-old", func(c cacheEntry) bool {
+			return c.usable && !c.result.RetriedPass()
+		}},
+		{"retried fail never expires", "fail-old", func(c cacheEntry) bool {
+			return c.usable && c.result.State == Fail
+		}},
+		// a file without the field, as scripts/verify.sh writes it: the retry is read from its RESULT line
+		{"old retried pass from scripts/verify.sh expires", "sh-old", func(c cacheEntry) bool { return !c.usable }},
 	}
-	if c := cached("old", now); c.usable || !strings.Contains(c.why, "canary retry") {
-		t.Fatalf("old retried pass used: usable=%v why=%q", c.usable, c.why)
-	}
-	if c := cached("plain-old", now); !c.usable || c.result.RetriedPass() {
-		t.Fatalf("plain pass: usable=%v %+v", c.usable, c.result)
-	}
-	if c := cached("fail-old", now); !c.usable || c.result.State != Fail {
-		t.Fatalf("retried fail: usable=%v %+v", c.usable, c.result)
-	}
-	if c := cached("sh-old", now); c.usable {
-		t.Fatal("an old retried pass without the field (scripts/verify.sh) was used")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if c := cached(tt.key, now); !tt.ok(c) {
+				t.Fatalf("usable=%v why=%q %+v", c.usable, c.why, c.result)
+			}
+		})
 	}
 	if _, ok := Cached("old"); ok {
 		t.Fatal("Cached used an expired retried pass")

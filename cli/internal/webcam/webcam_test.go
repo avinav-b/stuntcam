@@ -13,6 +13,36 @@ import (
 	"time"
 )
 
+// camHashByteLoop is CamHash as it was written, FNV-1a 64 spelled out byte by byte, kept to check that the hash/fnv
+// version gives the same names.
+func camHashByteLoop(home, uniqueID string) string {
+	h := uint64(0xcbf29ce484222325)
+	add := func(b byte) {
+		h ^= uint64(b)
+		h *= 0x100000001b3
+	}
+	for i := 0; i < len(home); i++ {
+		add(home[i])
+	}
+	add(0)
+	for i := 0; i < len(uniqueID); i++ {
+		add(uniqueID[i])
+	}
+	return fmt.Sprintf("%08x", uint32(h))
+}
+
+func FuzzCamHashMatchesByteLoop(f *testing.F) {
+	f.Add("", "")
+	f.Add("/h", "cam")
+	f.Add("/h/Library/Application Support/stuntcam", "0x8020000005ac8514")
+	f.Add("\x00", "synthetic")
+	f.Fuzz(func(t *testing.T, home, uniqueID string) {
+		if got, want := CamHash(home, uniqueID), camHashByteLoop(home, uniqueID); got != want {
+			t.Fatalf("CamHash(%q, %q) = %s, the byte loop gives %s", home, uniqueID, got, want)
+		}
+	})
+}
+
 func TestCamHashVectors(t *testing.T) { // docs/webcam-ring.md §1
 	if h := CamHash("", ""); h != "8601b7df" {
 		t.Fatal(h)
@@ -52,26 +82,28 @@ func TestParsePid(t *testing.T) {
 	if _, err := ParsePid([]byte(pidOK + "future=1\n")); err != nil {
 		t.Fatal("unknown keys are ignored:", err)
 	}
-	bad := []string{
-		strings.Replace(pidOK, "stuntcam-webcam 1", "stuntcam-webcam 2", 1),
-		strings.TrimSuffix(pidOK, "\n"),
-		pidOK + "pid=4322\n",
-		strings.Replace(pidOK, "pid=4321", "pid=04321", 1),
-		strings.Replace(pidOK, "pid=4321", "pid=0", 1),
-		strings.Replace(pidOK, "sha=0123456789ab", "sha=0123456789AB", 1),
-		strings.Replace(pidOK, "rings=1", "rings=1,0", 1),
-		strings.Replace(pidOK, "rings=1", "rings=1,2,3,4,5,6,7,8,9", 1),
-		strings.Replace(pidOK, "auth=prompting", "auth=maybe", 1),
-		strings.Replace(pidOK, "state=prompting", "state=9", 1),
-		strings.Replace(pidOK, "camera=0x1420000005ac8600", "camera=a\x01b", 1),
-		strings.Replace(pidOK, "auth=prompting\n", "", 1),
-		strings.Replace(pidOK, "started=1794790000", "started=-1", 1),
-		pidOK + "garbage\n",
+	bad := []struct{ name, file string }{
+		{"another format version", strings.Replace(pidOK, "stuntcam-webcam 1", "stuntcam-webcam 2", 1)},
+		{"no final newline", strings.TrimSuffix(pidOK, "\n")},
+		{"a key twice", pidOK + "pid=4322\n"},
+		{"pid with a leading zero", strings.Replace(pidOK, "pid=4321", "pid=04321", 1)},
+		{"pid 0", strings.Replace(pidOK, "pid=4321", "pid=0", 1)},
+		{"upper-case sha", strings.Replace(pidOK, "sha=0123456789ab", "sha=0123456789AB", 1)},
+		{"ring 0", strings.Replace(pidOK, "rings=1", "rings=1,0", 1)},
+		{"too many rings", strings.Replace(pidOK, "rings=1", "rings=1,2,3,4,5,6,7,8,9", 1)},
+		{"unknown auth", strings.Replace(pidOK, "auth=prompting", "auth=maybe", 1)},
+		{"unknown state", strings.Replace(pidOK, "state=prompting", "state=9", 1)},
+		{"control character in camera", strings.Replace(pidOK, "camera=0x1420000005ac8600", "camera=a\x01b", 1)},
+		{"no auth", strings.Replace(pidOK, "auth=prompting\n", "", 1)},
+		{"negative started", strings.Replace(pidOK, "started=1794790000", "started=-1", 1)},
+		{"a line without =", pidOK + "garbage\n"},
 	}
-	for _, b := range bad {
-		if _, err := ParsePid([]byte(b)); err == nil {
-			t.Errorf("accepted %q", b)
-		}
+	for _, tt := range bad {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := ParsePid([]byte(tt.file)); err == nil {
+				t.Errorf("accepted %q", tt.file)
+			}
+		})
 	}
 }
 
@@ -92,20 +124,23 @@ func TestResolve(t *testing.T) {
 	if err != nil || len(cs) != 4 {
 		t.Fatal(cs, err)
 	}
-	for name, want := range map[string]string{
-		"":                            "BUILTIN-1",
-		"BUILTIN-1":                   "BUILTIN-1",
-		"0x21000003564fefe":           "0x21000003564fefe",
-		"obsbot meet se streamcamera": "0x21000003564fefe", // name, case-insensitive
-		"OBSBOT":                      "0x21000003564fefe", // the one name containing it
-		"phone camera":                "PHONE-1",           // a Continuity Camera only when named
-		"desk view":                   "DESK-2",
-		"synthetic":                   SyntheticID,
-	} {
-		c, err := Resolve(cs, name)
-		if err != nil || c.ID != want {
-			t.Errorf("%q: %v %v", name, c, err)
-		}
+	tests := []struct{ name, camera, want string }{
+		{"default", "", "BUILTIN-1"},
+		{"uniqueID", "BUILTIN-1", "BUILTIN-1"},
+		{"external uniqueID", "0x21000003564fefe", "0x21000003564fefe"},
+		{"name, case-insensitive", "obsbot meet se streamcamera", "0x21000003564fefe"},
+		{"the one name containing it", "OBSBOT", "0x21000003564fefe"},
+		{"a Continuity Camera only when named", "phone camera", "PHONE-1"},
+		{"desk view", "desk view", "DESK-2"},
+		{"synthetic", "synthetic", SyntheticID},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c, err := Resolve(cs, tt.camera)
+			if err != nil || c.ID != tt.want {
+				t.Errorf("%q: %v %v", tt.camera, c, err)
+			}
+		})
 	}
 	if _, err := Resolve(cs, "camera"); err == nil || !strings.Contains(err.Error(), "matches 4 cameras") {
 		t.Error(err)

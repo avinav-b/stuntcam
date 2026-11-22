@@ -1,37 +1,47 @@
 // SPDX-License-Identifier: Apache-2.0
-// simcam runner hook (libsimcamrunnerhook.dylib): inserted into XCTest runner processes by `stuntcam exec` through
-// TEST_RUNNER_DYLD_INSERT_LIBRARIES (design §4.2, §4.5), for destinations that are launchd-armed or booted unarmed,
-// where Xcode's per-launch insert list replaces the stub's. It never runs in a user app as an app: in a hosted test
-// it runs in the test host only to put back what the variable displaced.
+// simcam runner hook (libsimcamrunnerhook.dylib).
 //
-// 1. Restores what TEST_RUNNER_DYLD_INSERT_LIBRARIES displaced from the runner's own insert list (that variable
-//    replaces XCTest's list; for hosted tests that drops libXCTestBundleInject and the test bundle is never
-//    injected: xcodebuild hangs, waiting for it). The list comes from the "test-runner" rule of the restore-rules
-//    file ($SIMCAM_HOOK_RULES), else the built-in copy below: <test host>/Frameworks/libXCTestBundleInject.dylib
-//    (when the host has it and an XCTest marker is set), MTC (unless SIMCAM_MTC=0), RPAC (if PERFC_*). Launch-only
-//    libraries (libclang_rt.*, libgmalloc) are never dlopened, nor a basename that is already mapped. Done in the
-//    constructor, the same point in launch where the boot-mode loader restores.
-// 2. In a UI-test runner (main bundle id *.xctrunner, or an XCTest process without XCInjectBundleInto), makes every
-//    app the test launches get stuntcam's stub prepended to its DYLD_INSERT_LIBRARIES and stuntcam's variables added
-//    to its environment. Xcode 27.0's XCTest builds each launch's environment in -[XCUIApplication
-//    _combinedLaunchEnvironment] (Xcode's target-app environment with the test's launchEnvironment over it; read by
-//    launch, activate and launchWithoutAccessibility:), so that getter is swizzled and its result extended; the
-//    test's launchEnvironment is never touched. Without that method (another XCTest), -launch and -activate (and
-//    launchWithOptions:-style variants if present) are swizzled instead and edit launchEnvironment around the call,
-//    putting it back afterwards. Either way the list kept behind the stub is the test's own DYLD_INSERT_LIBRARIES if
-//    it set one (never dropped), else Xcode's, launch-only libraries first so a sanitizer runtime still initializes
-//    first. Variables the test set itself win. Apple's own apps (com.apple.*) are left alone.
-// 3. Inert when the destination is boot-armed (the stub is mapped in this runner: the boot env already arms every
-//    app), when $SIMCAM_HOOK_DIR/<udid>.env says boot, or when there is nothing to add (no stub for this sim).
-// What to add comes from $SIMCAM_HOOK_DIR/<SIMULATOR_UDID>.env (KEY=VALUE lines written by exec for each
-// destination; first line "mode=launchd|unarmed|boot"), else, on a launchd-armed sim exec could not name, the
-// SIMCAM_* variables launchd gives this process plus $SIMCAM_HOOK_STUB. Logs to $SIMCAM_HOOK_DIR/<udid>.log: "armed
-// <bundle> via <method>" per launch.
-// Any failure: one log line ("failed (…)", which exec's summary repeats), and the launch goes ahead untouched; a
-// hosted test whose libXCTestBundleInject can't be restored logs "failed (hosted tests can't inject their bundle
-// …)".
-// SIMCAM=0 -> nothing. SIMCAM_HOOK_DIAG=1 also logs the environment, the mapped images and XCUIApplication's launch
+// Who loads it: dyld, at launch. `stuntcam exec` inserts it into XCTest runner processes through
+// TEST_RUNNER_DYLD_INSERT_LIBRARIES, for destinations that are launchd-armed or booted unarmed, where Xcode's
+// per-launch insert list replaces the stub's. It never runs in a user app as an app: in a hosted test it runs in the
+// test host only to put back what that variable displaced.
+//
+// What it provides: one constructor, simcam_runnerhook(), and no functions for other code. It does three things:
+// 1. It restores what TEST_RUNNER_DYLD_INSERT_LIBRARIES displaced from the runner's own insert list. That variable
+//    replaces XCTest's list. For hosted tests that drops libXCTestBundleInject, so the test bundle is never injected
+//    and xcodebuild hangs, waiting for it. The list comes from the "test-runner" rule of the restore-rules file
+//    ($SIMCAM_HOOK_RULES), else from the built-in copy below: <test host>/Frameworks/libXCTestBundleInject.dylib
+//    (when the host has it and an XCTest marker is set), MTC (unless SIMCAM_MTC=0) and RPAC (if a PERFC_* variable is
+//    set). Launch-only libraries (libclang_rt.*, libgmalloc) are never dlopened, nor is a library whose basename is
+//    already mapped. This happens in the constructor, the same point in the launch where the boot-mode loader
+//    restores.
+// 2. In a UI-test runner (main bundle id *.xctrunner, or an XCTest process without XCInjectBundleInto), it makes
+//    every app the test launches get stuntcam's stub prepended to its DYLD_INSERT_LIBRARIES and stuntcam's variables
+//    added to its environment. Xcode 27.0's XCTest builds each launch's environment in -[XCUIApplication
+//    _combinedLaunchEnvironment]: Xcode's target-app environment with the test's launchEnvironment over it, read by
+//    launch, activate and launchWithoutAccessibility:. So that getter is swizzled and its result extended; the test's
+//    launchEnvironment is never touched. Without that method (another XCTest), -launch and -activate (and
+//    launchWithOptions:-style variants if present) are swizzled instead. They edit launchEnvironment around the call
+//    and put it back afterwards. Either way, the list kept behind the stub is the test's own DYLD_INSERT_LIBRARIES if
+//    it set one (it is never dropped), else Xcode's, with launch-only libraries first so that a sanitizer runtime
+//    still initializes first. Variables the test set itself win. Apple's own apps (com.apple.*) are left alone.
+// 3. It stays inert when the destination is boot-armed (the stub is mapped in this runner, because the boot env
+//    already arms every app), when $SIMCAM_HOOK_DIR/<udid>.env says boot, or when there is nothing to add (no stub
+//    for this simulator).
+// What to add comes from $SIMCAM_HOOK_DIR/<SIMULATOR_UDID>.env: KEY=VALUE lines that exec writes for each destination,
+// the first line "mode=launchd|unarmed|boot". On a launchd-armed simulator that exec could not name, it comes from the
+// SIMCAM_* variables launchd gives this process, plus $SIMCAM_HOOK_STUB. The log is $SIMCAM_HOOK_DIR/<udid>.log, with
+// one "armed <bundle> via <method>" line per launch.
+// On any failure it logs one line, "failed (…)", which exec's summary repeats, and the launch goes ahead untouched. A
+// hosted test whose libXCTestBundleInject can't be restored logs "failed (hosted tests can't inject their bundle …)".
+// SIMCAM=0 turns it off. SIMCAM_HOOK_DIAG=1 also logs the environment, the mapped images and XCUIApplication's launch
 // selectors.
+//
+// State: file-scope globals. Set in the constructor before any hook is installed, and only read afterwards: gLogFd,
+// gUdid, gStub and gVars (the stub path and the variables to add; a nil gStub means inert). Shared by launches on any
+// thread: the saved original IMPs (gOrig, gOrigCount; each slot is published before its swizzle and never changes
+// afterwards), the atomics gFailedOnce, gHookedUI and gLaunchGen (a launch counter), and gLastArmedLine and
+// gLastArmedGen (guarded by gLogLock). gLaunchDepth is per thread.
 #import <Foundation/Foundation.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
@@ -43,524 +53,765 @@
 #import <stdatomic.h>
 #import <os/lock.h>
 
-// the "@testhost/" path prefix of the test-runner rule (see testhost())
+// the "@testhost/" path prefix of the test-runner rule (see testHostPath())
 #define TESTHOST_PREFIX @"@testhost/"
 enum { TESTHOST_PREFIX_LEN = 10 };
 _Static_assert(sizeof "@testhost/" - 1 == TESTHOST_PREFIX_LEN, "TESTHOST_PREFIX_LEN is the length of TESTHOST_PREFIX");
 
-static int gfd = -1;   // set once in the constructor, before any hook is installed
-static char udid[64];
-static void hlog(NSString *s) {
-    if (gfd < 0) return;
-    struct timespec ts; clock_gettime(CLOCK_REALTIME, &ts);
-    NSString *l = [NSString stringWithFormat:@"%ld.%06ld [hook %d %s] %@\n", (long)ts.tv_sec, ts.tv_nsec / 1000, getpid(),
-                                            getprogname(), s];
-    const char *c = l.UTF8String;
-    if (c) write(gfd, c, strlen(c));
+enum {
+    kUdidMax = 64,           // the simulator UDID buffer (a UDID is 36 characters)
+    kExePathMax = 1024,      // this executable's path, for the "loaded in" line
+    kTypeEncodingMax = 8,    // one return or argument type encoding ("v", "@")
+    kHiddenArgCount = 2,     // self and _cmd: a method's first explicit argument has this index
+};
+
+static int gLogFd = -1;   // set once in the constructor, before any hook is installed
+static char gUdid[kUdidMax];
+
+static void hookLog(NSString *message) {
+    if (gLogFd < 0) {
+        return;
+    }
+    struct timespec now;
+    clock_gettime(CLOCK_REALTIME, &now);
+    // seconds and microseconds
+    NSString *line = [NSString stringWithFormat:@"%ld.%06ld [hook %d %s] %@\n", (long)now.tv_sec, now.tv_nsec / 1000,
+                                               getpid(), getprogname(), message];
+    const char *utf8 = line.UTF8String;
+    if (utf8) {
+        (void)write(gLogFd, utf8, strlen(utf8));   // a log line that can't be written is dropped
+    }
 }
-static const char *base(const char *p) {
-    const char *b = strrchr(p, '/');
-    return b ? b + 1 : p;
+
+static const char *baseName(const char *path) {
+    const char *slash = strrchr(path, '/');
+    return slash ? slash + 1 : path;
 }
-static const char *mapped(const char *name) {   // a mapped image with exactly this basename
-    for (uint32_t i = 0, n = _dyld_image_count(); i < n; i++) {
-        const char *nm = _dyld_get_image_name(i);
-        if (nm && !strcmp(base(nm), name)) return nm;
+
+// A mapped image with exactly this basename, else NULL.
+static const char *mappedImage(const char *name) {
+    for (uint32_t i = 0, count = _dyld_image_count(); i < count; i++) {
+        const char *imageName = _dyld_get_image_name(i);
+        if (imageName && !strcmp(baseName(imageName), name)) {
+            return imageName;
+        }
     }
     return NULL;
 }
-// a launch-only library (a sanitizer runtime or Guard Malloc): never dlopened. The loader's launch_only() is the same test
-static BOOL launchOnly(NSString *p) {
-    NSString *b = p.lastPathComponent;
-    return [b hasPrefix:@"libclang_rt."] || [b isEqualToString:@"libgmalloc.dylib"];
+
+// A launch-only library (a sanitizer runtime or Guard Malloc) is never dlopened. The loader's launch_only() makes the
+// same test.
+static BOOL launchOnly(NSString *path) {
+    NSString *leaf = path.lastPathComponent;
+    return [leaf hasPrefix:@"libclang_rt."] || [leaf isEqualToString:@"libgmalloc.dylib"];
 }
 
-// ---- 1. restore the runner's own list ----------------------------------------------------------------------------------
-// a condition: VAR=value (equal), PREFIX* (any variable with that prefix), VAR (set): the restore-rules "if"/"unless"
-// syntax. The loader's cond() (engine/loader/loader.c) matches the same syntax against environ; the two must stay in step
-static BOOL cond(NSString *c, NSDictionary *env) {
-    if (!c.length) return YES;
-    if ([c hasSuffix:@"*"]) {
-        NSString *p = [c substringToIndex:c.length - 1];
-        for (NSString *k in env)
-            if ([k hasPrefix:p]) return YES;
+// ---- 1. restore the runner's own list -------------------------------------------------------------------------------
+// Tests a condition in the restore-rules "if"/"unless" syntax: VAR=value (equal), PREFIX* (any variable with that
+// prefix) or VAR (set). The loader's cond_holds() (engine/loader/loader.c) matches the same syntax against environ; the
+// two must stay in step.
+static BOOL condHolds(NSString *condition, NSDictionary *env) {
+    if (!condition.length) {
+        return YES;
+    }
+    if ([condition hasSuffix:@"*"]) {
+        NSString *prefix = [condition substringToIndex:condition.length - 1];
+        for (NSString *name in env) {
+            if ([name hasPrefix:prefix]) {
+                return YES;
+            }
+        }
         return NO;
     }
-    NSRange eq = [c rangeOfString:@"="];
-    if (eq.location == NSNotFound) return env[c] != nil;
-    return [env[[c substringToIndex:eq.location]] isEqualToString:[c substringFromIndex:eq.location + 1]];
+    NSRange eq = [condition rangeOfString:@"="];
+    if (eq.location == NSNotFound) {
+        return env[condition] != nil;
+    }
+    return [env[[condition substringToIndex:eq.location]]
+        isEqualToString:[condition substringFromIndex:eq.location + 1]];
 }
-// the built-in copy of restore-rules/27A266a.json's "test-runner" rule (used when $SIMCAM_HOOK_RULES has none); keep it
-// in step with that file, as the loader's builtin_xcode/builtin_ui are with its "xcode-run" and "ui-test-target" rules
+
+// The built-in copy of restore-rules/27A266a.json's "test-runner" rule, used when $SIMCAM_HOOK_RULES has none. Keep it
+// in step with that file, as the loader's builtin_xcode and builtin_ui are with its "xcode-run" and "ui-test-target"
+// rules.
 static NSArray *builtinRunnerLibs(void) {
     return @[@{@"path": @"@testhost/Frameworks/libXCTestBundleInject.dylib", @"if": @"XCInjectBundleInto"},
              @{@"path": @"/usr/lib/libMainThreadChecker.dylib", @"unless": @"SIMCAM_MTC=0"},
              @{@"path": @"/usr/lib/libRPAC.dylib", @"if": @"PERFC_*"}];
 }
-// @testhost/<rel>: where dyld finds what XCTest names "<built products dir>/<App>.app/<rel>": that file doesn't exist;
-// dyld takes the leaf from DYLD_LIBRARY_PATH first (Xcode's platform usr/lib copy), so do the same, then the built and
-// the installed host
-static NSString *testhost(NSString *rel, NSDictionary *env) {
-    NSFileManager *fm = NSFileManager.defaultManager;
+
+// Resolves @testhost/<rel>. XCTest names "<built products dir>/<App>.app/<rel>", but that file doesn't exist; dyld
+// takes the leaf from DYLD_LIBRARY_PATH first (Xcode's platform usr/lib copy). So this does the same, then tries the
+// built host, then the installed host.
+static NSString *testHostPath(NSString *rel, NSDictionary *env) {
+    NSFileManager *files = NSFileManager.defaultManager;
     NSString *host = NSBundle.mainBundle.bundlePath ?: @"";
-    for (NSString *d in [env[@"DYLD_LIBRARY_PATH"] ?: @"" componentsSeparatedByString:@":"]) {
-        NSString *p = [d stringByAppendingPathComponent:rel.lastPathComponent];
-        if (d.length && [fm fileExistsAtPath:p]) return p;
+    for (NSString *dir in [env[@"DYLD_LIBRARY_PATH"] ?: @"" componentsSeparatedByString:@":"]) {
+        NSString *path = [dir stringByAppendingPathComponent:rel.lastPathComponent];
+        if (dir.length && [files fileExistsAtPath:path]) {
+            return path;
+        }
     }
-    for (NSString *d in [env[@"__XCODE_BUILT_PRODUCTS_DIR_PATHS"] ?: @"" componentsSeparatedByString:@":"]) {
-        NSString *p = [[d stringByAppendingPathComponent:host.lastPathComponent] stringByAppendingPathComponent:rel];
-        if (d.length && [fm fileExistsAtPath:p]) return p;
+    for (NSString *dir in [env[@"__XCODE_BUILT_PRODUCTS_DIR_PATHS"] ?: @"" componentsSeparatedByString:@":"]) {
+        NSString *path =
+            [[dir stringByAppendingPathComponent:host.lastPathComponent] stringByAppendingPathComponent:rel];
+        if (dir.length && [files fileExistsAtPath:path]) {
+            return path;
+        }
     }
     return [host stringByAppendingPathComponent:rel];
 }
+
+// The rules file's "test-runner" rule, with a list of libs.
+static BOOL isTestRunnerRule(id rule) {
+    return [rule isKindOfClass:NSDictionary.class] && [rule[@"name"] isEqual:@"test-runner"] &&
+           [rule[@"libs"] isKindOfClass:NSArray.class];
+}
+
 static NSArray *runnerLibs(NSDictionary *env) {
-    NSString *rf = env[@"SIMCAM_HOOK_RULES"];
-    if (rf.length) {
-        NSData *d = [NSData dataWithContentsOfFile:rf];
-        id j = d ? [NSJSONSerialization JSONObjectWithData:d options:0 error:nil] : nil;
-        if ([j isKindOfClass:NSDictionary.class] && [j[@"rules"] isKindOfClass:NSArray.class])
-            for (id r in j[@"rules"])
-                if ([r isKindOfClass:NSDictionary.class] && [r[@"name"] isEqual:@"test-runner"] &&
-                    [r[@"libs"] isKindOfClass:NSArray.class]) {
-                    hlog([NSString stringWithFormat:@"rules: %@", rf]);
-                    return r[@"libs"];
+    NSString *rulesPath = env[@"SIMCAM_HOOK_RULES"];
+    if (rulesPath.length) {
+        NSData *data = [NSData dataWithContentsOfFile:rulesPath];
+        id json = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
+        if ([json isKindOfClass:NSDictionary.class] && [json[@"rules"] isKindOfClass:NSArray.class]) {
+            for (id rule in json[@"rules"]) {
+                if (isTestRunnerRule(rule)) {
+                    hookLog([NSString stringWithFormat:@"rules: %@", rulesPath]);
+                    return rule[@"libs"];
                 }
-        hlog([NSString stringWithFormat:@"rules: no test-runner rule in %@; built-in used", rf]);
+            }
+        }
+        hookLog([NSString stringWithFormat:@"rules: no test-runner rule in %@; built-in used", rulesPath]);
     }
     return builtinRunnerLibs();
 }
-// one lib of the test-runner rule: its conditions, its path (@testhost/ and the runtime root resolved), then dlopen
-// unless it is absent, launch-only or already mapped
+
+// Restores one lib of the test-runner rule: checks its conditions, resolves its path (@testhost/ and the runtime root),
+// then dlopens it unless it is absent, launch-only or already mapped.
 static void restoreRunnerLib(id lib, NSDictionary *env, NSString *root, BOOL xctest, BOOL runner) {
-    if (![lib isKindOfClass:NSDictionary.class] || ![lib[@"path"] isKindOfClass:NSString.class]) return;
-    NSString *p = lib[@"path"];
-    NSString *c = [lib[@"if"] isKindOfClass:NSString.class] ? lib[@"if"] : nil;
-    NSString *u = [lib[@"unless"] isKindOfClass:NSString.class] ? lib[@"unless"] : nil;
-    if (!cond(c, env) || (u.length && cond(u, env))) return;
-    if ([p hasPrefix:TESTHOST_PREFIX]) {
-        if (!xctest || runner) return;   // a UI-test runner never had it
-        p = testhost([p substringFromIndex:TESTHOST_PREFIX_LEN], env);
-    } else if ([p hasPrefix:@"/usr/"] || [p hasPrefix:@"/System/"]) {
-        NSString *q = [root stringByAppendingString:p];
-        if (root.length && [NSFileManager.defaultManager fileExistsAtPath:q]) p = q;
+    if (![lib isKindOfClass:NSDictionary.class] || ![lib[@"path"] isKindOfClass:NSString.class]) {
+        return;
     }
+    NSString *path = lib[@"path"];
+    NSString *ifCond = [lib[@"if"] isKindOfClass:NSString.class] ? lib[@"if"] : nil;
+    NSString *unlessCond = [lib[@"unless"] isKindOfClass:NSString.class] ? lib[@"unless"] : nil;
+    if (!condHolds(ifCond, env) || (unlessCond.length && condHolds(unlessCond, env))) {
+        return;
+    }
+
+    if ([path hasPrefix:TESTHOST_PREFIX]) {
+        if (!xctest || runner) {
+            return;   // a UI-test runner never had it
+        }
+        path = testHostPath([path substringFromIndex:TESTHOST_PREFIX_LEN], env);
+    } else if ([path hasPrefix:@"/usr/"] || [path hasPrefix:@"/System/"]) {
+        NSString *rooted = [root stringByAppendingString:path];
+        if (root.length && [NSFileManager.defaultManager fileExistsAtPath:rooted]) {
+            path = rooted;
+        }
+    }
+
     // a hosted test's bundle injector: without it the run hangs
     BOOL inject = [lib[@"path"] hasPrefix:TESTHOST_PREFIX];
-    if (![NSFileManager.defaultManager fileExistsAtPath:p]) {
-        hlog([NSString stringWithFormat:inject ? @"failed (hosted tests can't inject their bundle; the run may hang): absent %@"
-                                               : @"restore: absent %@",
-                                        p]);
+
+    if (![NSFileManager.defaultManager fileExistsAtPath:path]) {
+        if (inject) {
+            hookLog([NSString
+                stringWithFormat:@"failed (hosted tests can't inject their bundle; the run may hang): absent %@",
+                                 path]);
+        } else {
+            hookLog([NSString stringWithFormat:@"restore: absent %@", path]);
+        }
         return;
     }
-    if (launchOnly(p)) {
-        hlog([NSString stringWithFormat:@"restore: skipped (must load at launch) %@", p]);
+
+    if (launchOnly(path)) {
+        hookLog([NSString stringWithFormat:@"restore: skipped (must load at launch) %@", path]);
         return;
     }
-    const char *have = mapped(base(p.fileSystemRepresentation));
-    if (have) {
-        hlog([NSString stringWithFormat:@"restore: already loaded %s", have]);
+
+    const char *loaded = mappedImage(baseName(path.fileSystemRepresentation));
+
+    if (loaded) {
+        hookLog([NSString stringWithFormat:@"restore: already loaded %s", loaded]);
         return;
     }
-    void *h = dlopen(p.fileSystemRepresentation, RTLD_NOW | RTLD_GLOBAL);
-    if (!h && inject)
-        hlog([NSString stringWithFormat:@"failed (hosted tests can't inject their bundle; the run may hang): %@ %s", p,
-                                        dlerror()]);
-    else
-        hlog([NSString stringWithFormat:@"restore: %@ %s", p, h ? "loaded" : dlerror()]);
+
+    void *handle = dlopen(path.fileSystemRepresentation, RTLD_NOW | RTLD_GLOBAL);
+
+    if (!handle && inject) {
+        hookLog([NSString stringWithFormat:@"failed (hosted tests can't inject their bundle; the run may hang): %@ %s",
+                                           path, dlerror()]);
+    } else {
+        hookLog([NSString stringWithFormat:@"restore: %@ %s", path, handle ? "loaded" : dlerror()]);
+    }
 }
+
 static void restoreRunner(NSDictionary *env, BOOL xctest, BOOL runner) {
     if ([env[@"SIMCAM_XCODE_LIBS"] isEqualToString:@"0"]) {
-        hlog(@"restore: SIMCAM_XCODE_LIBS=0");
+        hookLog(@"restore: SIMCAM_XCODE_LIBS=0");
         return;
     }
     NSString *root = env[@"SIMULATOR_ROOT"] ?: env[@"DYLD_ROOT_PATH"] ?: @"";
-    for (id l in runnerLibs(env)) restoreRunnerLib(l, env, root, xctest, runner);
+    for (id lib in runnerLibs(env)) {
+        restoreRunnerLib(lib, env, root, xctest, runner);
+    }
 }
 
-// ---- 2. the app under test -----------------------------------------------------------------------------------------------
-// our stub, or nil: inert (set in the constructor, before any swizzle; read-only after)
+// ---- 2. the app under test ------------------------------------------------------------------------------------------
+// gStub is our stub, or nil for inert. It and gVars are set in the constructor, before any swizzle, and only read
+// afterwards.
 static NSString *gStub;
-static NSDictionary *gVars;             // SIMCAM_* etc. for the app (never DYLD_INSERT_LIBRARIES); same
+static NSDictionary *gVars;   // SIMCAM_* and the like, for the app (never DYLD_INSERT_LIBRARIES)
 static atomic_bool gFailedOnce;
-static void fail(NSString *what) {   // logged once per process
-    if (atomic_exchange(&gFailedOnce, true)) return;
-    hlog([NSString stringWithFormat:@"failed (launch left as it was): %@", what]);
+
+// Logs a failure, once per process.
+static void fail(NSString *what) {
+    if (atomic_exchange(&gFailedOnce, true)) {
+        return;
+    }
+    hookLog([NSString stringWithFormat:@"failed (launch left as it was): %@", what]);
 }
-// the original IMPs, one fixed slot per swizzled selector: each is stored (and published) before its method is swizzled,
-// and never changed afterwards, so a launch on any thread reads a complete entry without a lock
+
+// The original IMPs, one fixed slot per swizzled selector. Each slot is stored (and published) before its method is
+// swizzled, and never changed afterwards, so a launch on any thread reads a complete entry without a lock.
 enum { kMaxHooks = 8 };
-static struct { SEL sel; _Atomic(IMP) orig; } gOrig[kMaxHooks];
-static atomic_int gOrigN;
-static IMP origOf(SEL s) {
-    for (int i = 0, n = atomic_load(&gOrigN); i < n; i++)
-        if (gOrig[i].sel == s) return atomic_load(&gOrig[i].orig);
+static struct {
+    SEL sel;
+    _Atomic(IMP) orig;
+} gOrig[kMaxHooks];
+static atomic_int gOrigCount;
+
+static IMP originalImp(SEL sel) {
+    for (int i = 0, count = atomic_load(&gOrigCount); i < count; i++) {
+        if (gOrig[i].sel == sel) {
+            return atomic_load(&gOrig[i].orig);
+        }
+    }
     return NULL;
 }
-// swizzles m to imp, with its original saved first (a concurrent call to imp finds it); NO if out of slots
-static BOOL swizzle(Method m, IMP imp) {
-    int i = atomic_load(&gOrigN);
-    if (i >= kMaxHooks) return NO;
-    gOrig[i].sel = method_getName(m);
-    atomic_store(&gOrig[i].orig, method_getImplementation(m));
-    atomic_store(&gOrigN, i + 1);                    // published before the swizzle
-    IMP was = method_setImplementation(m, imp);
-    // changed in between by someone else: call theirs
-    if (was != atomic_load(&gOrig[i].orig)) atomic_store(&gOrig[i].orig, was);
+
+// Swizzles method to imp, saving its original first so that a concurrent call to imp finds it. NO if out of slots.
+static BOOL swizzle(Method method, IMP imp) {
+    int slot = atomic_load(&gOrigCount);
+    if (slot >= kMaxHooks) {
+        return NO;
+    }
+    gOrig[slot].sel = method_getName(method);
+    atomic_store(&gOrig[slot].orig, method_getImplementation(method));
+    atomic_store(&gOrigCount, slot + 1);   // published before the swizzle
+    IMP replaced = method_setImplementation(method, imp);
+    // Someone else changed the method between the save and the swizzle: call their IMP instead.
+    if (replaced != atomic_load(&gOrig[slot].orig)) {
+        atomic_store(&gOrig[slot].orig, replaced);
+    }
     return YES;
 }
 
-// what Xcode itself puts in the app's DYLD_INSERT_LIBRARIES (UITargetAppEnvironmentVariables), as the runner was told
+// What Xcode itself puts in the app's DYLD_INSERT_LIBRARIES (UITargetAppEnvironmentVariables), as the runner was told.
 static NSString *xcodeTargetInsert(void) {
     @try {
-        Class c = NSClassFromString(@"XCTestConfiguration");
-        if (![c respondsToSelector:@selector(activeTestConfiguration)]) return nil;
-        id cfg = ((id (*)(id, SEL))objc_msgSend)(c, @selector(activeTestConfiguration));
-        if (!cfg || ![cfg respondsToSelector:@selector(targetApplicationEnvironment)]) return nil;
-        NSDictionary *e = ((id (*)(id, SEL))objc_msgSend)(cfg, @selector(targetApplicationEnvironment));
-        id v = [e isKindOfClass:NSDictionary.class] ? e[@"DYLD_INSERT_LIBRARIES"] : nil;
-        return [v isKindOfClass:NSString.class] ? v : nil;
-    } @catch (NSException *x) { return nil; }
+        Class configClass = NSClassFromString(@"XCTestConfiguration");
+        if (![configClass respondsToSelector:@selector(activeTestConfiguration)]) {
+            return nil;
+        }
+        id config = ((id (*)(id, SEL))objc_msgSend)(configClass, @selector(activeTestConfiguration));
+        if (!config || ![config respondsToSelector:@selector(targetApplicationEnvironment)]) {
+            return nil;
+        }
+        NSDictionary *targetEnv = ((id (*)(id, SEL))objc_msgSend)(config, @selector(targetApplicationEnvironment));
+        id value = [targetEnv isKindOfClass:NSDictionary.class] ? targetEnv[@"DYLD_INSERT_LIBRARIES"] : nil;
+        return [value isKindOfClass:NSString.class] ? value : nil;
+    } @catch (NSException *exception) {
+        return nil;
+    }
 }
-static BOOL ours(NSString *p) { return [p.lastPathComponent hasPrefix:@"libsimcam"]; }
-// stub + base, launch-only libraries first, no duplicates, no other copy of ours
-static NSString *merged(NSString *b) {
-    NSMutableArray *first = [NSMutableArray new], *rest = [NSMutableArray new];
-    for (NSString *e in [b componentsSeparatedByString:@":"]) {
-        if (!e.length || ours(e) || [first containsObject:e] || [rest containsObject:e]) continue;
-        [(launchOnly(e) ? first : rest) addObject:e];
+
+static BOOL isOurLibrary(NSString *path) {
+    return [path.lastPathComponent hasPrefix:@"libsimcam"];
+}
+
+// The stub followed by baseList: launch-only libraries first, no duplicates, and no other copy of our libraries.
+static NSString *mergedInsertList(NSString *baseList) {
+    NSMutableArray *first = [NSMutableArray new];
+    NSMutableArray *rest = [NSMutableArray new];
+    for (NSString *entry in [baseList componentsSeparatedByString:@":"]) {
+        if (!entry.length || isOurLibrary(entry)) {
+            continue;
+        }
+        if ([first containsObject:entry] || [rest containsObject:entry]) {
+            continue;   // a duplicate
+        }
+        [(launchOnly(entry) ? first : rest) addObject:entry];
     }
     [first addObject:gStub];
     [first addObjectsFromArray:rest];
     return [first componentsJoinedByString:@":"];
 }
+
 static NSString *bundleOf(id app) {
     @try {
-        for (NSString *k in @[@"bundleID", @"bundleIdentifier"])
-            if ([app respondsToSelector:NSSelectorFromString(k)]) {
-                id v = [app valueForKey:k];
-                if ([v isKindOfClass:NSString.class]) return v;
+        for (NSString *key in @[@"bundleID", @"bundleIdentifier"]) {
+            if ([app respondsToSelector:NSSelectorFromString(key)]) {
+                id value = [app valueForKey:key];
+                if ([value isKindOfClass:NSString.class]) {
+                    return value;
+                }
             }
-    } @catch (NSException *x) {
+        }
+    } @catch (NSException *exception) {
     }
     return nil;
 }
-// returns the launchEnvironment to put back afterwards, or nil if nothing was changed
-static NSDictionary *prepare(id app, const char *how) {
-    if (!gStub) return nil;
+
+// Adds ours to the app's launchEnvironment. Returns the launchEnvironment to put back afterwards, or nil if nothing
+// was changed.
+static NSDictionary *prepareLaunchEnvironment(id app, const char *how) {
+    if (!gStub) {
+        return nil;
+    }
+
     @try {
-        NSString *bid = bundleOf(app);
-        if ([bid hasPrefix:@"com.apple."]) return nil;
-        NSDictionary *orig = [app valueForKey:@"launchEnvironment"];
-        if (orig && ![orig isKindOfClass:NSDictionary.class]) {
+        NSString *bundleId = bundleOf(app);
+        if ([bundleId hasPrefix:@"com.apple."]) {
+            return nil;
+        }
+        NSDictionary *original = [app valueForKey:@"launchEnvironment"];
+        if (original && ![original isKindOfClass:NSDictionary.class]) {
             fail(@"launchEnvironment is not a dictionary");
             return nil;
         }
-        NSMutableDictionary *env = orig ? [orig mutableCopy] : [NSMutableDictionary new];
-        NSString *own = env[@"DYLD_INSERT_LIBRARIES"];
-        NSString *b = own.length ? own : (xcodeTargetInsert() ?: @"");
-        env[@"DYLD_INSERT_LIBRARIES"] = merged(b);
-        for (NSString *k in gVars)
-            if (!env[k]) env[k] = gVars[k];
+        NSMutableDictionary *env = original ? [original mutableCopy] : [NSMutableDictionary new];
+        NSString *ownList = env[@"DYLD_INSERT_LIBRARIES"];
+        NSString *baseList = ownList.length ? ownList : (xcodeTargetInsert() ?: @"");
+        env[@"DYLD_INSERT_LIBRARIES"] = mergedInsertList(baseList);
+        for (NSString *key in gVars) {
+            if (!env[key]) {
+                env[key] = gVars[key];
+            }
+        }
         [app setValue:env forKey:@"launchEnvironment"];
-        hlog([NSString stringWithFormat:@"armed %@ via %s: DYLD_INSERT_LIBRARIES=%@ (%@)", bid ?: @"?", how,
-                                        env[@"DYLD_INSERT_LIBRARIES"],
-                                        own.length ? @"merged with the test's own"
-                                        : b.length ? @"merged with Xcode's list"
-                                                   : @"Xcode's list unknown"]);
-        return orig ?: @{};
-    } @catch (NSException *x) {
-        fail([NSString stringWithFormat:@"%@: %@", x.name, x.reason]);
+        NSString *listNote;   // where the list kept behind the stub came from
+        if (ownList.length) {
+            listNote = @"merged with the test's own";
+        } else if (baseList.length) {
+            listNote = @"merged with Xcode's list";
+        } else {
+            listNote = @"Xcode's list unknown";
+        }
+        hookLog([NSString stringWithFormat:@"armed %@ via %s: DYLD_INSERT_LIBRARIES=%@ (%@)", bundleId ?: @"?", how,
+                                           env[@"DYLD_INSERT_LIBRARIES"], listNote]);
+        return original ?: @{};
+    } @catch (NSException *exception) {
+        fail([NSString stringWithFormat:@"%@: %@", exception.name, exception.reason]);
         return nil;
     }
 }
-static void putback(id app, NSDictionary *orig) {
-    if (!orig) return;
+
+static void putBackLaunchEnvironment(id app, NSDictionary *original) {
+    if (!original) {
+        return;
+    }
     @try {
-        [app setValue:orig forKey:@"launchEnvironment"];
-    } @catch (NSException *x) {
+        [app setValue:original forKey:@"launchEnvironment"];
+    } @catch (NSException *exception) {
         fail(@"restoring launchEnvironment");
     }
 }
-// -[XCUIApplication _combinedLaunchEnvironment] (Xcode 27.0's XCTest): Xcode's target-app environment with the test's
-// launchEnvironment over it, read by every launch path (launch, activate, launchWithoutAccessibility:). Ours goes on top.
-static NSString *lastLogged;               // guarded by gLogLock
-static unsigned gLoggedGen;                // guarded by gLogLock
-static atomic_uint gLaunchGen;             // bumped by each outermost launch/activate call: one "armed" line per launch
+
+// -[XCUIApplication _combinedLaunchEnvironment] (Xcode 27.0's XCTest) returns Xcode's target-app environment with the
+// test's launchEnvironment over it, and every launch path reads it (launch, activate, launchWithoutAccessibility:).
+// Ours goes on top.
+static NSString *gLastArmedLine;   // guarded by gLogLock
+static unsigned gLastArmedGen;     // guarded by gLogLock
+static atomic_uint gLaunchGen;     // bumped by each outermost launch/activate call: one "armed" line per launch
 static os_unfair_lock gLogLock = OS_UNFAIR_LOCK_INIT;
+
 static id hookedCombined(id self, SEL _cmd) {
-    IMP o = origOf(_cmd);
-    if (!o) return nil;   // cannot happen: saved before the swizzle
-    id r = ((id (*)(id, SEL))o)(self, _cmd);
-    if (!gStub) return r;
+    IMP original = originalImp(_cmd);
+    if (!original) {
+        return nil;   // cannot happen: it is saved before the swizzle
+    }
+    id result = ((id (*)(id, SEL))original)(self, _cmd);
+    if (!gStub) {
+        return result;
+    }
+
     @try {
-        if (![r isKindOfClass:NSDictionary.class]) {
+        if (![result isKindOfClass:NSDictionary.class]) {
             fail(@"_combinedLaunchEnvironment is not a dictionary");
-            return r;
+            return result;
         }
-        NSString *bid = bundleOf(self);
-        if ([bid hasPrefix:@"com.apple."]) return r;
-        NSMutableDictionary *env = [r mutableCopy];
-        NSString *b = env[@"DYLD_INSERT_LIBRARIES"] ?: @"";
-        NSString *own = [[self valueForKey:@"launchEnvironment"] isKindOfClass:NSDictionary.class]
-                            ? [self valueForKey:@"launchEnvironment"][@"DYLD_INSERT_LIBRARIES"]
-                            : nil;
-        env[@"DYLD_INSERT_LIBRARIES"] = merged(b);
-        NSDictionary *tests = [self valueForKey:@"launchEnvironment"];
-        for (NSString *k in gVars)
-            if (![tests isKindOfClass:NSDictionary.class] || !tests[k]) env[k] = gVars[k];
-        NSString *l = [NSString stringWithFormat:@"armed %@ via _combinedLaunchEnvironment: DYLD_INSERT_LIBRARIES=%@ (%@)",
-                                                 bid ?: @"?", env[@"DYLD_INSERT_LIBRARIES"],
-                                                 own.length ? @"merged with the test's own"
-                                                 : b.length ? @"merged with Xcode's list"
-                                                            : @"no other list"];
+        NSString *bundleId = bundleOf(self);
+        if ([bundleId hasPrefix:@"com.apple."]) {
+            return result;
+        }
+        NSMutableDictionary *env = [result mutableCopy];
+        NSString *combinedList = env[@"DYLD_INSERT_LIBRARIES"] ?: @"";
+        NSString *ownList = [[self valueForKey:@"launchEnvironment"] isKindOfClass:NSDictionary.class]
+                                ? [self valueForKey:@"launchEnvironment"][@"DYLD_INSERT_LIBRARIES"]
+                                : nil;
+        env[@"DYLD_INSERT_LIBRARIES"] = mergedInsertList(combinedList);
+        NSDictionary *testEnv = [self valueForKey:@"launchEnvironment"];
+        for (NSString *key in gVars) {
+            if (![testEnv isKindOfClass:NSDictionary.class] || !testEnv[key]) {
+                env[key] = gVars[key];
+            }
+        }
+        NSString *listNote;   // where the list kept behind the stub came from
+        if (ownList.length) {
+            listNote = @"merged with the test's own";
+        } else if (combinedList.length) {
+            listNote = @"merged with Xcode's list";
+        } else {
+            listNote = @"no other list";
+        }
+        NSString *line = [NSString
+            stringWithFormat:@"armed %@ via _combinedLaunchEnvironment: DYLD_INSERT_LIBRARIES=%@ (%@)",
+                             bundleId ?: @"?", env[@"DYLD_INSERT_LIBRARIES"], listNote];
         unsigned gen = atomic_load(&gLaunchGen);
-        BOOL say = NO;
+        BOOL shouldLog = NO;
         os_unfair_lock_lock(&gLogLock);
-        if (gen != gLoggedGen || ![l isEqualToString:lastLogged]) {
-            say = YES;
-            lastLogged = l;
-            gLoggedGen = gen;
+        if (gen != gLastArmedGen || ![line isEqualToString:gLastArmedLine]) {
+            shouldLog = YES;
+            gLastArmedLine = line;
+            gLastArmedGen = gen;
         }
         os_unfair_lock_unlock(&gLogLock);
-        if (say) hlog(l);
+        if (shouldLog) {
+            hookLog(line);
+        }
         return env;
-    } @catch (NSException *x) {
-        fail([NSString stringWithFormat:@"%@: %@", x.name, x.reason]);
-        return r;
+    } @catch (NSException *exception) {
+        fail([NSString stringWithFormat:@"%@: %@", exception.name, exception.reason]);
+        return result;
     }
 }
-static __thread int depth;   // launch -> activate (or an internal call) prepares once, at the outermost call
-static void hooked0(id self, SEL _cmd) {
-    IMP o = origOf(_cmd);
-    NSDictionary *orig = depth++ ? nil : prepare(self, sel_getName(_cmd));
+
+// How deep this thread is in hooked launch calls. launch calling activate (or an internal call) prepares once, at the
+// outermost call.
+static __thread int gLaunchDepth;
+
+static void hookedLaunch(id self, SEL _cmd) {
+    IMP original = originalImp(_cmd);
+    NSDictionary *saved = gLaunchDepth++ ? nil : prepareLaunchEnvironment(self, sel_getName(_cmd));
     @try {
-        ((void (*)(id, SEL))o)(self, _cmd);
+        ((void (*)(id, SEL))original)(self, _cmd);
     } @finally {
-        depth--;
-        putback(self, orig);
+        gLaunchDepth--;
+        putBackLaunchEnvironment(self, saved);
     }
 }
-static void hooked1(id self, SEL _cmd, id a) {
-    IMP o = origOf(_cmd);
-    NSDictionary *orig = depth++ ? nil : prepare(self, sel_getName(_cmd));
+
+static void hookedLaunchWithObject(id self, SEL _cmd, id arg) {
+    IMP original = originalImp(_cmd);
+    NSDictionary *saved = gLaunchDepth++ ? nil : prepareLaunchEnvironment(self, sel_getName(_cmd));
     @try {
-        ((void (*)(id, SEL, id))o)(self, _cmd, a);
+        ((void (*)(id, SEL, id))original)(self, _cmd, arg);
     } @finally {
-        depth--;
-        putback(self, orig);
+        gLaunchDepth--;
+        putBackLaunchEnvironment(self, saved);
     }
 }
-// with _combinedLaunchEnvironment hooked, the launch methods only count launches (for the log); the environment is not
-// touched
-static void counted0(id self, SEL _cmd) {
-    if (!depth++) atomic_fetch_add(&gLaunchGen, 1);
+
+// With _combinedLaunchEnvironment hooked, the launch methods only count launches (for the log); they don't touch the
+// environment.
+static void countedLaunch(id self, SEL _cmd) {
+    if (!gLaunchDepth++) {
+        atomic_fetch_add(&gLaunchGen, 1);
+    }
     @try {
-        ((void (*)(id, SEL))origOf(_cmd))(self, _cmd);
+        ((void (*)(id, SEL))originalImp(_cmd))(self, _cmd);
     } @finally {
-        depth--;
+        gLaunchDepth--;
     }
 }
-static void countedB(id self, SEL _cmd, BOOL a) {
-    if (!depth++) atomic_fetch_add(&gLaunchGen, 1);
+
+static void countedLaunchWithBool(id self, SEL _cmd, BOOL flag) {
+    if (!gLaunchDepth++) {
+        atomic_fetch_add(&gLaunchGen, 1);
+    }
     @try {
-        ((void (*)(id, SEL, BOOL))origOf(_cmd))(self, _cmd, a);
+        ((void (*)(id, SEL, BOOL))originalImp(_cmd))(self, _cmd, flag);
     } @finally {
-        depth--;
+        gLaunchDepth--;
     }
 }
-// SIMCAM_HOOK_DIAG: XCUIApplication's launch and activate selectors with their type encodings
-static void logLaunchSelectors(Class c) {
-    unsigned n = 0;
-    Method *ms = class_copyMethodList(c, &n);
+
+// SIMCAM_HOOK_DIAG: logs XCUIApplication's launch and activate selectors with their type encodings.
+static void logLaunchSelectors(Class cls) {
+    unsigned count = 0;
+    Method *methods = class_copyMethodList(cls, &count);
     NSMutableArray *names = [NSMutableArray new];
-    for (unsigned i = 0; i < n; i++) {
-        NSString *s = NSStringFromSelector(method_getName(ms[i]));
-        if ([s.lowercaseString containsString:@"launch"] || [s.lowercaseString containsString:@"activate"])
-            [names addObject:[NSString stringWithFormat:@"%@ %s", s, method_getTypeEncoding(ms[i])]];
+    for (unsigned i = 0; i < count; i++) {
+        NSString *name = NSStringFromSelector(method_getName(methods[i]));
+        if ([name.lowercaseString containsString:@"launch"] || [name.lowercaseString containsString:@"activate"]) {
+            [names addObject:[NSString stringWithFormat:@"%@ %s", name, method_getTypeEncoding(methods[i])]];
+        }
     }
-    free(ms);
-    hlog([NSString stringWithFormat:@"diag: XCUIApplication selectors: %@", [names componentsJoinedByString:@", "]]);
+    free(methods);
+    hookLog([NSString stringWithFormat:@"diag: XCUIApplication selectors: %@", [names componentsJoinedByString:@", "]]);
 }
-// Xcode 27.0's XCTest: _combinedLaunchEnvironment carries ours; launch, activate and launchWithoutAccessibility: only
-// count launches (for the log)
-static void hookCombinedLaunchEnvironment(Class c, Method cm) {
-    swizzle(cm, (IMP)hookedCombined);
-    for (NSString *n in @[@"launch", @"activate", @"launchWithoutAccessibility:"]) {
-        Method m = class_getInstanceMethod(c, NSSelectorFromString(n));
-        const char *t = m ? method_getTypeEncoding(m) : NULL;
-        IMP imp = !t                          ? NULL
-                  : !strcmp(t, "v16@0:8")     ? (IMP)counted0
-                  : !strcmp(t, "v20@0:8B16")  ? (IMP)countedB
-                                              : NULL;
-        if (imp) swizzle(m, imp);
+
+// The counting replacement for a launch method with these type encodings: -(void)m, or -(void)m:(BOOL)flag on a
+// 64-bit target. NULL for any other method, which is left alone.
+static IMP countingImpFor(const char *types) {
+    if (!types) {
+        return NULL;
     }
-    hlog(@"hooked -[XCUIApplication _combinedLaunchEnvironment]");
+    if (!strcmp(types, "v16@0:8")) {
+        return (IMP)countedLaunch;
+    }
+    if (!strcmp(types, "v20@0:8B16")) {
+        return (IMP)countedLaunchWithBool;
+    }
+    return NULL;
 }
-// no _combinedLaunchEnvironment (another XCTest): the public launch methods, the test's launchEnvironment edited around
-// the call; only void methods with no or one object argument; anything else this XCTest has is left alone
-static void hookPublicLaunchMethods(Class c) {
+
+// Xcode 27.0's XCTest: _combinedLaunchEnvironment carries ours. launch, activate and launchWithoutAccessibility: only
+// count launches (for the log).
+static void hookCombinedLaunchEnvironment(Class cls, Method combined) {
+    swizzle(combined, (IMP)hookedCombined);
+    for (NSString *name in @[@"launch", @"activate", @"launchWithoutAccessibility:"]) {
+        Method method = class_getInstanceMethod(cls, NSSelectorFromString(name));
+        const char *types = method ? method_getTypeEncoding(method) : NULL;
+        IMP imp = countingImpFor(types);
+        if (imp) {
+            swizzle(method, imp);
+        }
+    }
+    hookLog(@"hooked -[XCUIApplication _combinedLaunchEnvironment]");
+}
+
+// Without _combinedLaunchEnvironment (another XCTest): the public launch methods, with the test's launchEnvironment
+// edited around the call. Only void methods with no argument or one object argument are hooked; anything else this
+// XCTest has is left alone.
+static void hookPublicLaunchMethods(Class cls) {
     NSMutableArray *done = [NSMutableArray new];
-    for (NSString *s in @[@"launch", @"activate", @"launchWithOptions:", @"launchWithConfiguration:", @"activateWithOptions:"]) {
-        Method m = class_getInstanceMethod(c, NSSelectorFromString(s));
-        if (!m) continue;
-        const char *t = method_getTypeEncoding(m);
-        int args = (int)method_getNumberOfArguments(m) - 2;
-        char rt[8] = "";
-        method_getReturnType(m, rt, sizeof rt);
-        if (strcmp(rt, "v") || args > 1) {
-            hlog([NSString stringWithFormat:@"not hooked (signature %s): %@", t, s]);
+    for (NSString *name in
+         @[@"launch", @"activate", @"launchWithOptions:", @"launchWithConfiguration:", @"activateWithOptions:"]) {
+        Method method = class_getInstanceMethod(cls, NSSelectorFromString(name));
+        if (!method) {
             continue;
         }
-        if (args == 1) {
-            char at[8] = "";
-            method_getArgumentType(m, 2, at, sizeof at);
-            if (strcmp(at, "@")) {
-                hlog([NSString stringWithFormat:@"not hooked (signature %s): %@", t, s]);
+        const char *types = method_getTypeEncoding(method);
+        int argCount = (int)method_getNumberOfArguments(method) - kHiddenArgCount;
+        char returnType[kTypeEncodingMax] = "";
+        method_getReturnType(method, returnType, sizeof returnType);
+        if (strcmp(returnType, "v") || argCount > 1) {
+            hookLog([NSString stringWithFormat:@"not hooked (signature %s): %@", types, name]);
+            continue;
+        }
+        if (argCount == 1) {
+            char argType[kTypeEncodingMax] = "";
+            method_getArgumentType(method, kHiddenArgCount, argType, sizeof argType);
+            if (strcmp(argType, "@")) {
+                hookLog([NSString stringWithFormat:@"not hooked (signature %s): %@", types, name]);
                 continue;
             }
         }
-        if (swizzle(m, args ? (IMP)hooked1 : (IMP)hooked0)) [done addObject:s];
+        if (swizzle(method, argCount ? (IMP)hookedLaunchWithObject : (IMP)hookedLaunch)) {
+            [done addObject:name];
+        }
     }
-    hlog([NSString stringWithFormat:@"hooked -[XCUIApplication %@]", [done componentsJoinedByString:@"], -["]]);
+
+    hookLog([NSString stringWithFormat:@"hooked -[XCUIApplication %@]", [done componentsJoinedByString:@"], -["]]);
 }
-static atomic_bool hookedUI;
+
+static atomic_bool gHookedUI;
+
 static void hookXCUI(void) {
-    if (atomic_load(&hookedUI)) return;
-    Class c = objc_getClass("XCUIApplication");
-    if (!c) return;
-    static atomic_int once;   // add-image callbacks can come from any thread
-    int zero = 0;
-    if (!atomic_compare_exchange_strong(&once, &zero, 1)) return;
-    atomic_store(&hookedUI, true);
-    if (getenv("SIMCAM_HOOK_DIAG")) logLaunchSelectors(c);
-    Method cm = class_getInstanceMethod(c, NSSelectorFromString(@"_combinedLaunchEnvironment"));
-    if (cm && !getenv("SIMCAM_HOOK_PUBLIC") && !strcmp(method_getTypeEncoding(cm) ?: "", "@16@0:8")) {
-        hookCombinedLaunchEnvironment(c, cm);
+    if (atomic_load(&gHookedUI)) {
         return;
     }
-    hookPublicLaunchMethods(c);
+    Class cls = objc_getClass("XCUIApplication");
+    if (!cls) {
+        return;
+    }
+    static atomic_int hookClaimed;   // add-image callbacks can come from any thread
+    int expected = 0;
+    if (!atomic_compare_exchange_strong(&hookClaimed, &expected, 1)) {
+        return;
+    }
+    atomic_store(&gHookedUI, true);
+    if (getenv("SIMCAM_HOOK_DIAG")) {
+        logLaunchSelectors(cls);
+    }
+    Method combined = class_getInstanceMethod(cls, NSSelectorFromString(@"_combinedLaunchEnvironment"));
+    if (combined && !getenv("SIMCAM_HOOK_PUBLIC") && !strcmp(method_getTypeEncoding(combined) ?: "", "@16@0:8")) {
+        hookCombinedLaunchEnvironment(cls, combined);
+        return;
+    }
+    hookPublicLaunchMethods(cls);
 }
-static void onImage(const struct mach_header *mh, intptr_t slide) {
-    if (atomic_load(&hookedUI)) return;
+
+static void onImageAdded(const struct mach_header *header, intptr_t slide) {
+    if (atomic_load(&gHookedUI)) {
+        return;
+    }
     @autoreleasepool {
         @try {
             hookXCUI();
-        } @catch (NSException *x) {
-            atomic_store(&hookedUI, true);
+        } @catch (NSException *exception) {
+            atomic_store(&gHookedUI, true);
             fail(@"swizzling XCUIApplication");
         }
     }
 }
 
-// $SIMCAM_HOOK_DIR/<udid>.env: mode=… then KEY=VALUE lines
+// Reads $SIMCAM_HOOK_DIR/<udid>.env: a mode=… line, then KEY=VALUE lines.
 static NSDictionary *readHookEnv(NSString *dir, NSString **mode) {
-    NSString *t = [NSString stringWithContentsOfFile:[dir stringByAppendingFormat:@"/%s.env", udid]
-                                            encoding:NSUTF8StringEncoding
-                                               error:nil];
-    if (!t) return nil;
-    NSMutableDictionary *d = [NSMutableDictionary new];
-    for (NSString *l in [t componentsSeparatedByString:@"\n"]) {
-        NSRange eq = [l rangeOfString:@"="];
-        if (!l.length || [l hasPrefix:@"#"] || eq.location == NSNotFound) continue;
-        NSString *k = [l substringToIndex:eq.location], *v = [l substringFromIndex:eq.location + 1];
-        if ([k isEqualToString:@"mode"]) *mode = v;
-        else d[k] = v;
+    NSString *text = [NSString stringWithContentsOfFile:[dir stringByAppendingFormat:@"/%s.env", gUdid]
+                                               encoding:NSUTF8StringEncoding
+                                                  error:nil];
+    if (!text) {
+        return nil;
     }
-    return d;
+    NSMutableDictionary *vars = [NSMutableDictionary new];
+    for (NSString *line in [text componentsSeparatedByString:@"\n"]) {
+        NSRange eq = [line rangeOfString:@"="];
+        if (!line.length || [line hasPrefix:@"#"] || eq.location == NSNotFound) {
+            continue;
+        }
+        NSString *key = [line substringToIndex:eq.location];
+        NSString *value = [line substringFromIndex:eq.location + 1];
+        if ([key isEqualToString:@"mode"]) {
+            *mode = value;
+        } else {
+            vars[key] = value;
+        }
+    }
+    return vars;
 }
 
-// SIMCAM_HOOK_DIAG: the environment and the mapped images (outside the OS's own directories)
+// SIMCAM_HOOK_DIAG: logs the environment and the mapped images (outside the OS's own directories).
 static void logEnvAndImages(NSDictionary *env) {
-    for (NSString *k in [env.allKeys sortedArrayUsingSelector:@selector(compare:)])
-        hlog([NSString stringWithFormat:@"diag: env %@=%@", k, env[k]]);
-    for (uint32_t i = 0, n = _dyld_image_count(); i < n; i++) {
-        const char *nm = _dyld_get_image_name(i);
-        if (nm && !strstr(nm, "/System/Library/") && !strstr(nm, "/usr/lib/system/"))
-            hlog([NSString stringWithFormat:@"diag: image %s", nm]);
+    for (NSString *key in [env.allKeys sortedArrayUsingSelector:@selector(compare:)]) {
+        hookLog([NSString stringWithFormat:@"diag: env %@=%@", key, env[key]]);
+    }
+    for (uint32_t i = 0, count = _dyld_image_count(); i < count; i++) {
+        const char *imageName = _dyld_get_image_name(i);
+        if (imageName && !strstr(imageName, "/System/Library/") && !strstr(imageName, "/usr/lib/system/")) {
+            hookLog([NSString stringWithFormat:@"diag: image %s", imageName]);
+        }
     }
 }
-// on a launchd-armed sim: the variables launchd gave this runner for the app (SIMCAM_* except SIMCAM_HOOK*, and the
-// six the CLI sets when arming, also under their stuntcam 1.1.0 names: a sim armed by 1.1.0 has only those, and the
-// engine reads both, core/env.inc), or nil unless both SIMCAM_SIM_DIR and SIMCAM_HOOK_STUB are set
+
+// On a launchd-armed simulator: the variables launchd gave this runner for the app. That is SIMCAM_* except
+// SIMCAM_HOOK*, plus the six variables the CLI sets when arming under their stuntcam 1.1.0 names too: a simulator armed
+// by 1.1.0 has only those, and the engine reads both (core/env.inc). Returns nil unless both SIMCAM_SIM_DIR and
+// SIMCAM_HOOK_STUB are set.
 static NSDictionary *launchdRunnerVars(NSDictionary *env) {
-    NSString *sd = env[@"SIMCAM_SIM_DIR"], *ds = env[@"SIMCAM_HOOK_STUB"];
-    if (!sd.length || !ds.length) return nil;
-    NSMutableDictionary *m = [NSMutableDictionary new];
-    for (NSString *k in env)
-        if ([k hasPrefix:@"SIMCAM_"] && ![k hasPrefix:@"SIMCAM_HOOK"]) m[k] = env[k];
-    for (NSString *k in @[@"SIMCAM_FIG_SOURCES", @"SIMCAM_FIG_SESSION", @"SIMCAM_OFF_KEY_LOG", @"SIMCAM_PROFILE",
-                          @"SIMCAM_FIXTURE_IMAGE", @"SIMCAM_ENGINE_LOG",
-                          @"M2_FAKE", @"M2_SESSION_HOOK", @"M2_NOLOGDICT", @"M2_PLIST", @"M5_IMAGE", @"M5_LOG"])
-        if (env[k]) m[k] = env[k];
-    return m;
+    NSString *simDir = env[@"SIMCAM_SIM_DIR"];
+    NSString *stub = env[@"SIMCAM_HOOK_STUB"];
+    if (!simDir.length || !stub.length) {
+        return nil;
+    }
+    NSMutableDictionary *vars = [NSMutableDictionary new];
+    for (NSString *key in env) {
+        if ([key hasPrefix:@"SIMCAM_"] && ![key hasPrefix:@"SIMCAM_HOOK"]) {
+            vars[key] = env[key];
+        }
+    }
+    for (NSString *key in @[@"SIMCAM_FIG_SOURCES", @"SIMCAM_FIG_SESSION", @"SIMCAM_OFF_KEY_LOG", @"SIMCAM_PROFILE",
+                            @"SIMCAM_FIXTURE_IMAGE", @"SIMCAM_ENGINE_LOG",
+                            @"M2_FAKE", @"M2_SESSION_HOOK", @"M2_NOLOGDICT", @"M2_PLIST", @"M5_IMAGE", @"M5_LOG"]) {
+        if (env[key]) {
+            vars[key] = env[key];
+        }
+    }
+    return vars;
 }
+
 static void setup(void) {
-    const char *on = getenv("SIMCAM");
-    if (on && on[0] == '0') return;
+    const char *enabled = getenv("SIMCAM");
+    if (enabled && enabled[0] == '0') {
+        return;
+    }
     NSDictionary *env = NSProcessInfo.processInfo.environment;
-    snprintf(udid, sizeof udid, "%s", [env[@"SIMULATOR_UDID"] UTF8String] ?: "unknown");
+    snprintf(gUdid, sizeof gUdid, "%s", [env[@"SIMULATOR_UDID"] UTF8String] ?: "unknown");
     NSString *dir = env[@"SIMCAM_HOOK_DIR"];
-    if (dir.length)
-        gfd = open([dir stringByAppendingFormat:@"/%s.log", udid].fileSystemRepresentation,
-                   O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC, 0644);
-    char exe[1024];
-    uint32_t sz = sizeof exe;
-    if (_NSGetExecutablePath(exe, &sz)) exe[0] = 0;
+
+    if (dir.length) {
+        gLogFd = open([dir stringByAppendingFormat:@"/%s.log", gUdid].fileSystemRepresentation,
+                      O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC, 0644);
+    }
+
+    char exe[kExePathMax];
+    uint32_t size = sizeof exe;
+    if (_NSGetExecutablePath(exe, &size)) {
+        exe[0] = 0;
+    }
     BOOL xctest = env[@"XCTestConfigurationFilePath"] || env[@"XCTestBundlePath"] || env[@"XCTestSessionIdentifier"] ||
                   env[@"XCInjectBundleInto"];
-    // a UI-test runner: Xcode names its bundle <test bundle id>.xctrunner; a hosted test's host is an XCTest process with
-    // XCInjectBundleInto (the app's own bundle id, whatever its executable is called)
-    NSString *bid = NSBundle.mainBundle.bundleIdentifier ?: @"";
-    BOOL runner = [bid hasSuffix:@".xctrunner"] || (xctest && !env[@"XCInjectBundleInto"]);
-    BOOL boot = mapped("libsimcamstub.dylib") != NULL;   // the boot env reached this process: it arms the app too
-    hlog([NSString stringWithFormat:@"loaded in %s (%@, xctest=%d, stub mapped=%d)", exe,
-                                    runner ? @"UI-test runner" : @"test host", xctest, boot]);
-    if (getenv("SIMCAM_HOOK_DIAG")) logEnvAndImages(env);
-    // in boot mode too: the loader restored XCTest's list, which no longer names them
+
+    // A UI-test runner: Xcode names its bundle <test bundle id>.xctrunner. A hosted test's host is an XCTest process
+    // with XCInjectBundleInto (the app's own bundle id, whatever its executable is called).
+    NSString *bundleId = NSBundle.mainBundle.bundleIdentifier ?: @"";
+    BOOL runner = [bundleId hasSuffix:@".xctrunner"] || (xctest && !env[@"XCInjectBundleInto"]);
+
+    // The boot env reached this process, so it arms the app too.
+    BOOL boot = mappedImage("libsimcamstub.dylib") != NULL;
+    hookLog([NSString stringWithFormat:@"loaded in %s (%@, xctest=%d, stub mapped=%d)", exe,
+                                       runner ? @"UI-test runner" : @"test host", xctest, boot]);
+    if (getenv("SIMCAM_HOOK_DIAG")) {
+        logEnvAndImages(env);
+    }
+
+    // In boot mode too: the loader restored XCTest's list, which no longer names these libraries.
     restoreRunner(env, xctest, runner);
+
     if (!runner) {
-        hlog(@"not a UI-test runner: nothing to hook");
+        hookLog(@"not a UI-test runner: nothing to hook");
         return;
     }
+
     if (boot) {
-        hlog(@"boot-armed (the stub is in this runner): inert");
+        hookLog(@"boot-armed (the stub is in this runner): inert");
         return;
     }
+
     NSString *mode = nil;
-    NSDictionary *v = dir.length ? readHookEnv(dir, &mode) : nil;
+    NSDictionary *settings = dir.length ? readHookEnv(dir, &mode) : nil;
+
     if ([mode isEqualToString:@"boot"]) {
-        hlog(@"boot-armed (per exec): inert");
+        hookLog(@"boot-armed (per exec): inert");
         return;
     }
-    NSString *stub = v[@"DYLD_INSERT_LIBRARIES"];
-    if (!v) {   // a destination exec couldn't name: a launchd-armed sim's own variables, if it has them
-        v = launchdRunnerVars(env);
-        if (!v) {
-            hlog(@"no stuntcam settings for this simulator (not armed, not a destination exec named): inert");
+
+    NSString *stub = settings[@"DYLD_INSERT_LIBRARIES"];
+
+    if (!settings) {   // a destination exec couldn't name: a launchd-armed simulator's own variables, if it has them
+        settings = launchdRunnerVars(env);
+        if (!settings) {
+            hookLog(@"no stuntcam settings for this simulator (not armed, not a destination exec named): inert");
             return;
         }
         stub = env[@"SIMCAM_HOOK_STUB"];
         mode = @"launchd (runner env)";
     }
+
     if (!stub.length || ![NSFileManager.defaultManager fileExistsAtPath:stub]) {
-        hlog([NSString stringWithFormat:@"no stub (%@): inert", stub ?: @"none"]);
+        hookLog([NSString stringWithFormat:@"no stub (%@): inert", stub ?: @"none"]);
         return;
     }
-    NSMutableDictionary *vars = [v mutableCopy];
+
+    NSMutableDictionary *vars = [settings mutableCopy];
     [vars removeObjectForKey:@"DYLD_INSERT_LIBRARIES"];
     gStub = stub;
     gVars = vars;
-    hlog([NSString stringWithFormat:@"active for %s (%@): stub %@, %lu variables", udid, mode, stub,
-                                    (unsigned long)vars.count]);
-    _dyld_register_func_for_add_image(onImage);
+    hookLog([NSString stringWithFormat:@"active for %s (%@): stub %@, %lu variables", gUdid, mode, stub,
+                                       (unsigned long)vars.count]);
+    _dyld_register_func_for_add_image(onImageAdded);
 }
+
 __attribute__((constructor)) static void simcam_runnerhook(void) {
     @autoreleasepool {
         @try {
             setup();
-        } @catch (NSException *x) {
+        } @catch (NSException *exception) {
             gStub = nil;
-            fail([NSString stringWithFormat:@"setup: %@: %@", x.name, x.reason]);
+            fail([NSString stringWithFormat:@"setup: %@: %@", exception.name, exception.reason]);
         }
     }
 }

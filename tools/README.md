@@ -3,6 +3,12 @@
 Small helpers for the lab (`scripts/`) and for inspecting the engine. The compiled ones are built into `tools/bin/`
 (git-ignored) by `tools/build.sh [name ...]` on a Mac with Xcode; each file's header says how to call it.
 
+When a tool can't do its job it usually says so in one line on stderr: called with wrong arguments, it prints its
+usage line and exits 2; an input it can't read, it prints `<tool>: <file>: <reason>` and exits 1 (a malformed input
+of an unexpected shape can still end in a Python traceback). Two kinds of tools differ:
+`orient.py` exits 2 for an unreadable picture as well, because 1 means "doesn't match", and `avinfo`, `avaudio` and
+`upright` print an `ERROR` line on stdout, where `scripts/run.sh` and the orient scripts collect their output.
+
 ## Build and repo checks
 
 - `build.sh` — compiles the Swift, C and Objective-C tools below into `tools/bin/` (all of them with no arguments).

@@ -16,10 +16,22 @@
 #            are long enough to see every frame they have (the scene's moving bar repeats every 160 frames; the video
 #            is $SIMCAM_HOME/golden/slow10.mov, 30 frames at 10 fps, made once with tools/mkvideo, so each of its
 #            frames lasts 3 ticks).
-set -u; ROOT="$(cd "$(dirname "$0")/.." && pwd)"; source $ROOT/scripts/env.sh; source $ROOT/scripts/common.sh
-CMD=${1:?capture|compare}; shift
-B=dev.simcam.spike.m10plain
-# case: name W H fps fmt pos rot mirror orientation (the source comes from SOURCES)
+set -u
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+source "$ROOT/scripts/env.sh"
+source "$ROOT/scripts/common.sh"
+
+CMD=${1:?capture|compare}
+shift
+SCRIPT=$0   # for messages: inside a function, $0 is the function's name
+
+# fixtures/plain's bundle id. Bundle ids, the fixture's M5APP_* and GF_* inputs and its GF* log tokens are names from
+# the project's early milestones (m10, m5, "golden frames"); they are data, so they keep those names.
+BUNDLE=dev.simcam.spike.m10plain
+
+# Each case: name W H fps fmt pos rot mirror orientation (the source comes from SOURCES). A name is p, l or u for the
+# orientation (f: the front camera), the height (4k: 2160), then the rest: v/f for 420v/420f (no suffix, or bgra:
+# BGRA), mir for mirrored, p60 for 60 fps. The rotation is not in the name.
 CASES=(
   "p1080bgra   1920 1080 30 bgra back  90  0 portrait"
   "p1080v      1920 1080 30 420v back  0   0 portrait"
@@ -28,63 +40,180 @@ CASES=(
   "u1440f      1920 1440 30 420f back  270 0 upsideDown"
   "l1080p60    1920 1080 60 bgra back  180 0 landscapeLeft"
 )
+
 SOURCES=(scene image video)
+
+# srcspec <source>: the control file's source= value for that source.
 srcspec() {
   case $1 in
-    scene) print -r -- scene;;
-    image) print -r -- "image:$SIMCAM_DEV/media/qr.png";;
-    video) print -r -- "video:$SIMCAM_HOME/golden/slow10.mov";;
+    scene)
+      print -r -- scene
+      ;;
+    image)
+      print -r -- "image:$SIMCAM_DEV/media/qr.png"
+      ;;
+    video)
+      print -r -- "video:$SIMCAM_HOME/golden/slow10.mov"
+      ;;
   esac
 }
+
+# capture_case <out dir> <rt> <udid> <source> <case spec>: one launch of fixtures/plain in golden mode for that source
+# and CASES entry. Writes <out dir>/<rt>-<source>-<case>.{control,log,txt} (.txt: the sorted frame, photo and movie
+# hashes) and prints the case's line: its GFSTAT/GFMOVIESTAT counts, and "FAIL (see log)" if the app logged a FAIL.
+capture_case() {
+  local out=$1
+  local rt=$2
+  local udid=$3
+  local src=$4
+  local -a fields
+  fields=(${=5})
+  local case_name=$src-${fields[1]}
+  local width=${fields[2]}
+  local height=${fields[3]}
+  local fps=${fields[4]}
+  local pixel_format=${fields[5]}
+  local position=${fields[6]}
+  local rotation=${fields[7]}
+  local mirror=${fields[8]}
+  local orientation=${fields[9]}
+
+  # the image source's picture is static: 3 s see all of it, and only it takes a photo and a 2 s movie
+  local secs=8
+  local photo=0
+  local movie_secs=0
+  if [[ $src == image ]]; then
+    secs=3
+    photo=1
+    movie_secs=2
+  fi
+
+  local control=$out/$rt-$case_name.control
+  print -r -- "source=$(srcspec $src)"$'\n'"orientation=$orientation" > $control
+
+  local -a launch_env
+  launch_env=(SIMCTL_CHILD_M5APP_MODE=golden "SIMCTL_CHILD_SIMCAM_CONTROL=$control"
+    SIMCTL_CHILD_GF_W=$width SIMCTL_CHILD_GF_H=$height SIMCTL_CHILD_GF_FPS=$fps SIMCTL_CHILD_GF_FMT=$pixel_format
+    SIMCTL_CHILD_GF_POS=$position SIMCTL_CHILD_GF_ROT=$rotation
+    SIMCTL_CHILD_GF_MIRROR=$mirror SIMCTL_CHILD_GF_SECS=$secs
+    SIMCTL_CHILD_GF_PHOTO=$photo
+    SIMCTL_CHILD_GF_MOVIE=$movie_secs)
+
+  local log=$out/$rt-$case_name.log
+  # not running: nothing to report
+  xcrun simctl terminate $udid $BUNDLE 2>/dev/null
+  env $launch_env xcrun simctl launch --console-pty $udid $BUNDLE > $log 2>&1 &
+  local launch_pid=$!
+  wait_for_line $log DONE 400 $launch_pid   # up to 40 s
+  # whatever already ended: nothing to report
+  kill $launch_pid 2>/dev/null
+  xcrun simctl terminate $udid $BUNDLE 2>/dev/null
+
+  # the frame hashes (GFH <hash>-<WxH> <count>, without the count), the photo's and the movie's, sorted
+  {
+    grep -oE "GFH [^ ]+" $log | cut -c5-
+    grep -oE "GFPHOTO [^ ]+" $log | sed 's/GFPHOTO/photo/'
+    grep -oE "GFMOVIE [0-9]+ [^ ]+" $log | tr -d '\r' | sed 's/^GFMOVIE/movie/'
+  } | LC_ALL=C sort -u > $out/$rt-$case_name.txt
+
+  printf "%-22s %s %s\n" $case_name \
+    "$(grep -oE 'GFSTAT.*|GFMOVIESTAT [^ ]+ [^ ]+' $log | tr -d '\r' | tr '\n' ' ')" \
+    "$(grep -cE '\| FAIL' $log | sed 's/^0$//;s/^[1-9].*/FAIL (see log)/')"
+}
+
+# capture_runtime <out dir> <rt> <loader>: every source and case on the sim $SIMCAM_UDID_<rt>, with <loader> swapped
+# in for the capture if it is set, and the sim's previous build swapped back afterwards.
+capture_runtime() {
+  local out=$1
+  local rt=$2
+  local loader=$3
+  local udid previous current src spec
+  need_udid "$SCRIPT" "$rt" udid short
+  # no current yet: nothing to put back at the end
+  previous=$(cat $SIMCAM_HOME/sims/$udid/current 2>/dev/null)
+  [[ -n $loader ]] && $ROOT/scripts/swap.sh $udid $loader >/dev/null
+  current=$(<$SIMCAM_HOME/sims/$udid/current)
+  current=${current#1 }
+  echo "== $rt: engine ${current:h:t}"
+
+  # already granted: nothing to report
+  xcrun simctl privacy $udid grant camera $BUNDLE 2>/dev/null
+  for src in $SOURCES; do
+    for spec in $CASES; do
+      capture_case $out $rt $udid $src $spec
+    done
+  done
+  # An `if`: a false && list as the function's last statement would make its exit status 1.
+  if [[ -n $loader && -n $previous ]]; then
+    $ROOT/scripts/swap.sh $udid "${previous#1 }" >/dev/null
+  fi
+}
+
 case $CMD in
   capture)
-    LABEL=${1:?label}; LDR=${2:-}; OUT=$SIMCAM_RESULTS/golden-$LABEL; rm -rf $OUT; mkdir -p $OUT
+    LABEL=${1:?label}
+    LOADER=${2:-}
+    OUT=$SIMCAM_RESULTS/golden-$LABEL
+    rm -rf $OUT
+    mkdir -p $OUT
+
     if [[ ! -f $SIMCAM_HOME/golden/slow10.mov ]]; then
-      mkdir -p $SIMCAM_HOME/golden; $ROOT/tools/build.sh mkvideo >/dev/null || exit 1
+      mkdir -p $SIMCAM_HOME/golden
+      $ROOT/tools/build.sh mkvideo >/dev/null || exit 1
       $ROOT/tools/bin/mkvideo $SIMCAM_HOME/golden/slow10.mov 10 30 >/dev/null || exit 1
     fi
+
     for rt in ${=RTS:-263 27}; do
-      need_udid "$0" "$rt" U short
-      PREV=$(cat $SIMCAM_HOME/sims/$U/current 2>/dev/null)
-      [[ -n $LDR ]] && $ROOT/scripts/swap.sh $U $LDR >/dev/null
-      CUR=$(<$SIMCAM_HOME/sims/$U/current); CUR=${CUR#1 }; echo "== $rt: engine ${CUR:h:t}"
-      xcrun simctl privacy $U grant camera $B 2>/dev/null
-      for src in $SOURCES; do for c in $CASES; do
-        set -- ${=c}; NAME=$src-$1; W=$2; H=$3; FPS=$4; FMT=$5; POS=$6; ROT=$7; MIR=$8; OR=$9
-        SECS=8; [[ $src == image ]] && SECS=3
-        CTL=$OUT/$rt-$NAME.control; print -r -- "source=$(srcspec $src)"$'\n'"orientation=$OR" > $CTL
-        typeset -a ENVS; ENVS=(SIMCTL_CHILD_M5APP_MODE=golden "SIMCTL_CHILD_SIMCAM_CONTROL=$CTL" SIMCTL_CHILD_GF_W=$W SIMCTL_CHILD_GF_H=$H
-          SIMCTL_CHILD_GF_FPS=$FPS SIMCTL_CHILD_GF_FMT=$FMT SIMCTL_CHILD_GF_POS=$POS SIMCTL_CHILD_GF_ROT=$ROT SIMCTL_CHILD_GF_MIRROR=$MIR
-          SIMCTL_CHILD_GF_SECS=$SECS SIMCTL_CHILD_GF_PHOTO=$([[ $src == image ]] && echo 1 || echo 0) SIMCTL_CHILD_GF_MOVIE=$([[ $src == image ]] && echo 2 || echo 0))
-        LOG=$OUT/$rt-$NAME.log
-        xcrun simctl terminate $U $B 2>/dev/null
-        env $ENVS xcrun simctl launch --console-pty $U $B > $LOG 2>&1 &
-        LP=$!
-        wait_for_line $LOG DONE 400 $LP   # up to 40 s
-        kill $LP 2>/dev/null; xcrun simctl terminate $U $B 2>/dev/null
-        { grep -oE "GFH [^ ]+" $LOG | cut -c5-; grep -oE "GFPHOTO [^ ]+" $LOG | sed 's/GFPHOTO/photo/'; grep -oE "GFMOVIE [0-9]+ [^ ]+" $LOG | tr -d '\r' | sed 's/^GFMOVIE/movie/'; } | LC_ALL=C sort -u > $OUT/$rt-$NAME.txt
-        printf "%-22s %s %s\n" $NAME "$(grep -oE 'GFSTAT.*|GFMOVIESTAT [^ ]+ [^ ]+' $LOG | tr -d '\r' | tr '\n' ' ')" "$(grep -cE '\| FAIL' $LOG | sed 's/^0$//;s/^[1-9].*/FAIL (see log)/')"
-      done; done
-      # an `if`: a false && list as the loop's last statement made the exit status 1
-      if [[ -n $LDR && -n $PREV ]]; then
-        $ROOT/scripts/swap.sh $U "${PREV#1 }" >/dev/null
-      fi
-    done;;
-  compare)
-    A=$SIMCAM_RESULTS/golden-${1:?labelA}; Bd=$SIMCAM_RESULTS/golden-${2:?labelB}; bad=0
-    printf "%-26s %8s %8s %8s %7s %7s  %s\n" case frames-A frames-B common only-A only-B result
-    for f in $A/*.txt(N); do
-      n=${f:t:r}; g=$Bd/${f:t}
-      [[ -f $g ]] || { printf "%-26s missing in %s\n" $n ${Bd:t}; bad=1; continue; }
-      na=$(grep -vcE '^(photo|movie)' $f); nb=$(grep -vcE '^(photo|movie)' $g)
-      cm=$(LC_ALL=C comm -12 $f $g | grep -vcE '^(photo|movie)'); oa=$(LC_ALL=C comm -23 $f $g | wc -l | tr -d ' ')
-      ob=$(LC_ALL=C comm -13 $f $g | wc -l | tr -d ' ')
-      r=identical; (( oa || ob || na == 0 )) && { r=DIFFERENT; bad=1; }
-      (( na == 0 )) && r="NO FRAMES"
-      printf "%-26s %8s %8s %8s %7s %7s  %s\n" $n $na $nb $cm $oa $ob "$r"
+      capture_runtime $OUT $rt "$LOADER"
     done
-    for g in $Bd/*.txt(N); do [[ -f $A/${g:t} ]] || { printf "%-26s missing in %s\n" ${g:t:r} ${A:t}; bad=1; }; done
-    (( bad )) && echo "golden: differences found" || echo "golden: all cases identical"
-    exit $bad;;
-  *) print_usage $0; exit 2;;
+    ;;
+  compare)
+    DIR_A=$SIMCAM_RESULTS/golden-${1:?labelA}
+    DIR_B=$SIMCAM_RESULTS/golden-${2:?labelB}
+    bad=0
+
+    printf "%-26s %8s %8s %8s %7s %7s  %s\n" case frames-A frames-B common only-A only-B result
+    for file_a in $DIR_A/*.txt(N); do
+      name=${file_a:t:r}
+      file_b=$DIR_B/${file_a:t}
+      if [[ ! -f $file_b ]]; then
+        printf "%-26s missing in %s\n" $name ${DIR_B:t}
+        bad=1
+        continue
+      fi
+
+      # Frame counts leave out the photo and movie lines.
+      frames_a=$(grep -vcE '^(photo|movie)' $file_a)
+      frames_b=$(grep -vcE '^(photo|movie)' $file_b)
+      common=$(LC_ALL=C comm -12 $file_a $file_b | grep -vcE '^(photo|movie)')
+      only_a=$(LC_ALL=C comm -23 $file_a $file_b | wc -l | tr -d ' ')
+      only_b=$(LC_ALL=C comm -13 $file_a $file_b | wc -l | tr -d ' ')
+
+      result=identical
+      if (( only_a || only_b || frames_a == 0 )); then
+        result=DIFFERENT
+        bad=1
+      fi
+      (( frames_a == 0 )) && result="NO FRAMES"
+      printf "%-26s %8s %8s %8s %7s %7s  %s\n" $name $frames_a $frames_b $common $only_a $only_b "$result"
+    done
+
+    for file_b in $DIR_B/*.txt(N); do
+      if [[ ! -f $DIR_A/${file_b:t} ]]; then
+        printf "%-26s missing in %s\n" ${file_b:t:r} ${DIR_A:t}
+        bad=1
+      fi
+    done
+
+    if (( bad )); then
+      echo "golden: differences found"
+    else
+      echo "golden: all cases identical"
+    fi
+    exit $bad
+    ;;
+  *)
+    print_usage $0
+    exit 2
+    ;;
 esac

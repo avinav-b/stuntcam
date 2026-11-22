@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Package simctl wraps `xcrun simctl` for the calls stuntcam needs. Every call can target a private device set (Set), which
-// Xcode and Simulator never list (design §5.3).
+// Package simctl wraps `xcrun simctl` for the calls stuntcam needs. Every call can target a private device set (Set),
+// which Xcode and Simulator never list.
 package simctl
 
 import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -19,10 +20,23 @@ import (
 	"time"
 )
 
+// State is a device's state as `simctl list devices` reports it.
+type State string
+
+// The device states stuntcam acts on.
+const (
+	Booted       State = "Booted"
+	Shutdown     State = "Shutdown"
+	Booting      State = "Booting"
+	ShuttingDown State = "Shutting Down"
+	Creating     State = "Creating"
+)
+
 type Device struct {
-	UDID, Name, State, RuntimeID string
-	Available                    bool
-	LastBooted                   time.Time // zero if simctl does not report it
+	UDID, Name, RuntimeID string
+	State                 State
+	Available             bool
+	LastBooted            time.Time // zero if simctl does not report it
 }
 
 type Runtime struct {
@@ -43,15 +57,21 @@ type DeviceType struct {
 // Ctl runs simctl against the default device set, or Set if non-empty.
 type Ctl struct {
 	Set     string
-	Timeout time.Duration // per call; 0 = 120 s
+	Timeout time.Duration // per call; 0 = DefaultTimeout
 }
 
-func (c Ctl) args(a ...string) []string {
+// DefaultTimeout bounds each call of a Ctl whose Timeout is 0.
+const DefaultTimeout = 120 * time.Second
+
+// ErrTimedOut is wrapped by the error of a call that ran past its Timeout.
+var ErrTimedOut = errors.New("timed out")
+
+func (c Ctl) args(argv ...string) []string {
 	out := []string{"simctl"}
 	if c.Set != "" {
 		out = append(out, "--set", c.Set)
 	}
-	return append(out, a...)
+	return append(out, argv...)
 }
 
 // calls in flight, so a signal handler can stop them (Interrupt) before it cleans up
@@ -62,29 +82,33 @@ var live struct {
 	stopping bool
 }
 
-// Interrupt sends SIGINT to every simctl call in flight (what a terminal Ctrl-C does to the whole process group: an
-// interrupted `simctl boot` stops booting) and waits up to d for them to exit. After it, only `shutdown` and `list` calls
-// run; any other call fails at once, so nothing new (a boot, a launch) starts behind a cleanup. A SIGTERM sent to stuntcam alone
-// reaches no child: without this, a `simctl boot` that had just started went on to boot the device after the handler had
-// already shut it down.
-func Interrupt(d time.Duration) {
+// Interrupt sends SIGINT to every simctl call in flight, and waits up to wait for them to exit. That is what a
+// terminal's Ctrl-C does to the whole process group, and an interrupted `simctl boot` stops booting.
+// After it, only `shutdown` and `list` calls run. Any other call fails at once, so nothing new, such as a boot or a
+// launch, starts behind a cleanup.
+// It is needed because a SIGTERM sent to stuntcam alone reaches no child. Without it, a `simctl boot` that had just
+// started went on to boot the device after the handler had already shut it down.
+func Interrupt(wait time.Duration) {
 	live.Lock()
 	live.stopping = true
 	var done []chan struct{}
-	for cmd, ch := range live.calls {
+	for cmd, exited := range live.calls {
 		if cmd.Process != nil {
-			_ = cmd.Process.Signal(syscall.SIGINT)
+			_ = cmd.Process.Signal(syscall.SIGINT) // it may have exited already
 		}
-		done = append(done, ch)
+
+		done = append(done, exited)
 	}
+
 	for cmd := range live.consoles { // not waited for: the caller's cleanup ends them, or the device shutdown does
-		_ = cmd.Process.Signal(syscall.SIGINT)
+		_ = cmd.Process.Signal(syscall.SIGINT) // it may have exited already
 	}
+
 	live.Unlock()
-	deadline := time.After(d)
-	for _, ch := range done {
+	deadline := time.After(wait)
+	for _, exited := range done {
 		select {
-		case <-ch:
+		case <-exited:
 		case <-deadline:
 			return
 		}
@@ -99,44 +123,52 @@ func Busy() bool {
 }
 
 // Run returns stdout; stderr is folded into the error.
-func (c Ctl) Run(env []string, a ...string) (string, error) {
-	to := c.Timeout
-	if to == 0 {
-		to = 120 * time.Second
+func (c Ctl) Run(env []string, argv ...string) (string, error) {
+	timeout := c.Timeout
+	if timeout == 0 {
+		timeout = DefaultTimeout
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), to)
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "xcrun", c.args(a...)...)
+
+	cmd := exec.CommandContext(ctx, "xcrun", c.args(argv...)...)
 	cmd.Env = append(os.Environ(), env...)
-	var out, errb bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &out, &errb
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	live.Lock()
-	if live.stopping && (len(a) == 0 || (a[0] != "shutdown" && a[0] != "list")) {
+	if live.stopping && (len(argv) == 0 || (argv[0] != "shutdown" && argv[0] != "list")) {
 		live.Unlock()
-		return "", fmt.Errorf("simctl %s: interrupted", strings.Join(a, " "))
+		return "", fmt.Errorf("simctl %s: interrupted", strings.Join(argv, " "))
 	}
+
 	if err := cmd.Start(); err != nil {
 		live.Unlock()
-		return "", fmt.Errorf("simctl %s: %v", strings.Join(a, " "), err)
+		return "", fmt.Errorf("simctl %s: %w", strings.Join(argv, " "), err)
 	}
-	ch := make(chan struct{})
+
+	exited := make(chan struct{})
 	if live.calls == nil {
 		live.calls = map[*exec.Cmd]chan struct{}{}
 	}
-	live.calls[cmd] = ch
+
+	live.calls[cmd] = exited
 	live.Unlock()
 	err := cmd.Wait()
 	live.Lock()
 	delete(live.calls, cmd)
-	close(ch)
+	close(exited)
 	live.Unlock()
 	if ctx.Err() == context.DeadlineExceeded {
-		return out.String(), fmt.Errorf("simctl %s: timed out after %s", strings.Join(a, " "), to)
+		return stdout.String(), fmt.Errorf("simctl %s: %w after %s", strings.Join(argv, " "), ErrTimedOut, timeout)
 	}
+
 	if err != nil {
-		return out.String(), fmt.Errorf("simctl %s: %v: %s", strings.Join(a, " "), err, strings.TrimSpace(errb.String()))
+		return stdout.String(), fmt.Errorf("simctl %s: %w: %s", strings.Join(argv, " "), err,
+			strings.TrimSpace(stderr.String()))
 	}
-	return out.String(), nil
+
+	return stdout.String(), nil
 }
 
 func (c Ctl) Devices() ([]Device, error) {
@@ -147,30 +179,35 @@ func (c Ctl) Devices() ([]Device, error) {
 	return ParseDevices([]byte(out))
 }
 
-func ParseDevices(b []byte) ([]Device, error) {
-	var v struct {
+func ParseDevices(data []byte) ([]Device, error) {
+	var parsed struct {
 		Devices map[string][]struct {
 			UDID      string `json:"udid"`
 			Name      string `json:"name"`
-			State     string `json:"state"`
+			State     State  `json:"state"`
 			Available bool   `json:"isAvailable"`
 			LastBoot  string `json:"lastBootedAt"`
 			LastUsed  string `json:"lastUsedAt"` // Xcode 27 reports only this; it is set when the device boots
 		} `json:"devices"`
 	}
-	if err := json.Unmarshal(b, &v); err != nil {
+
+	if err := json.Unmarshal(data, &parsed); err != nil {
 		return nil, err
 	}
+
 	var out []Device
-	for rt, ds := range v.Devices {
-		for _, d := range ds {
-			lb, _ := time.Parse(time.RFC3339, d.LastBoot)
-			if lb.IsZero() {
-				lb, _ = time.Parse(time.RFC3339, d.LastUsed)
+	for runtimeID, devices := range parsed.Devices {
+		for _, device := range devices {
+			lastBooted, _ := time.Parse(time.RFC3339, device.LastBoot) // missing or unparsable: zero, unknown
+			if lastBooted.IsZero() {
+				lastBooted, _ = time.Parse(time.RFC3339, device.LastUsed)
 			}
-			out = append(out, Device{UDID: d.UDID, Name: d.Name, State: d.State, RuntimeID: rt, Available: d.Available, LastBooted: lb})
+
+			out = append(out, Device{UDID: device.UDID, Name: device.Name, State: device.State, RuntimeID: runtimeID,
+				Available: device.Available, LastBooted: lastBooted})
 		}
 	}
+
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out, nil
 }
@@ -183,14 +220,14 @@ func (c Ctl) Runtimes() ([]Runtime, error) {
 	return ParseRuntimes([]byte(out))
 }
 
-func ParseRuntimes(b []byte) ([]Runtime, error) {
-	var v struct {
+func ParseRuntimes(data []byte) ([]Runtime, error) {
+	var parsed struct {
 		Runtimes []Runtime `json:"runtimes"`
 	}
-	if err := json.Unmarshal(b, &v); err != nil {
+	if err := json.Unmarshal(data, &parsed); err != nil {
 		return nil, err
 	}
-	return v.Runtimes, nil
+	return parsed.Runtimes, nil
 }
 
 func (c Ctl) DeviceTypes() ([]DeviceType, error) {
@@ -198,49 +235,60 @@ func (c Ctl) DeviceTypes() ([]DeviceType, error) {
 	if err != nil {
 		return nil, err
 	}
-	var v struct {
+
+	var parsed struct {
 		DeviceTypes []DeviceType `json:"devicetypes"`
 	}
-	err = json.Unmarshal([]byte(out), &v) // not in the return statement: its operands are evaluated before the call
-	return v.DeviceTypes, err
+
+	// not in the return statement: its operands are evaluated before the call
+	err = json.Unmarshal([]byte(out), &parsed)
+	return parsed.DeviceTypes, err
 }
 
 // NewestIOS picks the newest available iOS runtime, or the one matching want (a version like "26.3", or an identifier).
-func NewestIOS(rs []Runtime, want string) (Runtime, bool) {
-	var c []Runtime
-	for _, r := range rs {
-		if !r.Available || r.Platform != "iOS" {
+func NewestIOS(runtimes []Runtime, want string) (Runtime, bool) {
+	var matches []Runtime
+	for _, runtime := range runtimes {
+		if !runtime.Available || runtime.Platform != "iOS" {
 			continue
 		}
-		if want == "" || r.Identifier == want || r.Version == want || strings.HasPrefix(r.Version, want+".") {
-			c = append(c, r)
+
+		if want == "" || runtime.Identifier == want || runtime.Version == want ||
+			strings.HasPrefix(runtime.Version, want+".") {
+			matches = append(matches, runtime)
 		}
 	}
-	if len(c) == 0 {
+
+	if len(matches) == 0 {
 		return Runtime{}, false
 	}
-	sort.Slice(c, func(i, j int) bool { return versionLess(c[i].Version, c[j].Version) })
-	return c[len(c)-1], true
+
+	sort.Slice(matches, func(i, j int) bool { return versionLess(matches[i].Version, matches[j].Version) })
+	return matches[len(matches)-1], true
 }
 
-func versionLess(a, b string) bool {
-	pa, pb := strings.Split(a, "."), strings.Split(b, ".")
-	for i := 0; i < len(pa) || i < len(pb); i++ {
-		var x, y int
-		if i < len(pa) {
-			x, _ = strconv.Atoi(pa[i])
+func versionLess(left, right string) bool {
+	leftParts, rightParts := strings.Split(left, "."), strings.Split(right, ".")
+	for i := 0; i < len(leftParts) || i < len(rightParts); i++ {
+		var leftNum, rightNum int
+		if i < len(leftParts) {
+			leftNum, _ = strconv.Atoi(leftParts[i]) // a part that is not a number counts as 0
 		}
-		if i < len(pb) {
-			y, _ = strconv.Atoi(pb[i])
+
+		if i < len(rightParts) {
+			rightNum, _ = strconv.Atoi(rightParts[i]) // a part that is not a number counts as 0
 		}
-		if x != y {
-			return x < y
+
+		if leftNum != rightNum {
+			return leftNum < rightNum
 		}
 	}
+
 	return false
 }
 
-// Boot boots with a boot environment: each "K=V" is passed as SIMCTL_CHILD_K=V, which every process of that boot inherits.
+// Boot boots with a boot environment: each "K=V" is passed as SIMCTL_CHILD_K=V, which every process of that boot
+// inherits.
 func (c Ctl) Boot(udid string, bootEnv []string) error {
 	env := make([]string, 0, len(bootEnv))
 	for _, kv := range bootEnv {
@@ -250,7 +298,11 @@ func (c Ctl) Boot(udid string, bootEnv []string) error {
 	return err
 }
 
-func (c Ctl) Shutdown(udid string) error { _, err := c.Run(nil, "shutdown", udid); return err }
+// Shutdown shuts the device down.
+func (c Ctl) Shutdown(udid string) error {
+	_, err := c.Run(nil, "shutdown", udid)
+	return err
+}
 
 // WaitBooted runs `bootstatus -b` with a bound (macOS has no timeout(1)).
 func (c Ctl) WaitBooted(udid string, bound time.Duration) error {
@@ -259,19 +311,29 @@ func (c Ctl) WaitBooted(udid string, bound time.Duration) error {
 	return err
 }
 
-func (c Ctl) Getenv(udid, k string) (string, error) {
-	out, err := c.Run(nil, "spawn", udid, "launchctl", "getenv", k)
+// Getenv reads a variable of the booted device's launchd environment.
+func (c Ctl) Getenv(udid, key string) (string, error) {
+	out, err := c.Run(nil, "spawn", udid, "launchctl", "getenv", key)
 	return strings.TrimRight(out, "\n"), err
 }
-func (c Ctl) Setenv(udid, k, v string) error {
-	_, err := c.Run(nil, "spawn", udid, "launchctl", "setenv", k, v)
+
+// Setenv sets a variable in the booted device's launchd environment.
+func (c Ctl) Setenv(udid, key, value string) error {
+	_, err := c.Run(nil, "spawn", udid, "launchctl", "setenv", key, value)
 	return err
 }
-func (c Ctl) Unsetenv(udid, k string) error {
-	_, err := c.Run(nil, "spawn", udid, "launchctl", "unsetenv", k)
+
+// Unsetenv removes a variable from the booted device's launchd environment.
+func (c Ctl) Unsetenv(udid, key string) error {
+	_, err := c.Run(nil, "spawn", udid, "launchctl", "unsetenv", key)
 	return err
 }
-func (c Ctl) Install(udid, app string) error { _, err := c.Run(nil, "install", udid, app); return err }
+
+// Install installs an app bundle on the booted device.
+func (c Ctl) Install(udid, app string) error {
+	_, err := c.Run(nil, "install", udid, app)
+	return err
+}
 
 // Grant grants a privacy service (camera, microphone, …) to a bundle. It terminates the app if it is running.
 func (c Ctl) Grant(udid, service, bundle string) error {
@@ -286,12 +348,12 @@ func (c Ctl) Create(name, deviceType, runtime string) (string, error) {
 }
 
 // Spawn runs a command inside the booted sim and returns its stdout.
-func (c Ctl) Spawn(udid string, a ...string) (string, error) {
-	return c.Run(nil, append([]string{"spawn", udid}, a...)...)
+func (c Ctl) Spawn(udid string, argv ...string) (string, error) {
+	return c.Run(nil, append([]string{"spawn", udid}, argv...)...)
 }
 
-// AppContainer returns an installed app's container path (kind: app, data, groups or an app group id). simctl answers only
-// for a booted device.
+// AppContainer returns an installed app's container path (kind: app, data, groups or an app group id). simctl answers
+// only for a booted device.
 func (c Ctl) AppContainer(udid, bundle, kind string) (string, error) {
 	out, err := c.Run(nil, "get_app_container", udid, bundle, kind)
 	return strings.TrimSpace(out), err
@@ -312,36 +374,51 @@ func NotBooted(err error) bool {
 	return err != nil && strings.Contains(err.Error(), "current state: Shutdown")
 }
 
+// TimedOut says whether a call timed out: it ran past its Timeout, or simctl itself reported a timeout. The substring
+// test alone would catch both today (ErrTimedOut's text is "timed out"); errors.Is keeps the first case if that text
+// ever changes.
+func TimedOut(err error) bool {
+	return errors.Is(err, ErrTimedOut) || (err != nil && strings.Contains(err.Error(), "timed out"))
+}
+
+// Launch starts an installed app on the booted device.
 func (c Ctl) Launch(udid, bundle string) error {
 	_, err := c.Run(nil, "launch", udid, bundle)
 	return err
 }
+
+// Terminate stops a running app on the booted device.
 func (c Ctl) Terminate(udid, bundle string) error {
 	_, err := c.Run(nil, "terminate", udid, bundle)
 	return err
 }
 
-// LaunchConsole starts an app with its stdout/stderr attached (simctl launch --console-pty); the caller reads Stdout and must
-// Wait or Kill the returned command. The command is `xcrun simctl …` itself, so signalling it reaches simctl.
-// Like Run's calls it is refused after Interrupt, and Interrupt signals it; call Forget once it has exited.
+// LaunchConsole starts an app with its stdout and stderr attached (simctl launch --console-pty). The caller reads
+// Stdout and must Wait or Kill the returned command.
+// The command is `xcrun simctl …` itself, so a signal sent to it reaches simctl.
+// Like Run's calls, it is refused after Interrupt, and Interrupt signals it. Call Forget once it has exited.
 func (c Ctl) LaunchConsole(udid, bundle string, env []string) (*exec.Cmd, *bytes.Buffer, error) {
 	cmd := exec.Command("xcrun", c.args("launch", "--console-pty", udid, bundle)...)
 	cmd.Env = append(os.Environ(), env...)
-	var buf bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &lockedWriter{b: &buf}, &lockedWriter{b: &buf}
+	var output bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &lockedWriter{b: &output}, &lockedWriter{b: &output}
 	live.Lock()
 	defer live.Unlock()
+
 	if live.stopping {
-		return cmd, &buf, fmt.Errorf("simctl launch: interrupted")
+		return cmd, &output, fmt.Errorf("simctl launch: interrupted")
 	}
+
 	if err := cmd.Start(); err != nil {
-		return cmd, &buf, err
+		return cmd, &output, err
 	}
+
 	if live.consoles == nil {
 		live.consoles = map[*exec.Cmd]bool{}
 	}
+
 	live.consoles[cmd] = true
-	return cmd, &buf, nil
+	return cmd, &output, nil
 }
 
 // Forget stops tracking a LaunchConsole command.
@@ -363,4 +440,8 @@ func (w *lockedWriter) Write(p []byte) (int, error) {
 }
 
 // Snapshot returns a copy of a buffer filled by LaunchConsole.
-func Snapshot(b *bytes.Buffer) string { bufMu.Lock(); defer bufMu.Unlock(); return b.String() }
+func Snapshot(b *bytes.Buffer) string {
+	bufMu.Lock()
+	defer bufMu.Unlock()
+	return b.String()
+}

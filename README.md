@@ -22,6 +22,7 @@ Needs an Apple silicon Mac and Xcode 27. Works with AVFoundation, VisionCamera 5
 | Flutter | `stuntcam up`, then `flutter run` |
 | UI tests | `stuntcam exec -- xcodebuild test …` |
 | Your own picture | `stuntcam source image:/path/photo.png` (or `video:`) |
+| A QR code | `stuntcam source qr:'https://example.com/pay?id=42'` |
 | Your Mac's camera | `stuntcam source webcam` |
 | No camera? | `stuntcam doctor` |
 

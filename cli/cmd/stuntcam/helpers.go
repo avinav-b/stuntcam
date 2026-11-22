@@ -31,16 +31,16 @@ func prefix(p, s string) string {
 	return p + s
 }
 
-func ago(d time.Duration) string {
+func ago(age time.Duration) string {
 	switch {
-	case d < time.Minute:
-		return fmt.Sprintf("%ds", int(d.Seconds()))
-	case d < time.Hour:
-		return fmt.Sprintf("%dm", int(d.Minutes()))
-	case d < 48*time.Hour:
-		return fmt.Sprintf("%dh%02dm", int(d.Hours()), int(d.Minutes())%60)
+	case age < time.Minute:
+		return fmt.Sprintf("%ds", int(age.Seconds()))
+	case age < time.Hour:
+		return fmt.Sprintf("%dm", int(age.Minutes()))
+	case age < 48*time.Hour:
+		return fmt.Sprintf("%dh%02dm", int(age.Hours()), int(age.Minutes())%60)
 	}
-	return fmt.Sprintf("%dd", int(d.Hours()/24))
+	return fmt.Sprintf("%dd", int(age.Hours()/24))
 }
 
 // plural is one if n is 1, else many.

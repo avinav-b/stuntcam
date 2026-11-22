@@ -18,3 +18,4 @@ Start Metro with `scripts/metro.sh start`, then `scripts/run.sh <mode> <rt> boot
 | `vcorient`, `expoorient` | orientation of preview, photo and movie |
 | `vccycle`, `expocycle` | opens and closes the camera 20 times |
 | `vclidar` | the LiDAR camera (launch argument `-CAMTEST vclidar`) |
+| `vcqr`, `expoqr` | the QR payloads VisionCamera's object output or expo-camera's scanner reports, for `scripts/qr-test.sh` (launch arguments `-QRPOS back\|front`, `-QRSECS N`) |

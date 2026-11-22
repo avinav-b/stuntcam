@@ -1,20 +1,65 @@
 // SPDX-License-Identifier: Apache-2.0
-// audiosrc: (sim CLI via simctl spawn) print +[AVCaptureFigAudioDevice _newFigCaptureSources] and each source's AttributesDictionary.
+// audiosrc — a simulator command-line tool (run it with simctl spawn). It prints the audio capture sources that
+// +[AVCaptureFigAudioDevice _newFigCaptureSources] returns, with each source's AttributesDictionary, Formats and
+// UniqueID properties, and then the default audio device. Exits 1 with a message on stderr if it can't read a
+// source's properties (no CMBaseObjectGetVTable, or a source without copyProperty).
 #import <Foundation/Foundation.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <dlfcn.h>
-typedef struct { uint32_t version; size_t sz; void *eq, *inv, *fin, *desc; OSStatus (*copyProperty)(const void *, CFStringRef, CFAllocatorRef, void *); } BC;
-typedef struct { const void *r; const BC *base; const void *derived; } VT;
-int main(int argc, char **argv) { @autoreleasepool {
-    dlopen("/System/Library/PrivateFrameworks/AVFCapture.framework/AVFCapture", RTLD_NOW);
-    const VT *(*getVT)(const void *) = dlsym(RTLD_DEFAULT, "CMBaseObjectGetVTable");
-    id srcs = ((id (*)(id, SEL))objc_msgSend)(objc_getClass("AVCaptureFigAudioDevice"), sel_registerName("_newFigCaptureSources"));
-    printf("audio sources: %lu\n", (unsigned long)[srcs count]);
-    for (id s in srcs) {
-        const VT *vt = getVT((__bridge void *)s);
-        for (NSString *k in @[@"AttributesDictionary", @"Formats", @"UniqueID"]) { CFTypeRef v = NULL; OSStatus e = vt->base->copyProperty((__bridge void *)s, (__bridge CFStringRef)k, NULL, &v); printf("%s -> %d %s\n", k.UTF8String, (int)e, v ? [[(__bridge id)v description] UTF8String] : "(null)"); }
-        Dl_info di; dladdr(vt->base->copyProperty, &di); printf("copyProperty impl %s\n", di.dli_sname);
+
+// The leading part of a CoreMedia base object's class (CMBaseClass): a version, the derived storage size, then function
+// pointers. copyProperty is the one this tool calls; the fields before it only keep its offset.
+typedef struct {
+    uint32_t version;
+    size_t derivedStorageSize;
+    void *isEqual;
+    void *invalidate;
+    void *finalize;
+    void *copyDebugDescription;
+    OSStatus (*copyProperty)(const void *object, CFStringRef key, CFAllocatorRef allocator, void *valueOut);
+} BaseClass;
+
+// A CoreMedia base object's vtable (CMBaseVTable): a reserved pointer, the base class, the derived class.
+typedef struct {
+    const void *reserved;
+    const BaseClass *base;
+    const void *derived;
+} BaseVTable;
+
+static const char *describe(CFTypeRef value) {
+    return value ? [[(__bridge id)value description] UTF8String] : "(null)";
+}
+
+int main(int argc, char **argv) {
+    @autoreleasepool {
+        dlopen("/System/Library/PrivateFrameworks/AVFCapture.framework/AVFCapture", RTLD_NOW);
+        const BaseVTable *(*getVTable)(const void *) = dlsym(RTLD_DEFAULT, "CMBaseObjectGetVTable");
+        id sources = ((id(*)(id, SEL))objc_msgSend)(objc_getClass("AVCaptureFigAudioDevice"),
+                                                     sel_registerName("_newFigCaptureSources"));
+        printf("audio sources: %lu\n", (unsigned long)[sources count]);
+        for (id source in sources) {
+            if (!getVTable) {
+                fprintf(stderr, "audiosrc: CMBaseObjectGetVTable not found\n");
+                return 1;
+            }
+            const BaseVTable *vtable = getVTable((__bridge void *)source);
+            if (!vtable || !vtable->base || !vtable->base->copyProperty) {
+                fprintf(stderr, "audiosrc: a capture source has no CMBaseClass copyProperty\n");
+                return 1;
+            }
+            for (NSString *key in @[ @"AttributesDictionary", @"Formats", @"UniqueID" ]) {
+                CFTypeRef value = NULL;
+                OSStatus status = vtable->base->copyProperty((__bridge void *)source, (__bridge CFStringRef)key, NULL,
+                                                             &value);
+                printf("%s -> %d %s\n", key.UTF8String, (int)status, describe(value));
+            }
+            Dl_info info;
+            dladdr(vtable->base->copyProperty, &info);
+            printf("copyProperty impl %s\n", info.dli_sname);
+        }
+        id device = ((id(*)(id, SEL, id))objc_msgSend)(objc_getClass("AVCaptureDevice"),
+                                                       sel_registerName("defaultDeviceWithMediaType:"), @"soun");
+        printf("default audio device: %s\n", [[device description] UTF8String]);
     }
-    printf("default audio device: %s\n", [[((id (*)(id, SEL, id))objc_msgSend)(objc_getClass("AVCaptureDevice"), sel_registerName("defaultDeviceWithMediaType:"), @"soun") description] UTF8String]);
-}}
+}

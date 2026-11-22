@@ -299,9 +299,11 @@ func TestPlanRunnerHook(t *testing.T) {
 		"no rule":   with(base("-scheme", "Plain"), func(i *hookInputs) { i.Rules, i.RulesOK, i.XcodeBuild = norule, false, "27B1" }),
 		"wrapper":   with(base("-scheme", "Plain"), func(i *hookInputs) { i.WrapEnv = map[string]string{"TEST_RUNNER_DYLD_INSERT_LIBRARIES": "/x"} }),
 	} {
-		if p := planRunnerHook(in); p.Export || len(p.Notes) != 1 || !strings.Contains(p.Notes[0], "no runner hook") || !strings.Contains(p.Notes[0], "iPhone A") {
-			t.Errorf("%s: %+v", name, p)
-		}
+		t.Run(name, func(t *testing.T) {
+			if p := planRunnerHook(in); p.Export || len(p.Notes) != 1 || !strings.Contains(p.Notes[0], "no runner hook") || !strings.Contains(p.Notes[0], "iPhone A") {
+				t.Errorf("%s: %+v", name, p)
+			}
+		})
 	}
 	// forced without a verified rule: hooked, with the hook's built-in list
 	in = with(base("-scheme", "Plain"), func(i *hookInputs) {
@@ -339,7 +341,7 @@ func TestRunnerSettingsSkipSimCameraSettings(t *testing.T) {
 	for k := range arm.LegacyNames {
 		env = append(env, k+"=/caller")
 	}
-	pl := &hookPlanner{in: hookInputs{Environ: env}}
+	pl := &hookPlanner{inputs: hookInputs{Environ: env}}
 	got := strings.Join(pl.runnerSettings(false), " ")
 	if want := "TEST_RUNNER_SIMCAM_OFF_STOP_WAIT=1 TEST_RUNNER_SIMCAM_SOURCE=scene"; got != want {
 		t.Fatalf("forwarded %q, want %q", got, want)

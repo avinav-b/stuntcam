@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Package xcode identifies the Xcode that `stuntcam up` arms for (design §4.1 "Which Xcode's libs", §4.5 step 1, B-MF5).
+// Package xcode identifies the Xcode that `stuntcam up` arms for, whose restore rules the loader then applies.
 //
-// Under ⌘R nothing in the launched app names the Xcode that launched it (only DerivedData paths and IDE_*
-// variables), so the loader can't learn it in-process. The CLI records the build at arm time (`xcodebuild -version`, which
-// follows DEVELOPER_DIR, else `xcode-select -p`) in sims/<udid>/config.json, and the loader reads the restore rules for that
+// Under ⌘R nothing in the launched app names the Xcode that launched it (only DerivedData paths and IDE_* variables),
+// so the loader can't learn it in-process. The CLI records the build at arm time (`xcodebuild -version`, which follows
+// DEVELOPER_DIR, else `xcode-select -p`) in sims/<udid>/config.json, and the loader reads the restore rules for that
 // build. An Xcode switched after arming is noticed by `doctor`, not by the app.
 package xcode
 
@@ -32,18 +32,21 @@ type Info struct {
 
 // ParseVersion reads `xcodebuild -version` output ("Xcode 27.0\nBuild version 27A266a").
 func ParseVersion(out string) (version, build string, err error) {
-	for _, l := range strings.Split(out, "\n") {
-		l = strings.TrimSpace(l)
-		if v, ok := strings.CutPrefix(l, "Xcode "); ok && version == "" {
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		if v, ok := strings.CutPrefix(line, "Xcode "); ok && version == "" {
 			version = strings.TrimSpace(v)
 		}
-		if b, ok := strings.CutPrefix(l, "Build version "); ok {
+
+		if b, ok := strings.CutPrefix(line, "Build version "); ok {
 			build = strings.TrimSpace(b)
 		}
 	}
+
 	if version == "" || build == "" {
 		return version, build, errors.New("not xcodebuild -version output: " + strings.TrimSpace(out))
 	}
+
 	return version, build, nil
 }
 
@@ -51,33 +54,37 @@ func ParseVersion(out string) (version, build string, err error) {
 // broken install).
 var Timeout = 20 * time.Second
 
+// pipeWait bounds how long a killed tool's output pipes may stay open: the kill reaches only the direct child, so a
+// grandchild can still hold stdout.
+const pipeWait = 2 * time.Second
+
 // run is replaced in tests.
 var run = func(env []string, name string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
 	defer cancel()
-	c := exec.CommandContext(ctx, name, args...)
-	c.WaitDelay = 2 * time.Second // the kill reaches only the direct child: don't wait for a grandchild holding stdout
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.WaitDelay = pipeWait
 	if env != nil {
-		c.Env = env
+		cmd.Env = env
 	}
-	b, err := c.Output()
+	out, err := cmd.Output()
 	if ctx.Err() == context.DeadlineExceeded {
 		err = fmt.Errorf("%s timed out after %s", name, Timeout)
 	}
-	return string(b), err
+	return string(out), err
 }
 
 // NormalizeDeveloperDir turns a DEVELOPER_DIR naming the Xcode.app itself (which xcrun accepts) into its
 // Contents/Developer, so the same Xcode always compares equal. Other paths are only cleaned.
-func NormalizeDeveloperDir(d string) string {
-	if d == "" {
+func NormalizeDeveloperDir(dir string) string {
+	if dir == "" {
 		return ""
 	}
-	d = filepath.Clean(d)
-	if strings.HasSuffix(d, ".app") {
-		d = filepath.Join(d, "Contents", "Developer")
+	dir = filepath.Clean(dir)
+	if strings.HasSuffix(dir, ".app") {
+		dir = filepath.Join(dir, "Contents", "Developer")
 	}
-	return d
+	return dir
 }
 
 // Active is the Xcode that xcodebuild/xcrun use now: DEVELOPER_DIR when set, else `xcode-select -p`.
@@ -87,13 +94,16 @@ func Active() (Info, error) {
 	if err != nil {
 		return i, errors.New("xcodebuild -version failed: " + strings.TrimSpace(out) + errText(err))
 	}
+
 	if i.Version, i.Build, err = ParseVersion(out); err != nil {
 		return i, err
 	}
+
 	i.DeveloperDir = os.Getenv("DEVELOPER_DIR")
 	if i.DeveloperDir == "" {
-		i.DeveloperDir, _ = Selected()
+		i.DeveloperDir, _ = Selected() // "" if xcode-select fails: NormalizeDeveloperDir handles it
 	}
+
 	i.DeveloperDir = NormalizeDeveloperDir(i.DeveloperDir)
 	return i, nil
 }
@@ -128,58 +138,66 @@ func App(developerDir string) string {
 
 // Same reports whether two developer directories are the same Xcode (symlinks resolved).
 func Same(a, b string) bool {
-	ra, err1 := filepath.EvalSymlinks(a)
-	rb, err2 := filepath.EvalSymlinks(b)
+	realA, err1 := filepath.EvalSymlinks(a)
+	realB, err2 := filepath.EvalSymlinks(b)
 	if err1 != nil || err2 != nil {
 		return filepath.Clean(a) == filepath.Clean(b)
 	}
-	return ra == rb
+	return realA == realB
 }
 
 // Installed lists the Xcodes on the Mac: Spotlight's com.apple.dt.Xcode bundles plus /Applications/Xcode*.app and
 // ~/Applications/Xcode*.app (Spotlight can be off), each with its version.plist's version and build.
 func Installed() []Info {
+	// Spotlight may be off: the globs below still find Xcodes
 	out, _ := run(nil, "mdfind", "kMDItemCFBundleIdentifier == 'com.apple.dt.Xcode'")
 	paths := ParseMdfind(out)
 	globs := []string{"/Applications/Xcode*.app"}
-	if h, err := os.UserHomeDir(); err == nil {
-		globs = append(globs, filepath.Join(h, "Applications", "Xcode*.app"))
+	if homeDir, err := os.UserHomeDir(); err == nil {
+		globs = append(globs, filepath.Join(homeDir, "Applications", "Xcode*.app"))
 	}
-	for _, g := range globs {
-		m, _ := filepath.Glob(g)
-		paths = append(paths, m...)
+
+	for _, glob := range globs {
+		matches, _ := filepath.Glob(glob)
+		paths = append(paths, matches...)
 	}
+
 	var list []Info
 	seen := map[string]bool{}
-	for _, p := range paths {
-		r, err := filepath.EvalSymlinks(p)
-		if err != nil || seen[r] {
+	for _, path := range paths {
+		resolved, err := filepath.EvalSymlinks(path)
+		if err != nil || seen[resolved] {
 			continue
 		}
-		seen[r] = true
-		i := Info{DeveloperDir: filepath.Join(p, "Contents", "Developer")}
-		vp := filepath.Join(p, "Contents", "version.plist")
-		i.Version, _ = plistString(vp, "CFBundleShortVersionString")
-		i.Build, _ = plistString(vp, "ProductBuildVersion")
-		list = append(list, i)
+
+		seen[resolved] = true
+		info := Info{DeveloperDir: filepath.Join(path, "Contents", "Developer")}
+		versionPlist := filepath.Join(path, "Contents", "version.plist")
+		// unreadable: version and build stay ""
+		info.Version, _ = plistString(versionPlist, "CFBundleShortVersionString")
+		info.Build, _ = plistString(versionPlist, "ProductBuildVersion")
+		list = append(list, info)
 	}
+
 	sort.Slice(list, func(a, b int) bool { return list[a].DeveloperDir < list[b].DeveloperDir })
 	return list
 }
 
 // ParseMdfind keeps the .app paths of mdfind output (one per line), dropping copies inside other bundles and Trash.
 func ParseMdfind(out string) []string {
-	var ps []string
-	sc := bufio.NewScanner(strings.NewReader(out))
-	for sc.Scan() {
-		p := strings.TrimSpace(sc.Text())
-		insideApp := strings.Contains(strings.TrimSuffix(p, ".app"), ".app/") // an app inside another app's bundle
-		if !strings.HasSuffix(p, ".app") || strings.Contains(p, "/.Trash/") || insideApp {
+	var paths []string
+	scanner := bufio.NewScanner(strings.NewReader(out))
+	for scanner.Scan() {
+		path := strings.TrimSpace(scanner.Text())
+		insideApp := strings.Contains(strings.TrimSuffix(path, ".app"), ".app/") // an app inside another app's bundle
+		if !strings.HasSuffix(path, ".app") || strings.Contains(path, "/.Trash/") || insideApp {
 			continue
 		}
-		ps = append(ps, p)
+
+		paths = append(paths, path)
 	}
-	return ps
+
+	return paths
 }
 
 func plistString(path, key string) (string, error) {
@@ -187,29 +205,34 @@ func plistString(path, key string) (string, error) {
 	return strings.TrimSpace(out), err
 }
 
-// CompareBuilds orders Apple build numbers: <major><train letter><number><suffix> (27A266a < 27A9275 < 27B52). It matches
-// the loader's buildcmp.
+// CompareBuilds orders Apple build numbers: <major><train letter><number><suffix> (27A266a < 27A9275 < 27B52). It
+// matches the loader's build_compare.
 func CompareBuilds(a, b string) int {
-	ma, ra := leadInt(a)
-	mb, rb := leadInt(b)
-	if ma != mb {
-		return cmp(ma, mb)
+	majorA, restA := leadInt(a)
+	majorB, restB := leadInt(b)
+	if majorA != majorB {
+		return cmp(majorA, majorB)
 	}
-	if ra != "" && rb != "" && ra[0] != rb[0] {
-		return cmp(int(ra[0]), int(rb[0]))
+
+	if restA != "" && restB != "" && restA[0] != restB[0] {
+		return cmp(int(restA[0]), int(restB[0]))
 	}
-	if (ra == "") != (rb == "") {
-		return cmp(len(ra), len(rb))
+
+	if (restA == "") != (restB == "") {
+		return cmp(len(restA), len(restB))
 	}
-	if ra != "" {
-		ra, rb = ra[1:], rb[1:]
+
+	if restA != "" {
+		restA, restB = restA[1:], restB[1:]
 	}
-	na, sa := leadInt(ra)
-	nb, sb := leadInt(rb)
-	if na != nb {
-		return cmp(na, nb)
+
+	numberA, suffixA := leadInt(restA)
+	numberB, suffixB := leadInt(restB)
+	if numberA != numberB {
+		return cmp(numberA, numberB)
 	}
-	return strings.Compare(sa, sb)
+
+	return strings.Compare(suffixA, suffixB)
 }
 
 func leadInt(s string) (int, string) {
@@ -217,7 +240,7 @@ func leadInt(s string) (int, string) {
 	for i < len(s) && s[i] >= '0' && s[i] <= '9' {
 		i++
 	}
-	n, _ := strconv.Atoi(s[:i])
+	n, _ := strconv.Atoi(s[:i]) // digits only; "" is 0
 	return n, s[i:]
 }
 
@@ -231,48 +254,58 @@ func cmp(a, b int) int {
 	return 0
 }
 
-// Rules picks the restore-rules file for a build in dir, as the loader does: <build>.json if it is usable (verified), else
-// the newest build's file if that one is usable (best guess). "" when neither is: the loader then uses its built-in rules.
+// Rules picks the restore-rules file for a build in dir, as the loader does.
+//   - <build>.json, if it is usable. That is a verified pick.
+//   - Otherwise the newest build's file, if that one is usable. That is a best guess.
+//
+// It returns "" when neither is usable. The loader then uses its built-in rules.
 func Rules(dir, build string) (file string, verified bool) {
 	if build != "" {
-		f := filepath.Join(dir, build+".json")
-		if Usable(f) {
-			return f, true
+		exact := filepath.Join(dir, build+".json")
+		if Usable(exact) {
+			return exact, true
 		}
 	}
-	m, _ := filepath.Glob(filepath.Join(dir, "[0-9]*.json"))
+
+	matches, _ := filepath.Glob(filepath.Join(dir, "[0-9]*.json"))
 	best := ""
-	for _, f := range m {
-		b := strings.TrimSuffix(filepath.Base(f), ".json")
-		if best == "" || CompareBuilds(b, best) > 0 {
-			best = b
+	for _, path := range matches {
+		candidate := strings.TrimSuffix(filepath.Base(path), ".json")
+		if best == "" || CompareBuilds(candidate, best) > 0 {
+			best = candidate
 		}
 	}
+
 	if best == "" || !Usable(filepath.Join(dir, best+".json")) {
 		return "", false
 	}
+
 	return filepath.Join(dir, best+".json"), false
 }
 
-// MaxRulesSize is the loader's rules buffer less its NUL: a larger file is unreadable to the loader (loader.c rulesbuf).
+// MaxRulesSize is the loader's rules buffer less its NUL: a larger file is unreadable to the loader (loader.c
+// gRulesJson).
 const MaxRulesSize = 32768 - 2
 
-// Usable reports whether the loader would use a rules file: it parses as JSON, has a "rules" value, and fits the loader's
-// buffer (loader.c slurp/rulesok).
+// Usable reports whether the loader would use a rules file: it parses as JSON, has a "rules" value, and fits the
+// loader's buffer (loader.c read_whole_file/rules_usable).
 func Usable(file string) bool {
-	b, err := os.ReadFile(file)
-	if err != nil || len(b) > MaxRulesSize {
+	data, err := os.ReadFile(file)
+	if err != nil || len(data) > MaxRulesSize {
 		return false
 	}
+
 	var doc map[string]json.RawMessage
-	if json.Unmarshal(b, &doc) != nil {
+	if json.Unmarshal(data, &doc) != nil {
 		return false
 	}
+
 	_, ok := doc["rules"]
 	return ok
 }
 
-// UnverifiedLine is the loader's line for a build without rules (design §4.1), so the CLI says the same at `up`.
+// UnverifiedLine is the line the loader logs for an Xcode build without restore rules, so the CLI says the same at
+// `up`.
 func UnverifiedLine(build string) string {
 	if build == "" {
 		build = "(not recorded)"

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Auto-run harness: camera (camera_avfoundation) + mobile_scanner. No taps.
-// Env (via SIMCTL_CHILD_*): M7_TEST=all|camera|scanner|stream|audio (default all), M7_AUDIO=1|0 for `audio`.
+// Env (via SIMCTL_CHILD_*): M7_TEST=all|camera|scanner|stream|audio|qr (default all), M7_AUDIO=1|0 for `audio`;
+// for `qr` (scripts/qr-test.sh): M7_QR_POS=back|front, M7_QR_SECS=N (default 10).
 import 'dart:async';
 import 'dart:io';
 
@@ -77,6 +78,9 @@ class _M7AppState extends State<M7App> {
     try {
       if (test == 'all' || test == 'scanner') await scannerTest();
     } catch (e) { log('scanner test aborted: $e'); }
+    try {
+      if (test == 'qr') await qrTest();
+    } catch (e) { log('qr test aborted: $e'); }
     log('SUMMARY pass=$_pass fail=$_fail');
     show(Center(child: Text('END pass=$_pass fail=$_fail', style: const TextStyle(color: Colors.white))), 'end');
     log('END');
@@ -227,6 +231,34 @@ class _M7AppState extends State<M7App> {
       await step('scanner.qr+ean13', () => got.future, secs: 20, desc: (s) => s);
     } catch (_) { log('INFO scanner saw $seen'); }
     await shot('scanner', 200);
+    await sub.cancel();
+    await ctl.dispose();
+  }
+
+  // The QR payloads mobile_scanner reports: `QRSEEN src=flutter t=<ms since start> at=<Unix ms>
+  // pct=<Uri.encodeComponent>` each time
+  // the payload differs from the last one (scripts/qr-test.sh compares them).
+  Future<void> qrTest() async {
+    final front = Platform.environment['M7_QR_POS'] == 'front';
+    final secs = int.tryParse(Platform.environment['M7_QR_SECS'] ?? '') ?? 10;
+    log('BEGIN qr pos=${front ? 'front' : 'back'} secs=$secs');
+    final ctl = MobileScannerController(formats: const [BarcodeFormat.qrCode],
+        facing: front ? CameraFacing.front : CameraFacing.back);
+    final sw = Stopwatch()..start();
+    String? last;
+    var sized = false;
+    final sub = ctl.barcodes.listen(onError: (e) => log('qr stream error $e'), (cap) {
+      if (!sized) { sized = true; log('INFO qr analysed size=${cap.size}'); }
+      for (final b in cap.barcodes) {
+        final v = b.rawValue;
+        if (b.format != BarcodeFormat.qrCode || v == null || v == last) continue;
+        last = v;
+        log('QRSEEN src=flutter t=${sw.elapsedMilliseconds} at=${DateTime.now().millisecondsSinceEpoch} pct=${Uri.encodeComponent(v)}');
+      }
+    });
+    ctl.addListener(() { if (ctl.value.error != null) log('qr scanner error ${ctl.value.error}'); });
+    show(MobileScanner(controller: ctl), 'qr');
+    await sleep(secs * 1000);
     await sub.cancel();
     await ctl.dispose();
   }

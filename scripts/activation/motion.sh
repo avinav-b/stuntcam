@@ -1,240 +1,610 @@
 # SPDX-License-Identifier: Apache-2.0
 # activation/motion.sh — the CoreMotion stand-in: at load, decided from markers, its crashes, the attitude API.
 # Sourced by scripts/activation.sh, which runs each case <c> as the function c_<c>.
+
+# the stock line's text in the engine log: "CoreMotion is stock this launch (<reason>)"
+STOCK_LINE_RX='CoreMotion is stock this launch \([^)]*\)'
+
 c_motion-only() {
-  local n=${MOTION_N:-10} i d okn=0 bad1=
-  for i in {1..$n}; do
-    run plain mo$i M5APP_ORDER=motion-only; d=$(res plain mo$i)
-    local order=$(grep -nE 'M5APP\| order=motion-only' $d/app.log | head -1 | cut -d: -f1) tr=$(grep -nE 'tracking started by' $d/app.log | head -1 | cut -d: -f1)
-    if [[ $(cnt 'PASS order.motion-only' $d/app.log) == 3 && $(cnt 'LAZY armed' $d/app.log) == 0 && -n $tr &&
-      -n $order ]] && (( tr > order )) && [[ $(cnt DONE $d/app.log) == 1 ]]; then okn=$((okn + 1))
-    else bad1="$bad1 [$i: pass=$(cnt 'PASS order.motion-only' $d/app.log) armed=$(cnt 'LAZY armed' $d/app.log) tracking@$tr order@$order]"; fi
-  done
-  (( okn == n )) &&
-    ok "$n/$n: stand-in answers (available, rate, timestamps), never armed, '$(grep -m1 -oE 'tracking started by [^)]*\)' $d/app.log)' after the app's first query (no tracker before it)" ||
-    bad "$okn/$n;${bad1:0:300}"
-}
-c_motion-threads() {
-  local d; run plain mt M5APP_ORDER=motion-threads; d=$(res plain mt)
-  local q=$(grep -oE 'firstquery ms=\[[^]]*\]' $d/app.log)
-  if [[ $(cnt 'PASS order.motion-threads.updates' $d/app.log) == 1 &&
-    $(cnt 'PASS order.motion-threads.firstquery' $d/app.log) == 1 && $(cnt 'tracking started by' $d/app.log) == 1 ]]
-  then ok "all 3 managers got updates ($(grep -oE 'counts=\[[^]]*\]' $d/app.log)), one 'tracking started', first queries $q"
-  else bad "$(app_lines 'order.motion-threads' "$d" 200) tracking=$(cnt 'tracking started by' $d/app.log)"; fi
-}
-c_none() {
-  local d; run plain no M5APP_ORDER=none; d=$(res plain no)
-  # the tracker (0.5 s main-queue timer + device-orientation notifications) logs 'tracking started by' (motion start) or
-  # 'tracker starts' (any start); the load-time UI orientation snapshot (L57) logs nothing in an app that never starts it
-  [[ $(cnt 'LAZY armed' $d/app.log) == 0 && $(cnt 'tracking started|tracker starts' $d/app.log) == 0 &&
-    $(cnt DONE $d/app.log) == 1 ]] &&
-    ok "no armed-by, no tracker start (no main-queue timer, no orientation notifications), DONE" ||
-    bad "armed=$(cnt 'LAZY armed' $d/app.log) tracking=$(cnt 'tracking started|tracker starts' $d/app.log) done=$(cnt DONE $d/app.log)"
-}
-c_motion-gate() {
-  clear_sentinel $BP; local d; run plain mg M5APP_ORDER=motion SIMCAM_PF_BREAK=1; d=$(res plain mg)
-  # plain's accelerometer stream runs at 100 Hz and its rate check reads it at 1.5 s (150 updates): more than
-  # min_end_updates by the end means the stream kept running after the check
-  local min_end_updates=180
-  local end=$(grep -oE 'motion.end counts=\[[0-9]+\]' $d/app.log | grep -oE '[0-9]+') mk=$(nf $STATE/$BP/latched-*(N) $STATE/preflight-fail-$BUILD(N))
-  if [[ $(cnt 'stand-in removed' $d/dylib.log) == 0 && $(cnt 'PASS order.motion.rate' $d/app.log) == 1 &&
-    $(cnt 'DISABLED - preflight failed' $d/app.log) -ge 1 && $mk == 0 && $(cnt DONE $d/app.log) == 1 ]] &&
-    (( ${end:-0} > min_end_updates ))
-  then ok "camera stock (forced preflight failure), stand-in kept, stream kept running ($end updates by the end), no 'stand-in removed', no marker"
-  else bad "removed=$(cnt 'stand-in removed' $d/dylib.log) rate=$(cnt 'PASS order.motion.rate' $d/app.log) end=$end markers=$mk"; fi
-  clear_sentinel $BP
-}
-c_camera-then-motion() {
-  clear_sentinel $BP; local d; run plain ctm M5APP_ORDER=camera-then-motion SIMCAM_PF_BREAK=1; d=$(res plain ctm)
-  local mk=$(nf $STATE/$BP/latched-*(N) $STATE/preflight-fail-$BUILD(N))
-  if [[ $(cnt 'camera-then-motion discovery=0' $d/app.log) == 1 && $(cnt 'PASS order.camera-then-motion' $d/app.log) == 3 && $mk == 0 ]]
-  then ok "camera stock (0 devices), then the stand-in answers in the same launch (available, rate, timestamps), no marker"
-  else bad "$(app_lines 'discovery=|order.camera-then-motion' "$d" 200) markers=$mk"; fi
-  clear_sentinel $BP
-}
-# ---------------------------------------------------------------- CoreMotion decided at load from markers
-c_orient-nomotion-marker() {   # a planted latched-motion marker instead of SIMCAM_OFF_MOTION: the same landscape angles, CoreMotion stock with its line
-  clear_sentinel $BO; local now=$(date +%s) a0 a1 d1
-  p12 orient landscapeLeft nmk0; a0=$(angles $PD)
-  plant_marker $STATE/$BO/latched-motion-$BUILD motion $(( now + 7200 ))
-  p12 orient landscapeLeft nmk1 P12_MOTION_QUERY=1; a1=$(angles $PD); d1=$PD
-  if [[ -n $a1 && $a1 == $a0 && $a1 != *captureAngle=90* && $(cnt 'motion: hooked' $d1/app.log) == 0 && $(cnt 'one-shot forwarding traps' $d1/app.log) == 1 &&
-        $(cnt 'INFO motion accel=false' $d1/app.log) == 1 && $(mstock $d1) == 1 && $(cnt "latched-motion-$BUILD: motion until" $d1/dylib.log) == 1 && $(cnt 'P12\| DONE' $d1/app.log) == 1 ]]
-  then ok "marker: '$a1', same as without it; CoreMotion stock (accel=false), one stock line: '$(grep -m1 -oE 'CoreMotion is stock this launch \([^)]*\)' $d1/dylib.log)'"
-  else bad "marker '$a1' vs none '$a0'; hooked=$(cnt 'motion: hooked' $d1/app.log) traps=$(cnt 'one-shot forwarding traps' $d1/app.log) accel=$(grep -oE 'motion accel=[a-z]+' $d1/app.log) stocklines=$(mstock $d1)"
-  fi
-  clear_sentinel $BO
-}
-c_camera-then-motion-real() {   # a REAL preflight failure: stand-in this launch, preflight-fail written, the next motion-only is stock
-  clear_sentinel $BP; local d1 d2 pf=$STATE/preflight-fail-$BUILD now=$(date +%s) m
-  run plain ctr1 M5APP_ORDER=camera-then-motion SIMCAM_PF_BREAK=1 SIMCAM_TEST_PF_FAIL_REAL=1; d1=$(res plain ctr1); m=$(mtime $pf)
-  run plain ctr2 M5APP_ORDER=motion-only M5APP_EXPECT_MOTION=stock; d2=$(res plain ctr2)
-  if [[ $(cnt 'camera-then-motion discovery=0' $d1/app.log) == 1 &&
-    $(cnt 'PASS order.camera-then-motion' $d1/app.log) == 3 && $(mstock $d1) == 0 ]] &&
-     (( m - now >= 86400 - 120 && m - now <= 86400 + 120 )) && mstockok $d2 motion-only &&
-       [[ $(cnt "preflight-fail-$BUILD: preflight failed until" $d2/dylib.log) == 1 ]]
-  then ok "same launch: camera stock, stand-in answered; preflight-fail written (until +$(( (m - now) / 3600 )) h); next motion-only: stock (accel=false, 0 updates), one line '$(grep -m1 -oE 'CoreMotion is stock this launch \([^)]*\)' $d2/dylib.log)'"
-  else bad "L1: $(app_lines 'discovery=|order.camera-then-motion' "$d1" 160) pf until +$(( m - now )) s; L2: $(app_lines 'order.motion-only' "$d2" 160) hooked=$(cnt 'motion: hooked' $d2/app.log) lines=$(mstock $d2)"
-  fi
-  clear_sentinel $BP
-}
-c_motion-after-gate() {   # a FORCED preflight failure leaves no marker: the next motion-only gets the stand-in
-  clear_sentinel $BP; local d1 d2
-  run plain mag1 M5APP_ORDER=motion SIMCAM_PF_BREAK=1; d1=$(res plain mag1)
-  local mk=$(nf $STATE/$BP/latched-*(N) $STATE/preflight-fail-$BUILD(N))
-  run plain mag2 M5APP_ORDER=motion-only; d2=$(res plain mag2)
-  if [[ $(cnt 'DISABLED - preflight failed' $d1/app.log) -ge 1 && $(cnt 'PASS order.motion.rate' $d1/app.log) == 1 &&
-    $mk == 0 ]] && mstand $d2 motion-only
-  then ok "motion-gate launch: camera stock, stand-in kept, no marker; next motion-only: stand-in (available, rate, timestamps), no stock line"
-  else bad "gate: disabled=$(cnt 'DISABLED - preflight failed' $d1/app.log) rate=$(cnt 'PASS order.motion.rate' $d1/app.log) markers=$mk; next: $(app_lines 'order.motion-only' "$d2" 160) lines=$(mstock $d2)"
-  fi
-  clear_sentinel $BP
-}
-c_motion-latched() {   # preflight-fail (real) and a camera latch marker each stock CoreMotion from the first query; clear brings it back
-  clear_sentinel $BP; local e=$(ev $BP) d0 d1 d2 d3 now=$(date +%s) n0 r1 r2 r3
-  run plain mla0 SIMCAM_TEST_ACTIVATE_FAIL=preflight SIMCAM_TEST_PF_FAIL_REAL=1 M5APP_EXPECT=stock; d0=$(res plain mla0)
-  run plain mla1 M5APP_ORDER=motion-only M5APP_EXPECT_MOTION=stock; d1=$(res plain mla1)
-  mstockok $d1 motion-only && [[ $(cnt "preflight-fail-$BUILD" $d1/dylib.log) == 1 &&
-    -f $STATE/preflight-fail-$BUILD ]] && r1=ok ||
-    r1="pf: $(app_lines 'order.motion-only' "$d1" 120) lines=$(mstock $d1)"
-  clear_sentinel $BP; plant_marker $STATE/$BP/latched-$BUILD activate $(( now + 7200 ))
-  run plain mla2 M5APP_ORDER=motion-only M5APP_EXPECT_MOTION=stock; d2=$(res plain mla2)
-  mstockok $d2 motion-only && [[ $(cnt "latched-$BUILD: activate until" $d2/dylib.log) == 1 ]] && r2=ok ||
-    r2="camera marker: $(app_lines 'order.motion-only' "$d2" 120) lines=$(mstock $d2)"
-  plant_marker $STATE/preflight-fail-$BUILD "preflight failed" $(( now + 7200 )); n0=$(nl $e)
-  run plain mla3 M5APP_ORDER=motion-only SIMCAM_SENTINEL=clear; d3=$(res plain mla3)
-  local left=$(nf $STATE/$BP/latched-*(N) $STATE/preflight-fail-$BUILD(N)) cl=$(since $e $n0 | grep -c ' clear - .*SIMCAM_SENTINEL=clear')
-  mstand $d3 motion-only && [[ $left == 0 && $cl == 1 ]] && r3=ok ||
-    r3="clear: $(app_lines 'order.motion-only' "$d3" 120) markers left=$left clear lines=$cl"
-  if [[ $r1 == ok && $r2 == ok && $r3 == ok ]]
-  then ok "real preflight failure -> next motion-only stock (accel=false, 0 updates), exactly one stock line; planted latched-$BUILD -> the same, line names it; SIMCAM_SENTINEL=clear -> stand-in, markers gone, clear line appended"
-  else bad "$r1 | $r2 | $r3"; fi
-  clear_sentinel $BP
-}
-c_motion-pf-expiry() {   # preflight-fail expires after 24 h; a passing preflight deletes it
-  clear_sentinel $BP; local pf=$STATE/preflight-fail-$BUILD now=$(date +%s) d1 d2 d3 d4 d5 r1 r2 r3 r4 r5
-  plant_marker $pf "preflight failed" $(( now - 60 ))   # written 24 h + 1 min ago
-  run plain mpe1 M5APP_ORDER=motion-only; d1=$(res plain mpe1); mstand $d1 motion-only && r1=ok ||
-    r1="expired: $(app_lines 'order.motion-only' "$d1" 120) lines=$(mstock $d1)"
-  plant_marker $pf "preflight failed" $(( now + 82800 ))   # fresh (written 1 h ago)
-  run plain mpe2 M5APP_ORDER=motion-only M5APP_EXPECT_MOTION=stock; d2=$(res plain mpe2); mstockok $d2 motion-only &&
-    r2=ok || r2="fresh (control): $(app_lines 'order.motion-only' "$d2" 120)"
-  run plain mpe3; d3=$(res plain mpe3); [[ $(pass_n $d3) == 14 && ! -f $pf ]] && r3=ok ||
-    r3="passing camera launch: pass=$(pass_n $d3) pf=$([[ -f $pf ]] && echo kept || echo gone)"
-  run plain mpe4 M5APP_ORDER=motion-only; d4=$(res plain mpe4); mstand $d4 motion-only && r4=ok ||
-    r4="after: $(app_lines 'order.motion-only' "$d4" 120) lines=$(mstock $d4)"
-  # a fresh marker that the same launch's passing preflight unlinks before the first motion call: the stock
-  # line still names it with a real until (from the load-time stat), never "?"
-  plant_marker $pf "preflight failed" $(( now + 82800 ))
-  run plain mpe5 M5APP_ORDER=camera-then-motion M5APP_EXPECT_MOTION=stock; d5=$(res plain mpe5)
-  local l5=$(grep -m1 -oE 'simcam: CoreMotion is stock this launch \([^)]*\)' $d5/dylib.log)
-  mstockok $d5 camera-then-motion && [[ ! -f $pf &&
-    $l5 == *"preflight-fail-$BUILD: preflight failed until "[0-9][0-9][0-9][0-9]-* && $l5 != *'?'* ]] && r5=ok ||
-    r5="unlinked mid-launch: pf=$([[ -f $pf ]] && echo kept || echo gone) line '$l5' lines=$(mstock $d5)"
-  if [[ $r1 == ok && $r2 == ok && $r3 == ok && $r4 == ok && $r5 == ok ]]
-  then ok "expired (24 h + 1 min): stand-in; fresh: stock (control); a passing camera launch (14/14) unlinked it; next motion-only: stand-in; unlinked by the same launch's preflight before the first motion call: '${l5#simcam: CoreMotion is stock this launch }'"
-  else bad "$r1 | $r2 | $r3 | $r4 | $r5"; fi
-  clear_sentinel $BP
-}
-# motion_crash_seq <tag> [K=V ...]: launches N, N+1 crash in a motion tick (camera armed). Sets:
-#   MC_D1 MC_D2  their run dirs                MC_EV  their crash lines, "<kind>-<feature>x<count> ..." (sorted)
-#   MC_MK        1 if latched-motion exists     MC_MKT its mtime (the marker's until)
-#   MC_C1        the time of the first `crash motion` line
-motion_crash_seq() {
-  local t=$1; shift; local e=$(ev $BP) n0; clear_sentinel $BP; n0=$(nl $e)
-  run plain $t-1 M5APP_ORDER=camera-then-motion SIMCAM_TEST_MOTION_FAULT=1 "$@"; MC_D1=$(res plain $t-1)
-  run plain $t-2 M5APP_ORDER=camera-then-motion SIMCAM_TEST_MOTION_FAULT=1 "$@"; MC_D2=$(res plain $t-2)
-  MC_EV=$(since $e $n0 | awk '$3 ~ /^crash/ {print $3 "-" $4}' | sort | uniq -c | awk '{print $2 "x" $1}' | tr '\n' ' ')
-  MC_MK=$(nf $STATE/$BP/latched-motion-$BUILD(N)); MC_MKT=$(mtime $STATE/$BP/latched-motion-$BUILD)
-  MC_C1=$(since $e $n0 | awk '$3 == "crash" && $4 == "motion" {print $1; exit}')
-}
-c_motion-crash() {   # crashes in the stand-in at N, N+1 (camera armed): `crash motion`, not provider; N+1's handler writes latched-motion
-  motion_crash_seq mc; local d1=$MC_D1 d2=$MC_D2 d3 dc eng=0
-  local p1=$(fault_pid $d1/app.log 'SIMCAM_TEST_MOTION_FAULT: fault') p2=$(fault_pid $d2/app.log 'SIMCAM_TEST_MOTION_FAULT: fault'); crash_reports m5app 30 $p1 $p2
-  local ut=$(( MC_MKT - ${MC_C1:-0} ))
-  run plain mc-3 M5APP_ORDER=camera-then-motion M5APP_EXPECT_MOTION=stock; d3=$(res plain mc-3)
-  local disc=$(grep -oE 'camera-then-motion discovery=[0-9]+' $d3/app.log | grep -oE '[0-9]+$')
-  run canary mc-c; dc=$(res canary mc-c)
-  if [[ $MC_EV == "crash-motionx2 " && $MC_MK == 1 && -n $p1 && -n $p2 ]] && (( ut >= 86400 - 5 && ut <= 86400 + 5 )) && (( ${disc:-0} > 0 )) &&
-     [[ $(cnt 'LAZY armed by' $d3/dylib.log) == 1 ]] && mstockok $d3 camera-then-motion &&
-       [[ $(cnt "latched-motion-$BUILD: motion until" $d3/dylib.log) == 1 &&
-       $(cat $dc/summary.txt 2>/dev/null) == *core=PASS* ]]; then eng=1; fi
-  verdict_reports $eng 2 "N, N+1 (pids $p1 $p2): $MC_EV(no provider), $CR crash reports; N+1's handler wrote latched-motion (until = N's strike + 24 h); N+2: camera armed ($disc devices), CoreMotion stock from the first query, one line; canary $(cut -c1-40 $dc/summary.txt)" \
-    "events '$MC_EV' marker=$MC_MK until-strike=${ut}s fault pids '$p1' '$p2' reports=$CR; N+2 discovery=${disc:-?} armed=$(cnt 'LAZY armed by' $d3/dylib.log) $(app_lines 'order.camera-then-motion' "$d3" 120) lines=$(mstock $d3); canary '$(cut -c1-60 $dc/summary.txt 2>/dev/null)'"
-  clear_sentinel $BP; clear_sentinel $BC
-}
-c_motion-stock-threads() {   # a latched-motion launch whose 3 threads make their first motion call at once: exactly one stock line
-  local i d r= okn=0 now=$(date +%s)
-  for i in 1 2 3; do
-    clear_sentinel $BP; plant_marker $STATE/$BP/latched-motion-$BUILD motion $(( now + 7200 ))
-    run plain mst$i M5APP_ORDER=motion-threads M5APP_EXPECT_MOTION=stock; d=$(res plain mst$i)
-    if [[ $(cnt 'PASS order.motion-threads.stock.updates' $d/app.log) == 1 && $(cnt 'motion: hooked' $d/app.log) == 0 &&
-      $(mstock $d) == 1 && $(cnt DONE $d/app.log) == 1 ]]; then okn=$((okn + 1))
-    else r="$r $i: $(app_lines 'order.motion-threads' "$d" 120) lines=$(mstock $d)"; fi
-  done
-  (( okn == 3 )) &&
-    ok "3/3: three threads' first calls into the forwarding traps at once, 0 updates (stock), exactly one stock line each" ||
-    bad "$okn/3 ok;$r"
-  clear_sentinel $BP
-}
-c_mutation-L58() {   # SIMCAM_OFF_MOTION_MARKERS=1: motion ignores markers at load: motion-latched must catch it (the stand-in answers)
-  clear_sentinel $BP; local d now=$(date +%s); plant_marker $STATE/$BP/latched-motion-$BUILD motion $(( now + 7200 ))
-  run plain l58 M5APP_ORDER=motion-only SIMCAM_OFF_MOTION_MARKERS=1; d=$(res plain l58)
-  if mstand $d motion-only
-  then ok "mutant caught: with a valid latched-motion marker the stand-in still answered (motion-latched wants stock + one line)"
-  else bad "mutant not caught: $(app_lines 'order.motion-only' "$d" 160) lines=$(mstock $d)"; fi
-  clear_sentinel $BP
-}
-c_mutation-L59() {   # SIMCAM_OFF_MOTION_KEY=1: no feature key: motion crashes are `provider` and close the camera: motion-crash must catch it
-  motion_crash_seq l59 SIMCAM_OFF_MOTION_KEY=1; local d3
-  run plain l59-3 M5APP_ORDER=camera-then-motion M5APP_EXPECT=stock; d3=$(res plain l59-3)
-  if [[ $MC_EV == "crash-providerx2 " && $(cnt 'camera-then-motion discovery=0' $d3/app.log) == 1 ]]
-  then ok "mutant caught: '$MC_EV', N+2 camera latched (0 devices; motion-crash wants motion x2 and the camera armed)"
-  else bad "mutant not caught: events '$MC_EV'; N+2 $(grep -oE 'discovery=[0-9]+' $d3/app.log)"; fi
-  clear_sentinel $BP
-}
-c_mutation-L60() {   # SIMCAM_OFF_HANDLER_MOTION_MARKER=1: the second strike writes no marker: N+2 still gets the stand-in (one launch late)
-  motion_crash_seq l60 SIMCAM_OFF_HANDLER_MOTION_MARKER=1; local d3
-  run plain l60-3 M5APP_ORDER=camera-then-motion; d3=$(res plain l60-3)
-  if [[ $MC_EV == "crash-motionx2 " && $MC_MK == 0 ]] && mstand $d3 camera-then-motion
-  then ok "mutant caught: '$MC_EV', no latched-motion after N+1, N+2 got the stand-in (motion-crash wants stock at N+2)"
-  else bad "mutant not caught: events '$MC_EV' marker=$MC_MK; N+2 $(app_lines 'order.camera-then-motion' "$d3" 120) lines=$(mstock $d3)"; fi
-  clear_sentinel $BP
-}
-# ---------------------------------------------------------------- the attitude stand-in
-mprobe() {   # mprobe <tag> <probe args...>: one fixtures/motion-probe launch (XENV from MPX, one K=V per line); sets MD
-  local t=$1; shift
-  XENV="${MPX:-}" $ROOT/fixtures/motion-probe/drive.sh $RT $TAG-$t boot "$@" >/dev/null 2>&1; MD=$SIMCAM_RESULTS/motion-$RT-$TAG-$t
-}
-att_sum() { grep -m1 -oE 'ATT SUMMARY pass=[0-9]+ fail=[0-9]+' $1/app.log; }
-c_motion-attitude() {   # attitude, quaternion, rotationMatrix, roll/pitch/yaw in portrait, upside-down and both landscapes: 24 checks each
-  # The orientation comes from the control file's orientation= line, the line `stuntcam orient` writes (the CLI refuses a sim
-  # the scripts armed); the engine reads it when the camera arms, so the probe makes one camera call first (-armcam 1).
-  clear_sentinel $BM; local o d c=$SIMCAM_RESULTS/activation-$RT-$TAG-att-control.txt okn=0 r= e= s
-  for o in portrait portraitUpsideDown landscapeLeft landscapeRight; do
-    print -r -- "orientation=$o" > $c
-    MPX="SIMCAM_CONTROL=$c"$'\n' mprobe att-$o -attitude 1 -armcam 1 -expect $o; d=$MD; s=$(att_sum $d)
-    if [[ $s == 'ATT SUMMARY pass=24 fail=0' && $(cnt 'motion: hooked 16' $d/app.log) == 1 ]]; then okn=$((okn + 1))
-      e="$e $o: $(grep -m1 -oE 'gravity=\([^)]*\) q=\([^)]*\) roll=[-0-9.]+ pitch=[-0-9.]+ yaw=[-0-9.]+' $d/app.log), $(grep -m1 -oE 'samples=[0-9]+ in 2 s' $d/app.log);"
-    else r="$r [$o: ${s:-no summary} hooked=$(cnt 'motion: hooked 16' $d/app.log) $(grep 'ATT FAIL' $d/app.log | sed 's/.*ATT FAIL //' | cut -c1-120 | tr '\n' ';')]"
+  local launches=${MOTION_N:-10}
+  local passed=0
+  local failures=
+  local i dir
+
+  for i in {1..$launches}; do
+    run plain mo$i M5APP_ORDER=motion-only
+    dir=$(run_dir plain mo$i)
+    # line numbers of the app's first query and of the tracker's start: the tracker must start after the query
+    local order=$(first_line_number 'M5APP\| order=motion-only' $dir/app.log)
+    local tracking=$(first_line_number 'tracking started by' $dir/app.log)
+    local pass=$(count_matches 'PASS order.motion-only' $dir/app.log)
+    local armed=$(count_matches 'LAZY armed' $dir/app.log)
+    local done_lines=$(count_matches DONE $dir/app.log)
+    if [[ $pass == 3 && $armed == 0 && -n $tracking && -n $order ]] && (( tracking > order )) &&
+      [[ $done_lines == 1 ]]; then
+      passed=$((passed + 1))
+    else
+      failures="$failures [$i: pass=$pass armed=$armed tracking@$tracking order@$order]"
     fi
   done
-  rm -f $c
-  (( okn == 4 )) &&
-    ok "4/4 orientations, 24/24 checks each (frames, pull start, rate, R = matrix(q) = matrix(angles), R*down = gravity, stable 2 s, magneticField, Apple's CMAttitude oracle, multiply, copy, coding as Apple's, M1: decoded attitudes are the stand-in, multiply/isEqual with dm.attitude):$e" ||
-    bad "$okn/4;$r"
-  clear_sentinel $BM
-}
-c_motion-attitude-stock() {   # a latched-motion launch: the new selectors go through the forwarding traps and get stock answers
-  clear_sentinel $BM; local now=$(date +%s) d0 d1
-  MPX="SIMCAM_OFF_MOTION=1"$'\n' mprobe atts0 -attitude stock; d0=$MD   # stock CoreMotion, no traps: the reference answers
-  plant_marker $STATE/$BM/latched-motion-$BUILD motion $(( now + 7200 ))
-  MPX= mprobe atts1 -attitude stock; d1=$MD
-  local f0=$(grep -m1 -oE ' frames=[0-9]+' $d0/app.log) f1=$(grep -m1 -oE ' frames=[0-9]+' $d1/app.log) r0=$(grep -m1 -oE 'samples=0 frame=[0-9]+' $d0/app.log) r1=$(grep -m1 -oE 'samples=0 frame=[0-9]+' $d1/app.log)
-  if [[ $(att_sum $d1) == 'ATT SUMMARY pass=3 fail=0' && $(cnt 'motion: hooked' $d1/app.log) == 0 && $(cnt '16 one-shot forwarding traps' $d1/app.log) == 1 && $(mstock $d1) == 1 &&
-        -n $f0 && $f1 == $f0 && $f1 != ' frames=1' && -n $r0 && $r1 == $r0 ]]
-  then ok "16 traps, one stock line; availableAttitudeReferenceFrames forwarded:$f1 (stock:$f0, the stand-in answers 1); reference-frame starts (queue and pull) delivered nothing, attitudeReferenceFrame $r1 as stock"
-  else bad "$(att_sum $d1) hooked=$(cnt 'motion: hooked' $d1/app.log) traps=$(cnt '16 one-shot forwarding traps' $d1/app.log) lines=$(mstock $d1) frames trap:$f1 stock:$f0 '$r1' vs '$r0'"
+
+  if (( passed == launches )); then
+    ok "$launches/$launches: stand-in answers (available, rate, timestamps), never armed," \
+      "'$(grep -m1 -oE 'tracking started by [^)]*\)' $dir/app.log)' after the app's first query (no tracker before it)"
+  else
+    bad "$passed/$launches;${failures:0:300}"
   fi
-  clear_sentinel $BM
+}
+
+c_motion-threads() {
+  local dir
+  run plain mt M5APP_ORDER=motion-threads
+  dir=$(run_dir plain mt)
+  local first_queries=$(grep -oE 'firstquery ms=\[[^]]*\]' $dir/app.log)
+  local updates=$(count_matches 'PASS order.motion-threads.updates' $dir/app.log)
+  local first_query=$(count_matches 'PASS order.motion-threads.firstquery' $dir/app.log)
+  local tracking=$(count_matches 'tracking started by' $dir/app.log)
+
+  if [[ $updates == 1 && $first_query == 1 && $tracking == 1 ]]; then
+    ok "all 3 managers got updates ($(grep -oE 'counts=\[[^]]*\]' $dir/app.log)), one 'tracking started'," \
+      "first queries $first_queries"
+  else
+    bad "$(app_lines 'order.motion-threads' "$dir" 200) tracking=$tracking"
+  fi
+}
+
+c_none() {
+  local dir
+  run plain no M5APP_ORDER=none
+  dir=$(run_dir plain no)
+
+  # The tracker (a 0.5 s main-queue timer plus device-orientation notifications) logs 'tracking started by' when
+  # motion starts it, or 'tracker starts' for any start. The load-time UI orientation snapshot logs nothing in
+  # an app that never starts the tracker.
+  local armed=$(count_matches 'LAZY armed' $dir/app.log)
+  local tracking=$(count_matches 'tracking started|tracker starts' $dir/app.log)
+  local done_lines=$(count_matches DONE $dir/app.log)
+
+  if [[ $armed == 0 && $tracking == 0 && $done_lines == 1 ]]; then
+    ok "no armed-by, no tracker start (no main-queue timer, no orientation notifications), DONE"
+  else
+    bad "armed=$armed tracking=$tracking done=$done_lines"
+  fi
+}
+
+# motion_end_updates <run dir>: the accelerometer update count of plain's "motion.end counts=[<n>]" line
+motion_end_updates() { grep -oE 'motion.end counts=\[[0-9]+\]' $1/app.log | grep -oE '[0-9]+'; }
+
+c_motion-gate() {
+  clear_sentinel $PLAIN_BUNDLE
+
+  local dir
+  run plain mg M5APP_ORDER=motion SIMCAM_PF_BREAK=1
+  dir=$(run_dir plain mg)
+
+  # plain's accelerometer stream runs at 100 Hz and its rate check reads it at 1.5 s (150 updates). More than
+  # min_end_updates by the end means the stream kept running after the check.
+  local min_end_updates=180
+  local end_updates=$(motion_end_updates $dir)
+  local markers=$(count_existing $STATE_DIR/$PLAIN_BUNDLE/latched-*(N) $STATE_DIR/preflight-fail-$BUILD(N))
+  local removed=$(count_matches 'stand-in removed' $dir/dylib.log)
+  local rate=$(count_matches 'PASS order.motion.rate' $dir/app.log)
+  local disabled=$(count_matches 'DISABLED - preflight failed' $dir/app.log)
+  local done_lines=$(count_matches DONE $dir/app.log)
+
+  if [[ $removed == 0 && $rate == 1 && $disabled -ge 1 && $markers == 0 && $done_lines == 1 ]] &&
+    (( ${end_updates:-0} > min_end_updates )); then
+    ok "camera stock (forced preflight failure), stand-in kept, stream kept running ($end_updates updates by the" \
+      "end)," \
+      "no 'stand-in removed', no marker"
+  else
+    bad "removed=$removed rate=$rate end=$end_updates markers=$markers"
+  fi
+
+  clear_sentinel $PLAIN_BUNDLE
+}
+
+c_camera-then-motion() {
+  clear_sentinel $PLAIN_BUNDLE
+
+  local dir
+  run plain ctm M5APP_ORDER=camera-then-motion SIMCAM_PF_BREAK=1
+  dir=$(run_dir plain ctm)
+  local markers=$(count_existing $STATE_DIR/$PLAIN_BUNDLE/latched-*(N) $STATE_DIR/preflight-fail-$BUILD(N))
+  local no_devices=$(count_matches 'camera-then-motion discovery=0' $dir/app.log)
+  local answered=$(count_matches 'PASS order.camera-then-motion' $dir/app.log)
+
+  if [[ $no_devices == 1 && $answered == 3 && $markers == 0 ]]; then
+    ok "camera stock (0 devices), then the stand-in answers in the same launch (available, rate, timestamps), no marker"
+  else
+    bad "$(app_lines 'discovery=|order.camera-then-motion' "$dir" 200) markers=$markers"
+  fi
+
+  clear_sentinel $PLAIN_BUNDLE
+}
+
+# ---------------------------------------------------------------- CoreMotion decided at load from markers
+# A planted latched-motion marker instead of SIMCAM_OFF_MOTION gives the same landscape angles, with CoreMotion stock
+# and its stock line.
+c_orient-nomotion-marker() {
+  clear_sentinel $ORIENT_BUNDLE
+
+  local now=$(date +%s)
+  local angles_plain angles_marker dir1
+  run_plain_orient orient landscapeLeft nmk0
+  angles_plain=$(orient_angles $LAST_RUN_DIR)
+  plant_marker $STATE_DIR/$ORIENT_BUNDLE/latched-motion-$BUILD motion $(( now + 7200 ))
+  run_plain_orient orient landscapeLeft nmk1 P12_MOTION_QUERY=1
+  angles_marker=$(orient_angles $LAST_RUN_DIR)
+  dir1=$LAST_RUN_DIR
+  local hooked=$(count_matches 'motion: hooked' $dir1/app.log)
+  local traps=$(count_matches 'one-shot forwarding traps' $dir1/app.log)
+  local accel_false=$(count_matches 'INFO motion accel=false' $dir1/app.log)
+  local stock_lines=$(motion_stock_lines $dir1)
+  local marker_named=$(count_matches "latched-motion-$BUILD: motion until" $dir1/dylib.log)
+  local done_lines=$(count_matches 'P12\| DONE' $dir1/app.log)
+
+  if [[ -n $angles_marker && $angles_marker == $angles_plain && $angles_marker != *captureAngle=90* ]] &&
+    [[ $hooked == 0 && $traps == 1 && $accel_false == 1 && $stock_lines == 1 && $marker_named == 1 ]] &&
+    [[ $done_lines == 1 ]]; then
+    ok "marker: '$angles_marker', same as without it; CoreMotion stock (accel=false), one stock line:" \
+      "'$(grep -m1 -oE "$STOCK_LINE_RX" $dir1/dylib.log)'"
+  else
+    bad "marker '$angles_marker' vs none '$angles_plain'; hooked=$hooked traps=$traps" \
+      "accel=$(grep -oE 'motion accel=[a-z]+' $dir1/app.log) stocklines=$stock_lines"
+  fi
+
+  clear_sentinel $ORIENT_BUNDLE
+}
+
+# A REAL preflight failure: the stand-in answers in this launch, preflight-fail is written, and the next motion-only
+# launch is stock.
+c_camera-then-motion-real() {
+  clear_sentinel $PLAIN_BUNDLE
+
+  local pf_marker=$STATE_DIR/preflight-fail-$BUILD
+  local now=$(date +%s)
+  local dir1 dir2 pf_until
+  run plain ctr1 M5APP_ORDER=camera-then-motion SIMCAM_PF_BREAK=1 SIMCAM_TEST_PF_FAIL_REAL=1
+  dir1=$(run_dir plain ctr1)
+  pf_until=$(mtime $pf_marker)
+  run plain ctr2 M5APP_ORDER=motion-only M5APP_EXPECT_MOTION=stock
+  dir2=$(run_dir plain ctr2)
+  local no_devices=$(count_matches 'camera-then-motion discovery=0' $dir1/app.log)
+  local answered=$(count_matches 'PASS order.camera-then-motion' $dir1/app.log)
+  local pf_named=$(count_matches "preflight-fail-$BUILD: preflight failed until" $dir2/dylib.log)
+
+  # the marker's until (its mtime) is 24 h after the failure, give or take 2 minutes
+  local until_s=$(( pf_until - now ))
+  local slack_s=120
+
+  if [[ $no_devices == 1 && $answered == 3 && $(motion_stock_lines $dir1) == 0 ]] &&
+    (( until_s >= MARKER_LIFE_S - slack_s && until_s <= MARKER_LIFE_S + slack_s )) &&
+    motion_stock_once $dir2 motion-only && [[ $pf_named == 1 ]]; then
+    ok "same launch: camera stock, stand-in answered; preflight-fail written (until +$(( (pf_until - now) / 3600 ))" \
+      "h);" \
+      "next motion-only: stock (accel=false, 0 updates), one line '$(grep -m1 -oE "$STOCK_LINE_RX" $dir2/dylib.log)'"
+  else
+    bad "L1: $(app_lines 'discovery=|order.camera-then-motion' "$dir1" 160) pf until +$(( pf_until - now )) s;" \
+      "L2: $(app_lines 'order.motion-only' "$dir2" 160) hooked=$(count_matches 'motion: hooked' $dir2/app.log)" \
+      "lines=$(motion_stock_lines $dir2)"
+  fi
+
+  clear_sentinel $PLAIN_BUNDLE
+}
+
+# A FORCED preflight failure leaves no marker, so the next motion-only launch gets the stand-in.
+c_motion-after-gate() {
+  clear_sentinel $PLAIN_BUNDLE
+
+  local dir1 dir2
+  run plain mag1 M5APP_ORDER=motion SIMCAM_PF_BREAK=1
+  dir1=$(run_dir plain mag1)
+  local markers=$(count_existing $STATE_DIR/$PLAIN_BUNDLE/latched-*(N) $STATE_DIR/preflight-fail-$BUILD(N))
+  run plain mag2 M5APP_ORDER=motion-only
+  dir2=$(run_dir plain mag2)
+  local disabled=$(count_matches 'DISABLED - preflight failed' $dir1/app.log)
+  local rate=$(count_matches 'PASS order.motion.rate' $dir1/app.log)
+
+  if [[ $disabled -ge 1 && $rate == 1 && $markers == 0 ]] && motion_standin_answered $dir2 motion-only; then
+    ok "motion-gate launch: camera stock, stand-in kept, no marker;" \
+      "next motion-only: stand-in (available, rate, timestamps), no stock line"
+  else
+    bad "gate: disabled=$disabled rate=$rate markers=$markers;" \
+      "next: $(app_lines 'order.motion-only' "$dir2" 160) lines=$(motion_stock_lines $dir2)"
+  fi
+
+  clear_sentinel $PLAIN_BUNDLE
+}
+
+# A (real) preflight-fail marker and a camera latch marker each make CoreMotion stock from the first query; a clear
+# brings the stand-in back.
+c_motion-latched() {
+  clear_sentinel $PLAIN_BUNDLE
+
+  local events=$(events_log $PLAIN_BUNDLE)
+  local now=$(date +%s)
+  local dir0 dir1 dir2 dir3 events_seen pf_result marker_result clear_result
+  run plain mla0 SIMCAM_TEST_ACTIVATE_FAIL=preflight SIMCAM_TEST_PF_FAIL_REAL=1 M5APP_EXPECT=stock
+  dir0=$(run_dir plain mla0)
+  run plain mla1 M5APP_ORDER=motion-only M5APP_EXPECT_MOTION=stock
+  dir1=$(run_dir plain mla1)
+
+  if motion_stock_once $dir1 motion-only && [[ $(count_matches "preflight-fail-$BUILD" $dir1/dylib.log) == 1 &&
+    -f $STATE_DIR/preflight-fail-$BUILD ]]; then
+    pf_result=ok
+  else
+    pf_result="pf: $(app_lines 'order.motion-only' "$dir1" 120) lines=$(motion_stock_lines $dir1)"
+  fi
+
+  clear_sentinel $PLAIN_BUNDLE
+  plant_marker $STATE_DIR/$PLAIN_BUNDLE/latched-$BUILD activate $(( now + 7200 ))
+  run plain mla2 M5APP_ORDER=motion-only M5APP_EXPECT_MOTION=stock
+  dir2=$(run_dir plain mla2)
+  local marker_named=$(count_matches "latched-$BUILD: activate until" $dir2/dylib.log)
+
+  if motion_stock_once $dir2 motion-only && [[ $marker_named == 1 ]]; then
+    marker_result=ok
+  else
+    marker_result="camera marker: $(app_lines 'order.motion-only' "$dir2" 120) lines=$(motion_stock_lines $dir2)"
+  fi
+
+  plant_marker $STATE_DIR/preflight-fail-$BUILD "preflight failed" $(( now + 7200 ))
+  events_seen=$(line_count $events)
+  run plain mla3 M5APP_ORDER=motion-only SIMCAM_SENTINEL=clear
+  dir3=$(run_dir plain mla3)
+  local left=$(count_existing $STATE_DIR/$PLAIN_BUNDLE/latched-*(N) $STATE_DIR/preflight-fail-$BUILD(N))
+  local clear_lines=$(lines_after $events $events_seen | grep -c ' clear - .*SIMCAM_SENTINEL=clear')
+
+  if motion_standin_answered $dir3 motion-only && [[ $left == 0 && $clear_lines == 1 ]]; then
+    clear_result=ok
+  else
+    clear_result="clear: $(app_lines 'order.motion-only' "$dir3" 120) markers left=$left clear lines=$clear_lines"
+  fi
+
+  if [[ $pf_result == ok && $marker_result == ok && $clear_result == ok ]]; then
+    ok "real preflight failure -> next motion-only stock (accel=false, 0 updates), exactly one stock line;" \
+      "planted latched-$BUILD -> the same, line names it;" \
+      "SIMCAM_SENTINEL=clear -> stand-in, markers gone, clear line appended"
+  else
+    bad "$pf_result | $marker_result | $clear_result"
+  fi
+
+  clear_sentinel $PLAIN_BUNDLE
+}
+
+# The preflight-fail marker expires after 24 h, and a passing preflight deletes it.
+c_motion-pf-expiry() {
+  clear_sentinel $PLAIN_BUNDLE
+
+  local pf_marker=$STATE_DIR/preflight-fail-$BUILD
+  local now=$(date +%s)
+  local dir1 dir2 dir3 dir4 dir5 expired_result fresh_result pass_result after_result unlinked_result
+  plant_marker $pf_marker "preflight failed" $(( now - 60 ))   # written 24 h + 1 min ago
+  run plain mpe1 M5APP_ORDER=motion-only
+  dir1=$(run_dir plain mpe1)
+
+  if motion_standin_answered $dir1 motion-only; then
+    expired_result=ok
+  else
+    expired_result="expired: $(app_lines 'order.motion-only' "$dir1" 120) lines=$(motion_stock_lines $dir1)"
+  fi
+
+  plant_marker $pf_marker "preflight failed" $(( now + 82800 ))   # fresh (written 1 h ago)
+  run plain mpe2 M5APP_ORDER=motion-only M5APP_EXPECT_MOTION=stock
+  dir2=$(run_dir plain mpe2)
+
+  if motion_stock_once $dir2 motion-only; then
+    fresh_result=ok
+  else
+    fresh_result="fresh (control): $(app_lines 'order.motion-only' "$dir2" 120)"
+  fi
+
+  run plain mpe3
+  dir3=$(run_dir plain mpe3)
+
+  if [[ $(pass_count $dir3) == "$PLAIN_CHECKS" && ! -f $pf_marker ]]; then
+    pass_result=ok
+  else
+    pass_result="passing camera launch: pass=$(pass_count $dir3) pf=$([[ -f $pf_marker ]] && echo kept || echo gone)"
+  fi
+
+  run plain mpe4 M5APP_ORDER=motion-only
+  dir4=$(run_dir plain mpe4)
+
+  if motion_standin_answered $dir4 motion-only; then
+    after_result=ok
+  else
+    after_result="after: $(app_lines 'order.motion-only' "$dir4" 120) lines=$(motion_stock_lines $dir4)"
+  fi
+
+  # A fresh marker that the same launch's passing preflight unlinks before the first motion call: the stock line
+  # still names it with a real until (from the load-time stat), never "?".
+  plant_marker $pf_marker "preflight failed" $(( now + 82800 ))
+  run plain mpe5 M5APP_ORDER=camera-then-motion M5APP_EXPECT_MOTION=stock
+  dir5=$(run_dir plain mpe5)
+  local stock_line5=$(grep -m1 -oE 'simcam: CoreMotion is stock this launch \([^)]*\)' $dir5/dylib.log)
+
+  if motion_stock_once $dir5 camera-then-motion && [[ ! -f $pf_marker &&
+    $stock_line5 == *"preflight-fail-$BUILD: preflight failed until "[0-9][0-9][0-9][0-9]-* &&
+    $stock_line5 != *'?'* ]]; then
+    unlinked_result=ok
+  else
+    unlinked_result="unlinked mid-launch: pf=$([[ -f $pf_marker ]] && echo kept || echo gone)"
+    unlinked_result+=" line '$stock_line5' lines=$(motion_stock_lines $dir5)"
+  fi
+
+  if [[ $expired_result == ok && $fresh_result == ok && $pass_result == ok && $after_result == ok &&
+    $unlinked_result == ok ]]; then
+    ok "expired (24 h + 1 min): stand-in; fresh: stock (control); a passing camera launch (14/14) unlinked it;" \
+      "next motion-only: stand-in; unlinked by the same launch's preflight before the first motion call:" \
+      "'${stock_line5#simcam: CoreMotion is stock this launch }'"
+  else
+    bad "$expired_result | $fresh_result | $pass_result | $after_result | $unlinked_result"
+  fi
+
+  clear_sentinel $PLAIN_BUNDLE
+}
+
+# motion_crash_seq <tag> [K=V ...]: two launches of plain, N and N+1, that crash in a motion tick with the camera
+# armed (the K=V go to both). Sets these globals:
+#   MOTION_CRASH_DIR1 MOTION_CRASH_DIR2   the run dirs of N and N+1
+#   MOTION_CRASH_COUNTS                   their crash lines, counted as crash_counts prints them
+#   MOTION_MARKER_COUNT                   1 if this build's latched-motion marker exists afterwards, else 0
+#   MOTION_MARKER_UNTIL                   that marker's mtime, which is its until (0 if there is no marker)
+#   MOTION_FIRST_STRIKE                   the epoch time of the first `crash motion` line (empty if there is none)
+motion_crash_seq() {
+  local tag=$1
+  shift
+  local events=$(events_log $PLAIN_BUNDLE)
+  local events_seen
+  clear_sentinel $PLAIN_BUNDLE
+  events_seen=$(line_count $events)
+  run plain $tag-1 M5APP_ORDER=camera-then-motion SIMCAM_TEST_MOTION_FAULT=1 "$@"
+  MOTION_CRASH_DIR1=$(run_dir plain $tag-1)
+  run plain $tag-2 M5APP_ORDER=camera-then-motion SIMCAM_TEST_MOTION_FAULT=1 "$@"
+  MOTION_CRASH_DIR2=$(run_dir plain $tag-2)
+  MOTION_CRASH_COUNTS=$(crash_counts $events $events_seen)
+  MOTION_MARKER_COUNT=$(count_existing $STATE_DIR/$PLAIN_BUNDLE/latched-motion-$BUILD(N))
+  MOTION_MARKER_UNTIL=$(mtime $STATE_DIR/$PLAIN_BUNDLE/latched-motion-$BUILD)
+  MOTION_FIRST_STRIKE=$(first_event_time $events $events_seen crash motion)
+}
+
+# discovery_count <run dir>: how many cameras plain's camera-then-motion discovery found
+discovery_count() { grep -oE 'camera-then-motion discovery=[0-9]+' $1/app.log | grep -oE '[0-9]+$'; }
+
+# Launches N and N+1 crash in the stand-in with the camera armed. They count as `crash motion`, not provider, and
+# N+1's crash handler writes the latched-motion marker.
+c_motion-crash() {
+  motion_crash_seq mc
+  local dir1=$MOTION_CRASH_DIR1
+  local dir2=$MOTION_CRASH_DIR2
+  local engine_ok=0
+  local dir3 canary_dir
+  local pid1=$(fault_pid $dir1/app.log 'SIMCAM_TEST_MOTION_FAULT: fault')
+  local pid2=$(fault_pid $dir2/app.log 'SIMCAM_TEST_MOTION_FAULT: fault')
+  crash_reports $PLAIN_PROCESS $CRASH_REPORT_WAIT_S $pid1 $pid2
+
+  # the marker's until minus N's strike: 24 h, give or take 5 s
+  local until_minus_strike=$(( MOTION_MARKER_UNTIL - ${MOTION_FIRST_STRIKE:-0} ))
+  local strike_slack_s=5   # the marker's until is 24 h after the first strike's own time
+  run plain mc-3 M5APP_ORDER=camera-then-motion M5APP_EXPECT_MOTION=stock
+  dir3=$(run_dir plain mc-3)
+  local devices=$(discovery_count $dir3)
+  run canary mc-c
+  canary_dir=$(run_dir canary mc-c)
+  local armed=$(count_matches 'LAZY armed by' $dir3/dylib.log)
+  local marker_named=$(count_matches "latched-motion-$BUILD: motion until" $dir3/dylib.log)
+  local canary_summary=$(cat $canary_dir/summary.txt 2>/dev/null)   # no summary: the canary did not finish (a FAIL)
+
+  if [[ $MOTION_CRASH_COUNTS == "crash-motionx2 " && $MOTION_MARKER_COUNT == 1 && -n $pid1 && -n $pid2 ]] &&
+    in_range $until_minus_strike $(( MARKER_LIFE_S - strike_slack_s )) $(( MARKER_LIFE_S + strike_slack_s )) &&
+    (( ${devices:-0} > 0 )) &&
+    [[ $armed == 1 ]] && motion_stock_once $dir3 camera-then-motion &&
+    [[ $marker_named == 1 && $canary_summary == *core=PASS* ]]; then
+    engine_ok=1
+  fi
+
+  local ok_text="N, N+1 (pids $pid1 $pid2): $MOTION_CRASH_COUNTS(no provider), $REPORTS_FOUND crash reports;"
+  ok_text+=" N+1's handler wrote latched-motion (until = N's strike + 24 h);"
+  ok_text+=" N+2: camera armed ($devices devices), CoreMotion stock from the first query, one line;"
+  ok_text+=" canary $(cut -c1-40 $canary_dir/summary.txt)"
+  local bad_text="events '$MOTION_CRASH_COUNTS' marker=$MOTION_MARKER_COUNT until-strike=${until_minus_strike}s"
+  bad_text+=" fault pids '$pid1' '$pid2' reports=$REPORTS_FOUND;"
+  bad_text+=" N+2 discovery=${devices:-?} armed=$armed $(app_lines 'order.camera-then-motion' "$dir3" 120)"
+  bad_text+=" lines=$(motion_stock_lines $dir3); canary '$(cut -c1-60 $canary_dir/summary.txt 2>/dev/null)'"
+  verdict_reports $engine_ok 2 "$ok_text" "$bad_text"
+  clear_sentinel $PLAIN_BUNDLE
+  clear_sentinel $CANARY_BUNDLE
+}
+
+# In a latched-motion launch, 3 threads make their first motion call at once. There must be exactly one stock line.
+c_motion-stock-threads() {
+  local failures=
+  local passed=0
+  local now=$(date +%s)
+  local i dir
+
+  for i in 1 2 3; do
+    clear_sentinel $PLAIN_BUNDLE
+    plant_marker $STATE_DIR/$PLAIN_BUNDLE/latched-motion-$BUILD motion $(( now + 7200 ))
+    run plain mst$i M5APP_ORDER=motion-threads M5APP_EXPECT_MOTION=stock
+    dir=$(run_dir plain mst$i)
+    local updates=$(count_matches 'PASS order.motion-threads.stock.updates' $dir/app.log)
+    local hooked=$(count_matches 'motion: hooked' $dir/app.log)
+    local done_lines=$(count_matches DONE $dir/app.log)
+    if [[ $updates == 1 && $hooked == 0 && $(motion_stock_lines $dir) == 1 && $done_lines == 1 ]]; then
+      passed=$((passed + 1))
+    else
+      failures="$failures $i: $(app_lines 'order.motion-threads' "$dir" 120) lines=$(motion_stock_lines $dir)"
+    fi
+  done
+
+  if (( passed == 3 )); then
+    ok "3/3: three threads' first calls into the forwarding traps at once, 0 updates (stock)," \
+      "exactly one stock line each"
+  else
+    bad "$passed/3 ok;$failures"
+  fi
+
+  clear_sentinel $PLAIN_BUNDLE
+}
+
+# Mutant SIMCAM_OFF_MOTION_MARKERS=1 makes motion ignore markers at load. motion-latched must catch it (the stand-in
+# answers).
+c_mutation-L58() {
+  clear_sentinel $PLAIN_BUNDLE
+
+  local now=$(date +%s)
+  local dir
+  plant_marker $STATE_DIR/$PLAIN_BUNDLE/latched-motion-$BUILD motion $(( now + 7200 ))
+  run plain l58 M5APP_ORDER=motion-only SIMCAM_OFF_MOTION_MARKERS=1
+  dir=$(run_dir plain l58)
+
+  if motion_standin_answered $dir motion-only; then
+    ok "mutant caught: with a valid latched-motion marker the stand-in still answered" \
+      "(motion-latched wants stock + one line)"
+  else
+    bad "mutant not caught: $(app_lines 'order.motion-only' "$dir" 160) lines=$(motion_stock_lines $dir)"
+  fi
+
+  clear_sentinel $PLAIN_BUNDLE
+}
+
+# Mutant SIMCAM_OFF_MOTION_KEY=1 sets no feature key, so motion crashes count as `provider` and close the camera.
+# motion-crash must catch it.
+c_mutation-L59() {
+  motion_crash_seq l59 SIMCAM_OFF_MOTION_KEY=1
+  local dir3
+  run plain l59-3 M5APP_ORDER=camera-then-motion M5APP_EXPECT=stock
+  dir3=$(run_dir plain l59-3)
+
+  if [[ $MOTION_CRASH_COUNTS == "crash-providerx2 " &&
+    $(count_matches 'camera-then-motion discovery=0' $dir3/app.log) == 1 ]]; then
+    ok "mutant caught: '$MOTION_CRASH_COUNTS', N+2 camera latched (0 devices; motion-crash wants motion x2 and the" \
+      "camera armed)"
+  else
+    bad "mutant not caught: events '$MOTION_CRASH_COUNTS'; N+2 $(grep -oE 'discovery=[0-9]+' $dir3/app.log)"
+  fi
+
+  clear_sentinel $PLAIN_BUNDLE
+}
+
+# Mutant SIMCAM_OFF_HANDLER_MOTION_MARKER=1 writes no marker at the second strike, so N+2 still gets the stand-in
+# (the latch comes one launch late).
+c_mutation-L60() {
+  motion_crash_seq l60 SIMCAM_OFF_HANDLER_MOTION_MARKER=1
+  local dir3
+  run plain l60-3 M5APP_ORDER=camera-then-motion
+  dir3=$(run_dir plain l60-3)
+
+  if [[ $MOTION_CRASH_COUNTS == "crash-motionx2 " && $MOTION_MARKER_COUNT == 0 ]] &&
+    motion_standin_answered $dir3 camera-then-motion; then
+    ok "mutant caught: '$MOTION_CRASH_COUNTS', no latched-motion after N+1, N+2 got the stand-in (motion-crash wants" \
+      "stock at N+2)"
+  else
+    bad "mutant not caught: events '$MOTION_CRASH_COUNTS' marker=$MOTION_MARKER_COUNT;" \
+      "N+2 $(app_lines 'order.camera-then-motion' "$dir3" 120) lines=$(motion_stock_lines $dir3)"
+  fi
+
+  clear_sentinel $PLAIN_BUNDLE
+}
+
+# ---------------------------------------------------------------- the attitude stand-in
+# motion_probe <tag> <probe args...>: one launch of fixtures/motion-probe. PROBE_ENV, if set, holds the K=V to inject
+# (one per line). Sets PROBE_DIR to the launch's run dir.
+motion_probe() {
+  local tag=$1
+  shift
+  # its output stays in its result dir; the verdict is read from there
+  XENV="${PROBE_ENV:-}" $ROOT/fixtures/motion-probe/drive.sh $RUNTIME $TAG-$tag boot "$@" >/dev/null 2>&1
+  PROBE_DIR=$SIMCAM_RESULTS/motion-$RUNTIME-$TAG-$tag
+}
+
+# attitude_summary <run dir>: the probe's "ATT SUMMARY pass=<n> fail=<n>" line
+attitude_summary() { grep -m1 -oE 'ATT SUMMARY pass=[0-9]+ fail=[0-9]+' $1/app.log; }
+
+# attitude_failures <run dir>: the probe's "ATT FAIL" checks, each cut to 120 characters and followed by ";"
+attitude_failures() { grep 'ATT FAIL' $1/app.log | sed 's/.*ATT FAIL //' | cut -c1-120 | tr '\n' ';'; }
+
+# attitude, quaternion, rotationMatrix and roll/pitch/yaw in portrait, upside-down and both landscapes: 24 checks in
+# each orientation
+c_motion-attitude() {
+  # The orientation comes from the control file's orientation= line, the line `stuntcam orient` writes (the CLI
+  # refuses a sim that the scripts armed). The engine reads it when the camera arms, so the probe makes one camera
+  # call first (-armcam 1).
+  clear_sentinel $MOTION_BUNDLE
+  local control=$SIMCAM_RESULTS/activation-$RUNTIME-$TAG-att-control.txt
+  local passed=0
+  local failures=
+  local evidence=
+  local orient dir summary
+  local attitude_rx='gravity=\([^)]*\) q=\([^)]*\) roll=[-0-9.]+ pitch=[-0-9.]+ yaw=[-0-9.]+'
+
+  for orient in portrait portraitUpsideDown landscapeLeft landscapeRight; do
+    print -r -- "orientation=$orient" > $control
+    PROBE_ENV="SIMCAM_CONTROL=$control"$'\n' motion_probe att-$orient -attitude 1 -armcam 1 -expect $orient
+    dir=$PROBE_DIR
+    summary=$(attitude_summary $dir)
+    local hooked=$(count_matches 'motion: hooked 16' $dir/app.log)
+    if [[ $summary == 'ATT SUMMARY pass=24 fail=0' && $hooked == 1 ]]; then
+      passed=$((passed + 1))
+      evidence+=" $orient: $(grep -m1 -oE "$attitude_rx" $dir/app.log),"
+      evidence+=" $(grep -m1 -oE 'samples=[0-9]+ in 2 s' $dir/app.log);"
+    else
+      local att_fails=$(attitude_failures $dir)
+      failures="$failures [$orient: ${summary:-no summary} hooked=$hooked $att_fails]"
+    fi
+  done
+
+  rm -f $control
+
+  if (( passed == 4 )); then
+    ok "4/4 orientations, 24/24 checks each (frames, pull start, rate, R = matrix(q) = matrix(angles)," \
+      "R*down = gravity, stable 2 s, magneticField, Apple's CMAttitude oracle, multiply, copy, coding as Apple's," \
+      "M1: decoded attitudes are the stand-in, multiply/isEqual with dm.attitude):$evidence"
+  else
+    bad "$passed/4;$failures"
+  fi
+
+  clear_sentinel $MOTION_BUNDLE
+}
+
+# In a latched-motion launch the newer selectors go through the forwarding traps and get stock answers.
+c_motion-attitude-stock() {
+  clear_sentinel $MOTION_BUNDLE
+
+  local now=$(date +%s)
+  local dir0 dir1
+
+  # stock CoreMotion, no traps: the reference answers
+  PROBE_ENV="SIMCAM_OFF_MOTION=1"$'\n' motion_probe atts0 -attitude stock
+  dir0=$PROBE_DIR
+  plant_marker $STATE_DIR/$MOTION_BUNDLE/latched-motion-$BUILD motion $(( now + 7200 ))
+  PROBE_ENV= motion_probe atts1 -attitude stock
+  dir1=$PROBE_DIR
+
+  # availableAttitudeReferenceFrames, and the reference frame after a start that delivered nothing, as stock
+  # CoreMotion answers them and as they come through the traps
+  local frames_stock=$(grep -m1 -oE ' frames=[0-9]+' $dir0/app.log)
+  local frames_trap=$(grep -m1 -oE ' frames=[0-9]+' $dir1/app.log)
+  local frame_stock=$(grep -m1 -oE 'samples=0 frame=[0-9]+' $dir0/app.log)
+  local frame_trap=$(grep -m1 -oE 'samples=0 frame=[0-9]+' $dir1/app.log)
+  local summary=$(attitude_summary $dir1)
+  local hooked=$(count_matches 'motion: hooked' $dir1/app.log)
+  local traps=$(count_matches '16 one-shot forwarding traps' $dir1/app.log)
+  local stock_lines=$(motion_stock_lines $dir1)
+
+  if [[ $summary == 'ATT SUMMARY pass=3 fail=0' && $hooked == 0 && $traps == 1 && $stock_lines == 1 ]] &&
+    [[ -n $frames_stock && $frames_trap == $frames_stock && $frames_trap != ' frames=1' && -n $frame_stock &&
+    $frame_trap == $frame_stock ]]; then
+    ok "16 traps, one stock line; availableAttitudeReferenceFrames forwarded:$frames_trap (stock:$frames_stock, the" \
+      "stand-in answers 1);" \
+      "reference-frame starts (queue and pull) delivered nothing, attitudeReferenceFrame $frame_trap as stock"
+  else
+    bad "$summary hooked=$hooked traps=$traps lines=$stock_lines frames trap:$frames_trap stock:$frames_stock" \
+      "'$frame_trap' vs '$frame_stock'"
+  fi
+
+  clear_sentinel $MOTION_BUNDLE
 }

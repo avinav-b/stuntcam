@@ -554,6 +554,339 @@ that are not a whole name replace that exact text in the files named.
 | `w4 e40: ` | `photo stop: ` | client/photo.inc; log lines; consumers by hand: scripts/run.sh, scripts/mutation.sh (MISMATCH: photo stop), docs/ledger.md L66, TODO.md |
 | `"w4 e48 trace shutter"` | `"trace shutter"` | client/photo.inc; hook label; shows in docs/inventory.md (generated) |
 
+## Engine internal names (1.2.0)
+
+The engine's core subsystems keep their state in documented structs, each declared in a small internal header next
+to its fragment (`core/activation.h`, `core/sentinel.h`, `core/trace.h`, `core/control.h`, `fig/session_hook.h`,
+`client/motion.h`, `providers/barcodes.h`), and their cryptic prefixes became words. These are internal names only:
+log lines, marker texts, file formats, environment variables and test switches did not change. One log line keeps
+an old name on purpose: the trap fault's `fault in ActEnsure now`, which `scripts/activation/orientation.sh` matches.
+Comments in `cli/` and `scripts/` that cite engine functions may still use the old names below.
+
+Prefix rules (a name that follows its rule is not listed in the tables):
+
+| old | new | example |
+|---|---|---|
+| `Act*` (functions, types), `kAct*` | `Activation*`, `kActivation*` | `ActEnsure` -> `ActivationEnsure` |
+| `SC*` (functions) | `Sentinel*` | `SCOpBegin` -> `SentinelOpBegin` |
+| `SC_*` (sizes, limits) | `kSentinel*` | `SC_STRIKES_TO_LATCH` -> `kSentinelStrikesToLatch`; `SC_MAXOPS` -> `kSentinelMaxOps` |
+| `TR*` (functions), `TR_*` | `Trace*`, `kTrace*` / `kTraceOp*` (the ops) | `TR_SHUTTER` -> `kTraceOpShutter` |
+| `Ctl*`, `kCtl*` | `Control*`, `kControl*` | `CtlSwap` -> `ControlSwap` |
+
+
+### Other renamed names (99)
+
+| old | new |
+|---|---|
+| `gActThread` | `gActivationThread` |
+| `gActFakeBreak` | `gTestPreflightBreak` |
+| `ACT_IDLE` | `kActivationIdle` |
+| `ACT_RUNNING` | `kActivationRunning` |
+| `ACT_COMMITTING` | `kActivationCommitting` |
+| `ACT_ARMED` | `kActivationArmed` |
+| `ACT_STOCK` | `kActivationStock` |
+| `PH_START` | `kActivationPhaseStart` |
+| `PH_TRIM` | `kActivationPhaseTrim` |
+| `PH_SENTINEL` | `kActivationPhaseSentinel` |
+| `PH_LOOKUPS` | `kActivationPhaseLookups` |
+| `PH_PREFLIGHT` | `kActivationPhasePreflight` |
+| `PH_RESOLVE` | `kActivationPhaseResolve` |
+| `PH_SWAP` | `kActivationPhaseSwap` |
+| `PH_DONE` | `kActivationPhaseDone` |
+| `kActPhaseName` | `kActivationPhaseNames` |
+| `HG_CLIENT` | `kHookGroupClient` |
+| `HG_SESSION` | `kHookGroupSession` |
+| `HG_AUDIO` | `kHookGroupAudio` |
+| `HG_VIDEO` | `kHookGroupVideo` |
+| `HG_N` | `kHookGroupCount` |
+| `ACT_HOOK_NOT_INSTALLED` | `kHookNotInstalled` |
+| `ACT_HOOK_CHAINED_PREPARED` | `kHookChainedToPrepared` |
+| `ACT_HOOK_CHAINED_NEWER` | `kHookChainedToNewer` |
+| `ACT_MAXHOOKS` | `kActivationMaxHooks` |
+| `AP_OK` | `kPrepareOk` |
+| `AP_LATCHED` | `kPrepareLatched` |
+| `AP_PREFLIGHT` | `kPreparePreflightFailed` |
+| `AP_MISSING` | `kPrepareHookMissing` |
+| `AP_THROW` | `kPrepareThrew` |
+| `AP_FORCED` | `kPreparePreflightForced` |
+| `ORF_NONE` | `kOrientFaultNone` |
+| `ORF_UPD` | `kOrientFaultUpd` |
+| `ORF_START` | `kOrientFaultStart` |
+| `ORF_RUNMAIN` | `kOrientFaultRunMain` |
+| `ORF_ENSURE` | `kOrientFaultEnsure` |
+| `ACT_SLEEP_SLICE_MS` | `kSlicedSleepSliceMs` |
+| `ACT_SLEEP_STALL_MS` | `kSlicedSleepStallMs` |
+| `ACT_LOG_PID_ROOM` | `kLogPathPidRoom` |
+| `ActNow` | `MonotonicNowNs` |
+| `ActSleepMs` | `SlicedSleepMs` |
+| `ActProcessStartTime` | `ProcessStartTime` |
+| `ActIsPrimaryEngine` | `IsPrimaryEngine` |
+| `ActOpenLog` | `OpenLog` |
+| `ActRecLog` | `ActivationRecordLog` |
+| `ActRecLogF` | `ActivationRecordLogF` |
+| `ActRecStderrF` | `ActivationRecordStderrF` |
+| `ActPhase` | `ActivationEnterPhase` |
+| `gSCFeatures` | `kFeatureNames` |
+| `kSCMotion` | `kMotionFeatureKey` |
+| `kSCSigs` | `kCrashSignals` |
+| `SCRange` | `SentinelImageRange` |
+| `SC_FSESSION` | `kFeatureSession` |
+| `SC_FPHOTO` | `kFeaturePhoto` |
+| `SC_FMOVIE` | `kFeatureMovie` |
+| `SC_FPROVIDER` | `kFeatureProvider` |
+| `SC_FENGINE` | `kFeatureEngine` |
+| `SC_FACTIVATE` | `kFeatureActivate` |
+| `SC_FMOTION` | `kFeatureMotion` |
+| `SC_NFEAT` | `kFeatureCount` |
+| `SC_FIELD_EPOCH` | `kEventFieldEpoch` |
+| `SC_FIELD_ACTIVATION` | `kEventFieldActivation` |
+| `SC_FIELD_KIND` | `kEventFieldKind` |
+| `SC_FIELD_FEATURE` | `kEventFieldFeature` |
+| `SC_FIELD_BUILD` | `kEventFieldBuild` |
+| `SC_FIELD_DETAIL` | `kEventFieldDetail` |
+| `SC_MIN_FIELDS` | `kEventMinFields` |
+| `SC_SENTINEL_OFF` | `kSentinelModeOff` |
+| `SC_SENTINEL_ON` | `kSentinelModeOn` |
+| `SC_SENTINEL_CLEAR` | `kSentinelModeClear` |
+| `SC_DIR_STATE` | `kStateDirState` |
+| `SC_DIR_TMP` | `kStateDirTmp` |
+| `SC_NDIRS` | `kStateDirCount` |
+| `SCP_OK` | `kSentinelPrepareOk` |
+| `SCP_OFF` | `kSentinelPrepareOff` |
+| `SCP_LATCHED` | `kSentinelPrepareLatched` |
+| `SC_MOTION_SCOPE` | `SENTINEL_MOTION_SCOPE` |
+| `SC_NSIGS` | `kCrashSignalCount` |
+| `SC_FEATS_CAP` | `kSentinelLatchFeaturesCap` |
+| `SC_NUMS_CAP` | `kSentinelLatchCountsCap` |
+| `SCFormat` | `SentinelFormatEvent` |
+| `SCEventRaw` | `SentinelWriteEvent` |
+| `SCIsTraced` | `ProcessIsTraced` |
+| `SCMarkerValidAtLoad` | `SentinelLatchMarkerValidAtLoad` |
+| `SCTailMaxAct` | `SentinelTailMaxActivation` |
+| `kTRFlushMs` | `kTraceFlushMs` |
+| `kTRKeep` | `kTraceKeepFiles` |
+| `kTRName` | `kTraceOpNames` |
+| `TR_NOPS` | `kTraceOpCount` |
+| `SESS_HOOK_OBJC` | `kSessionHookObjc` |
+| `SESS_HOOK_GOT` | `kSessionHookGot` |
+| `SESS_MAXGOT` | `kSessionHookMaxGotSlots` |
+| `SCW_LD32` | `SCW_LOAD_ACQUIRE_U32` |
+| `SCW_LD64` | `SCW_LOAD_ACQUIRE_U64` |
+| `SCW_LD32R` | `SCW_LOAD_RELAXED_U32` |
+| `SCW_LD64R` | `SCW_LOAD_RELAXED_U64` |
+| `SCW_ST32` | `SCW_STORE_RELEASE_U32` |
+| `SCW_ST64` | `SCW_STORE_RELEASE_U64` |
+| `SCW_ST64R` | `SCW_STORE_RELAXED_U64` |
+
+### Globals that became struct fields (119)
+
+| old global | new field |
+|---|---|
+| `gAct` | `gActivation.state` |
+| `gActRunning` | `gActivation.preparing` |
+| `gActPhase` | `gActivation.phase` |
+| `gActLazy` | `gActivation.lazy` |
+| `gActInline` | `gActivation.runsInline` |
+| `gActBudgetMs` | `gActivation.budget.ms` |
+| `gActBudgetExplicit` | `gActivation.budget.isExplicit` |
+| `gActDeadline` | `gActivation.budget.deadlineNs` |
+| `gActBeganNs` | `gActivation.timing.beganNs` |
+| `gActPhaseBeganNs` | `gActivation.timing.phaseBeganNs` |
+| `gActSwapBeganNs` | `gActivation.timing.swapBeganNs` |
+| `gActArmedNs` | `gActivation.timing.armedNs` |
+| `gActQueue` | `gActivation.queues.activate` |
+| `gActRecordQueue` | `gActivation.queues.record` |
+| `gActGroup` | `gActivation.queues.waiters` |
+| `gActOnce` | `gActivation.queues.once` |
+| `gActTrigger` | `gActivation.trigger.name` |
+| `gActTriggerQueueLabel` | `gActivation.trigger.queueLabel` |
+| `gActTriggerOnMain` | `gActivation.trigger.onMain` |
+| `gActTriggerReturnAddress` | `gActivation.trigger.returnAddress` |
+| `gActStockNoted` | `gActivation.noted.stock` |
+| `gActReenterNoted` | `gActivation.noted.reentry` |
+| `gActOverrunNoted` | `gActivation.noted.swapOverrun` |
+| `gActMainTrackerRefreshed` | `gActivation.noted.mainTrackerRun` |
+| `gActExceptionName` | `gActivation.exceptionName` |
+| `gActSwapExceptionName` | `gActivation.swapExceptionName` |
+| `gActRecorded` | `gActivation.strikeRecorded` |
+| `gActRecordedActivation` | `gActivation.timeoutActivationNumber` |
+| `gActHooks` | `gActivation.hooks.list` |
+| `gActHookCount` | `gActivation.hooks.count` |
+| `gActMissing` | `gActivation.hooks.missing` |
+| `gSCSentinel` | `gSentinel.mode` |
+| `gSCBuild` | `gSentinel.build` |
+| `gSCBundle` | `gSentinel.bundle` |
+| `gSCScale` | `gSentinel.scale` |
+| `gSCLive` | `gSentinel.live` |
+| `gSCTraced` | `gSentinel.traced` |
+| `gSCEventsFd` | `gSentinel.events.fd` |
+| `gSCActivation` | `gSentinel.events.activationNumber` |
+| `gSCEventsPath` | `gSentinel.events.path` |
+| `gSCEventsDirIndex` | `gSentinel.events.dirIndex` |
+| `gSCEventsPathPublished` | `gSentinel.events.pathPublished` |
+| `gSCActivationPublished` | `gSentinel.events.activationNumberPublished` |
+| `gSCOps` | `gSentinel.ops.slots` |
+| `gSCLock` | `gSentinel.ops.lock` |
+| `gSCActiveNs` | `gSentinel.ops.activeClockNs` |
+| `gSCHangs` | `gSentinel.hangs` |
+| `gSCLatchedNow` | `gSentinel.latchedNow` |
+| `gSCFeatureKey` | `gSentinel.featureKey.key` |
+| `gSCFeatureKeyOn` | `gSentinel.featureKey.on` |
+| `gSCSessionErrorAt` | `gSentinel.sessionErrorAtNs` |
+| `gSCLatchMessage` | `gSentinel.latchMessage` |
+| `gSCEventsDirs` | `gSentinel.paths.eventsDirs` |
+| `gSCLatchMarker` | `gSentinel.paths.latchMarker` |
+| `gSCPreflightFailPath` | `gSentinel.paths.preflightFail` |
+| `gSCMotionMarker` | `gSentinel.paths.motionMarker` |
+| `gSCLatchMarkerAtLoad` | `gSentinel.atLoad.latchMarker` |
+| `gSCMotionStockAt` | `gSentinel.atLoad.motionStockMarker` |
+| `gSCMotionStockUntil` | `gSentinel.atLoad.motionStockUntil` |
+| `gSCMotionStockInode` | `gSentinel.atLoad.motionStockInode` |
+| `gSCMotionStockKind` | `gSentinel.atLoad.motionStockKind` |
+| `gSCClearedAtLoad` | `gSentinel.atLoad.cleared` |
+| `gSCSelfRange` | `gCrashHandler.selfRange` |
+| `gSCRelatedRanges` | `gCrashHandler.relatedRanges` |
+| `gSCRelatedCount` | `gCrashHandler.relatedCount` |
+| `gSCChainedByFull` | `gCrashHandler.chainedByFull` |
+| `gSCChainedByMinimal` | `gCrashHandler.chainedByMinimal` |
+| `gSCMinimalOn` | `gCrashHandler.minimalOn` |
+| `gSCPrepareCrashRecorded` | `gCrashHandler.prepareCrashRecorded` |
+| `gSCMotionPrior` | `gCrashHandler.motionMarker.priorStrikes` |
+| `gSCMotionPriorEpoch` | `gCrashHandler.motionMarker.newestStrikeEpoch` |
+| `gSCMotionMarkerPath` | `gCrashHandler.motionMarker.path` |
+| `gSCMotionMarkerTmp` | `gCrashHandler.motionMarker.tempPath` |
+| `gTRRing` | `gTrace.ring` |
+| `gTRNext` | `gTrace.recorded` |
+| `gTROn` | `gTrace.on` |
+| `gTRKicked` | `gTrace.flushScheduled` |
+| `gTRPaths` | `gTrace.paths` |
+| `gTRPathSlot` | `gTrace.pathSlot` |
+| `gTRRepicked` | `gTrace.repicked` |
+| `gTRCrashWriting` | `gTrace.crashWriting` |
+| `gTRTimebase` | `gTrace.timebase` |
+| `gTRSigBuf` | `gTrace.crashBuffer` |
+| `gOrientBeforeForce` | `gControl.orientBeforeForce` |
+| `gCtlLastEvent` | `gControl.poll.lastEvent` |
+| `gCtlMtime` | `gControl.poll.mtime` |
+| `gCtlFirstPoll` | `gControl.poll.isFirst` |
+| `gCtlRead` | `gControl.atPrepare` |
+| `gSrcSpecNext` | `gControl.atSwap.sourceSpec` |
+| `gOrientNext` | `gControl.atSwap.orientation` |
+| `gOrientNextReason` | `gControl.atSwap.orientationReason` |
+| `gPhotoErrAtStart` | `gControl.atSwap.photoError` |
+| `gPhotoErrAtStartSet` | `gControl.atSwap.photoErrorSet` |
+| `gSessHookMode` | `gSessionHook.mode` |
+| `gSessSlotMismatch` | `gSessionHook.slotMismatch` |
+| `gSessBase` | `gSessionHook.base` |
+| `gOrigSessFinalize` | `gSessionHook.origFinalize` |
+| `gOrigCreateFig` | `gSessionHook.origCreateFig` |
+| `gGotSlots` | `gSessionHook.got.slots` |
+| `gGotSlotCount` | `gSessionHook.got.count` |
+| `gGotSlotsPatched` | `gSessionHook.got.patched` |
+| `gUIOrient` | `gOrientTracker.uiOrientation` |
+| `gOrientTrackRunning` | `gOrientTracker.running` |
+| `gOrientTrackStarted` | `gOrientTracker.started` |
+| `gUIOrientSnapNote` | `gOrientTracker.uiSnapshot.note` |
+| `gUIOrientSceneObserver` | `gOrientTracker.uiSnapshot.sceneObserver` |
+| `gUIOrientGeometryObserver` | `gOrientTracker.uiSnapshot.geometryObserver` |
+| `gMotionFirstTick` | `gMotion.firstTickNs` |
+| `gMotionHookedCount` | `gMotion.hookedCount` |
+| `gMotionInstalledAt` | `gMotion.installedAt` |
+| `gMotionStockNoted` | `gMotion.stockNoted` |
+| `gMotionStockTrapCount` | `gMotion.stockTrapCount` |
+| `gBarcodeDicts` | `gBarcodes.dicts` |
+| `gBarcodeSrcGen` | `gBarcodes.foundGen` |
+| `gBarcodeOrient` | `gBarcodes.foundOrientation` |
+| `gScanBusy` | `gBarcodes.scanBusy` |
+| `gScanGenDone` | `gBarcodes.scanGenDone` |
+| `gVisionRequest` | `gBarcodes.visionRequest` |
+| `gVisionHandler` | `gBarcodes.visionHandler` |
+
+## Engine webcam names (1.2.0)
+
+The webcam source's functions and types (`providers/webcam.inc`, `providers/webcam_path.inc`, `providers/webcam.h`)
+took the engine's subsystem-word prefix, as `Scene*` and `Sentinel*` had. Internal names only: log lines, the reader
+file, the ring's `scw_*` functions and environment variables did not change. The `kWc*` constants keep their prefix
+(the CLI's test reads the `kWcRings` line).
+
+Prefix rule (a name that follows it is not listed below):
+
+| old | new | example |
+|---|---|---|
+| `Wc*` (functions, types) | `Webcam*` | `WcApply` -> `WebcamApply`, `WcStats` -> `WebcamStats` |
+
+### Other renamed names (29)
+
+| old | new |
+|---|---|
+| `WcFrameBuf` | `WebcamFrameBuffer` |
+| `WcOp` | `WebcamOutputOp` |
+| `WcOutCache` | `WebcamOutputCache` |
+| `WcDrawBand` | `WebcamDrawOfflineBand` |
+| `WcSinkOut` | `WebcamSinkOutput` |
+| `WcMovieOut` | `WebcamMovieOutput` |
+| `WcOutFree` | `WebcamOutputCacheFree` |
+| `WcWarm` | `WebcamPathWarm` |
+| `WcCopy` | `WebcamCopyFrame` |
+| `WcFrameBufsFree` | `WebcamFrameBuffersFree` |
+| `WcFrameBufGet` | `WebcamFrameBufferGet` |
+| `WcFrameBufRelease` | `WebcamFrameBufferRelease` |
+| `WcCached` | `WebcamCachedOutput` |
+| `WcCrop` | `WebcamCropSize` |
+| `WcGpu` | `WebcamRenderGpu` |
+| `WcGpuLateEnd` | `WebcamGpuLateRenderEnded` |
+| `WcGpuTimeout` | `WebcamGpuRenderTimedOut` |
+| `WcGraph` | `WebcamImageGraph` |
+| `WcOpKey` | `WebcamOutputOpKey` |
+| `WcOutCacheFor` | `WebcamOutputCacheFor` |
+| `WcOutClear` | `WebcamOutputCacheClear` |
+| `WcPoolBuf` | `WebcamPoolBuffer` |
+| `WcReadDefault` | `WebcamReadDefaultCamera` |
+| `WcReaderStart` | `WebcamReaderFileStart` |
+| `WcReaderStop` | `WebcamReaderFileStop` |
+| `WcReaderWrite` | `WebcamReaderFileWrite` |
+| `WcResolve` | `WebcamResolveRing` |
+| `WcToCG` | `WebcamFallBackToCG` |
+| `WcVideoToolbox` | `WebcamRenderVideoToolbox` |
+
+### Fields, and two names folded in (9)
+
+| old | new |
+|---|---|
+| `gWebcam.ring.shm` | `gWebcam.ring.reader` |
+| `scw_shm_reader.g` (`gWebcam.ring.shm.g`) | `scw_shm_reader.geom` (`gWebcam.ring.reader.geom`) |
+| `gWebcam.lock` | `gWebcam.phaseLock` |
+| `WcOp.fmt` | `WebcamOutputOp.format` |
+| `WcOutCache.last` | `WebcamOutputCache.lastOutput` |
+| `WcOutCache.gen` | `WebcamOutputCache.frameGen` |
+| `WcOutCache.key` | `WebcamOutputCache.opKey` |
+| `SceneWebcamFrame` (providers/scene.inc) | `WebcamTickFrame` (providers/webcam.h), which WebcamAdvance returns |
+| `lastStatus` (a static in WebcamOfflineTick) | `gWebcam.feed.offlineStatus` |
+
+## Engine ring and header names (1.2.0)
+
+The webcam ring's fields took the header's camelCase, and its raw buffer sizes took names (`engine/src/webcam/ring.h`,
+`ring_shm.h`; the helper uses two of them). The shared-memory layout did not change: `ring.h` now checks every
+field's offset. Internal names only: the ring's functions, the pid file and log lines did not change.
+
+| old | new |
+|---|---|
+| `scw_peek_t.have_ts` | `scw_peek_t.hasTimestamps` |
+| `scw_shm_report.unlink_errno` | `scw_shm_report.unlinkErrno` |
+| `scw_shm_report.fchmod_errno` | `scw_shm_report.fchmodErrno` |
+| `scw_shm_reader.next_open_ns` | `scw_shm_reader.nextOpenNs` |
+| `scw_shm_reader.max_w`, `.max_h` | `scw_shm_reader.maxWidth`, `.maxHeight` |
+| `scw_writer.h`, `scw_shm_writer.h` | `scw_writer.header`, `scw_shm_writer.header` |
+| `kWcCamHashBytes` (providers/webcam.inc) | `SCW_CAM_HASH_BYTES` (webcam/ring.h) |
+| `char out[9]`, `sha[13]`, `camera[128]` | `SCW_CAM_HASH_BYTES`, `SCW_SHA_LEN + 1`, `SCW_PID_CAMERA_BYTES` |
+| `msg[160]`, `accepted[4]` (ring_shm.h) | `SCW_REPORT_MSG_BYTES`, `SCW_READER_ACCEPTED_MAX` |
+
+No other engine name changed in 1.2.0. Definitions moved instead: every global, constant and function another
+fragment uses is now defined or declared in the owning fragment's header (engine/README.md, "Subsystem headers"). New
+headers hold them for the fragments that had none: `core/init.h`, `core/preflight.h`, `providers/photo.h`,
+`client/photo.h`, `client/output_settings.h`, and `fig/sources.h`, which repeats `fig/sources.inc`'s declarations.
+`kLocalQueueMsgSampleBuffer` moved from providers/video.inc to fig/session.h, beside `LocalQueueMsg`.
+
 ## Not renamed
 
 - Bundle ids (`dev.simcam.spike.m10canary`, `dev.simcam.spike.m10plain`, ...), and the product and file names of

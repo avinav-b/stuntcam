@@ -13,7 +13,10 @@
 #   preflight (tags: the repo variable HELPER_TEAM_ID is set) -> helper (unsigned release build from the checkout, no
 #   secrets; build-machine path scan) -> sign-helper (tags only; environment `helper-signing`, which holds the secrets;
 #   checks out nothing, runs no repo code; temporary keychain, codesign, notarytool, staple) -> build (package.sh
-#   --helper: the signed bundle goes inside payload.tar, manifest line 2 says `helper release`) -> verify -> stage.
+#   --helper: the signed bundle goes inside payload.tar, manifest line 2 says `helper release`; then ci-verdicts.sh runs
+#   the packaged canary on the runner's iOS runtimes and packages again with its plain passes; a confirmed canary fail
+#   stops the build unless the repository variable CI_VERDICTS_FAILS is `warn`, or `skip`: no canary runs) -> verify ->
+#   stage.
 # Bundles travel between jobs as ustar tars: upload-artifact drops exec bits. A run from a non-tag ref can't reach the
 # environment: it packages a dev helper (ad-hoc, `helper dev`), and stage refuses any package without `helper release`.
 # A tag fails in preflight without the repository variable HELPER_TEAM_ID, and in sign-helper's first step without the
@@ -282,16 +285,33 @@ jobs:
         with:
           name: helper-signed
           path: ${{ runner.temp }}/helper-in
-      - name: Build the package (scripts/package.sh)
+      - name: Build the package (scripts/package.sh) and its verdicts (scripts/ci-verdicts.sh)
         env:
           HELPER_TEAM_ID: ${{ vars.HELPER_TEAM_ID }}
+          CI_VERDICTS_FAILS: ${{ vars.CI_VERDICTS_FAILS }}   # `warn`: a confirmed canary fail only warns; `skip`: no canary
         run: |
+          args=()   # a dry run: an ad-hoc dev helper, `helper dev` in the manifest
           if [[ $GITHUB_REF_TYPE == tag ]]; then
             mkdir -p $RUNNER_TEMP/helper && tar -xf $RUNNER_TEMP/helper-in/helper-signed.tar -C $RUNNER_TEMP/helper
-            scripts/package.sh --helper "$RUNNER_TEMP/helper/Stuntcam Camera.app"
-          else
-            scripts/package.sh   # a dry run: an ad-hoc dev helper, `helper dev` in the manifest
+            args=(--helper "$RUNNER_TEMP/helper/Stuntcam Camera.app")
           fi
+          scripts/ci-verdicts-test.sh   # its branches against stubs (~20 s), on this runner's bash and zsh
+          scripts/package.sh "${args[@]}"
+          # the packaged canary once on each of this runner's iOS runtimes: its plain passes ship, so a user's first `up`
+          # on those runtime builds skips the self-test (design C-MF1); a confirmed fail fails the build
+          scripts/ci-verdicts.sh "${args[@]}"
+      - name: Upload the canary logs
+        if: always()   # diagnostics: also after a timeout, and never a reason to fail the release
+        continue-on-error: true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: canary-logs
+          path: |
+            ${{ runner.temp }}/simcam-home/logs
+            ${{ runner.temp }}/simcam-home/verdicts
+          if-no-files-found: ignore
+          overwrite: true   # a re-run's logs replace the earlier attempt's
+          retention-days: 7
       - name: Check the package
         env:
           V: ${{ steps.version.outputs.version }}

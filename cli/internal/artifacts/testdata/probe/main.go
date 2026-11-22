@@ -23,27 +23,27 @@ func main() {
 				}
 			}
 		}
-		s, err := artifacts.InstalledHere()
+		set, err := artifacts.InstalledHere()
 		if err != nil {
 			fmt.Println(err)
 			os.Exit(1)
 		}
-		fi, err := os.Stat(filepath.Join(s.Canary, "m10canary"))
+		fi, err := os.Stat(filepath.Join(set.Canary, "m10canary"))
 		if err != nil || fi.Mode().Perm() != 0o755 {
 			fmt.Println("canary missing or not executable right after InstalledHere:", fi, err)
 			os.Exit(1)
 		}
-		fmt.Println("ok", s.BuildID())
+		fmt.Println("ok", set.BuildID())
 		return
 	}
-	s, err := artifacts.Find("")
+	found, err := artifacts.Find("")
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
 	where := "elsewhere"
-	if s.Installed {
+	if found.Installed {
 		where = "installed"
 	}
-	fmt.Println(s.BuildID(), where)
+	fmt.Println(found.BuildID(), where)
 }

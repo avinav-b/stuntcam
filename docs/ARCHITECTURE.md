@@ -97,7 +97,8 @@ simulator; a semantic change can still slip past it (design §13), and the senti
     interrupting a session waits for photos in flight.
   - **Movie writer:** `AVAssetWriter` in the simulator, sized by the active format.
   - **Audio:** a tone by default; the Mac's microphone in `mic` mode.
-  - **Scene:** the synthetic picture with a QR code and an EAN-13 barcode, or an image or video file.
+  - **Scene:** the synthetic picture with a QR code and an EAN-13 barcode, an image or video file, or a QR code of any
+    text (`qr:`, made in the app with Core Image; `providers/qr.c`).
   - **Webcam:** the Mac camera, published by the helper app (`helper/`, "Stuntcam Camera") into a read-only
     shared-memory ring ([webcam-ring.md](webcam-ring.md)). The pump locks its ticks to the helper's frames, and an
     offline helper means the scene with a "webcam offline" band. Its frames go to each output in one GPU pass (Core
@@ -133,7 +134,7 @@ because simulator processes can't read macOS privacy-protected folders:
 
 ## Verdicts and the self-test
 
-`stuntcam up` and `verify` run the canary (`canary/main.swift`) on a throwaway simulator in the private set. The canary
+`stuntcam up` and `verify` run the canary (`canary/`) on a throwaway simulator in the private set. The canary
 walks every capture path and prints `PASS`, `FAIL` or `INCONCLUSIVE`. "Late" is inconclusive and "never" is a fail.
 Pass and fail are cached per key; inconclusive never is. A content fail is cached only after a second launch fails too; a pass after a fail is cached for an hour (W4 e40). A failed verdict stops `up` from arming.
 

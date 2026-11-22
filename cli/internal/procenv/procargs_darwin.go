@@ -6,23 +6,32 @@ import (
 	"unsafe"
 )
 
+// The sysctl MIB names procargs2 reads (<sys/sysctl.h>).
+const (
+	ctlKern       = 1  // CTL_KERN
+	kernProcargs2 = 49 // KERN_PROCARGS2
+)
+
 // procargs2 is sysctl {CTL_KERN, KERN_PROCARGS2, pid} (the caller's own processes need no privileges).
 func procargs2(pid int) ([]byte, error) {
-	mib := [3]int32{1, 49, int32(pid)} // CTL_KERN, KERN_PROCARGS2
-	n := uintptr(0)
-	_, _, e := syscall.Syscall6(syscall.SYS___SYSCTL,
-		uintptr(unsafe.Pointer(&mib[0])), 3, 0, uintptr(unsafe.Pointer(&n)), 0, 0)
-	if e != 0 {
-		return nil, e
+	mib := [3]int32{ctlKern, kernProcargs2, int32(pid)}
+	size := uintptr(0)
+	_, _, errno := syscall.Syscall6(syscall.SYS___SYSCTL,
+		uintptr(unsafe.Pointer(&mib[0])), uintptr(len(mib)), 0, uintptr(unsafe.Pointer(&size)), 0, 0)
+	if errno != 0 {
+		return nil, errno
 	}
-	if n == 0 {
-		return nil, syscall.EINVAL // nothing to read (and &b[0] below would panic)
+
+	if size == 0 {
+		return nil, syscall.EINVAL // nothing to read (and &raw[0] below would panic)
 	}
-	b := make([]byte, n)
-	_, _, e = syscall.Syscall6(syscall.SYS___SYSCTL,
-		uintptr(unsafe.Pointer(&mib[0])), 3, uintptr(unsafe.Pointer(&b[0])), uintptr(unsafe.Pointer(&n)), 0, 0)
-	if e != 0 {
-		return nil, e
+
+	raw := make([]byte, size)
+	_, _, errno = syscall.Syscall6(syscall.SYS___SYSCTL, uintptr(unsafe.Pointer(&mib[0])), uintptr(len(mib)),
+		uintptr(unsafe.Pointer(&raw[0])), uintptr(unsafe.Pointer(&size)), 0, 0)
+	if errno != 0 {
+		return nil, errno
 	}
-	return b[:n], nil
+
+	return raw[:size], nil
 }

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Package scheme finds Xcode schemes that insert their own libraries (DYLD_INSERT_LIBRARIES in a launch or test action's
-// environment, e.g. Reveal or an in-house debug dylib). Boot mode's boot environment displaces them; `stuntcam chain add`
-// brings them back (design §4.1 "Scheme-level inserts").
+// Package scheme finds Xcode schemes that insert their own libraries (DYLD_INSERT_LIBRARIES in a launch or test
+// action's environment, e.g. Reveal or an in-house debug dylib). Boot mode's boot environment displaces them;
+// `stuntcam chain add` brings them back.
 package scheme
 
 import (
@@ -41,11 +41,14 @@ func Scan(root string, maxDepth int) []Insert {
 		if !strings.HasSuffix(p, ".xcscheme") {
 			return nil
 		}
+
 		if in, ok := parse(p); ok {
 			out = append(out, in)
 		}
+
 		return nil
 	})
+
 	return out
 }
 
@@ -56,42 +59,51 @@ var skippedDirs = []string{"node_modules", "Pods", "build", "DerivedData", ".git
 // whatever can't be read. visit returns filepath.SkipAll to stop the walk.
 func walkFiles(root string, maxDepth int, visit func(p string) error) {
 	base := strings.Count(filepath.Clean(root), string(filepath.Separator))
-	filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+	// WalkDir's result is dropped: it skips what it can't read, and visit's SkipAll comes back as nil
+	filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
-		if d.IsDir() {
-			if slices.Contains(skippedDirs, d.Name()) {
+
+		if entry.IsDir() {
+			if slices.Contains(skippedDirs, entry.Name()) {
 				return filepath.SkipDir
 			}
-			if strings.Count(p, string(filepath.Separator))-base > maxDepth {
+
+			if strings.Count(path, string(filepath.Separator))-base > maxDepth {
 				return filepath.SkipDir
 			}
+
 			return nil
 		}
-		return visit(p)
+
+		return visit(path)
 	})
 }
 
-func parse(p string) (Insert, bool) {
-	b, err := os.ReadFile(p)
+func parse(schemePath string) (Insert, bool) {
+	data, err := os.ReadFile(schemePath)
 	if err != nil {
 		return Insert{}, false
 	}
-	var s xcscheme
-	if xml.Unmarshal(b, &s) != nil {
+
+	var parsed xcscheme
+	if xml.Unmarshal(data, &parsed) != nil {
 		return Insert{}, false
 	}
-	in := Insert{Scheme: p}
-	for _, v := range append(s.Launch.Env, s.Test.Env...) {
-		if v.Key != "DYLD_INSERT_LIBRARIES" || v.Enabled == "NO" {
+
+	insert := Insert{Scheme: schemePath}
+	for _, env := range append(parsed.Launch.Env, parsed.Test.Env...) {
+		if env.Key != "DYLD_INSERT_LIBRARIES" || env.Enabled == "NO" {
 			continue
 		}
-		for _, l := range strings.Split(v.Value, ":") {
-			if l = strings.TrimSpace(l); l != "" && !slices.Contains(in.Libs, l) {
-				in.Libs = append(in.Libs, l)
+
+		for _, lib := range strings.Split(env.Value, ":") {
+			if lib = strings.TrimSpace(lib); lib != "" && !slices.Contains(insert.Libs, lib) {
+				insert.Libs = append(insert.Libs, lib)
 			}
 		}
 	}
-	return in, len(in.Libs) > 0
+
+	return insert, len(insert.Libs) > 0
 }

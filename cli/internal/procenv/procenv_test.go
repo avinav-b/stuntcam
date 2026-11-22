@@ -20,19 +20,30 @@ func TestLaunchdSimPid(t *testing.T) {
 26714 /Library/Developer/PrivateFrameworks/CoreSimulator.framework/Resources/bin/launchd_sim /Users/x/Library/Application Support/stuntcam/devices/5EED0003-0000-4000-8000-00000000B003/data/var/run/launchd_bootstrap.plist
   812 /Applications/Xcode 27.app/Contents/Developer/launchd_sim /Users/x/Library/Application Support/stuntcam e30 & co/devices/5EED0005-0000-4000-8000-00000000B005/data/var/run/launchd_bootstrap.plist
 `
-	if pid, ok := LaunchdSimPid(ps, "5EED0004-0000-4000-8000-00000000B004"); !ok || pid != 20497 {
-		t.Fatalf("%d %v", pid, ok)
+	tests := []struct {
+		name, udid string
+		pid        int
+		found      bool
+	}{
+		{"default device set", "5EED0004-0000-4000-8000-00000000B004", 20497, true},
+		// the private device set under Application Support; the grep/pgrep lines naming the udid are not it
+		{"path with a space", "5EED0003-0000-4000-8000-00000000B003", 26714, true},
+		{"spaces in the launchd_sim path and the device set", "5EED0005-0000-4000-8000-00000000B005", 812, true},
+		{"not booted", "5EED0007-0000-4000-8000-00000000B007", 0, false},
 	}
-	// a path with a space (the private device set under Application Support); the grep/pgrep lines naming the udid are not it
-	if pid, ok := LaunchdSimPid(ps, "5EED0003-0000-4000-8000-00000000B003"); !ok || pid != 26714 {
-		t.Fatalf("%d %v", pid, ok)
-	}
-	// spaces in both the launchd_sim path and the device set
-	if pid, ok := LaunchdSimPid(ps, "5EED0005-0000-4000-8000-00000000B005"); !ok || pid != 812 {
-		t.Fatalf("%d %v", pid, ok)
-	}
-	if _, ok := LaunchdSimPid(ps, "5EED0007-0000-4000-8000-00000000B007"); ok {
-		t.Fatal("found a sim that isn't booted")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pid, ok := LaunchdSimPid(ps, tt.udid)
+			if !tt.found {
+				if ok {
+					t.Fatal("found a sim that isn't booted")
+				}
+				return
+			}
+			if !ok || pid != tt.pid {
+				t.Fatalf("%d %v", pid, ok)
+			}
+		})
 	}
 }
 

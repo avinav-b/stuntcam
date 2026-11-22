@@ -36,6 +36,27 @@ func TestStageSource(t *testing.T) {
 	}
 }
 
+// a sim that isn't booted: each key's error says how to get its setting to the sim's apps
+func TestControllableNotRunning(t *testing.T) {
+	t.Setenv("SIMCAM_HOME", t.TempDir())
+	if err := home.WriteCurrent("U", "/h/builds/b/libsimcamloader.dylib"); err != nil {
+		t.Fatal(err)
+	}
+	if err := arm.WriteRecord("U", arm.Record{Mode: arm.Env, At: time.Now().Unix()}); err != nil {
+		t.Fatal(err)
+	}
+	off := simctl.Device{UDID: "U", Name: "iPhone", State: "Shutdown"}
+	for key, want := range map[string]string{
+		"source":      "iPhone isn't running; `stuntcam up --source …` sets the picture when it boots",
+		"orientation": "iPhone isn't running: `stuntcam up` boots it armed, then `stuntcam orient`",
+		"event":       "iPhone isn't running: `stuntcam up` boots it armed, then `stuntcam `",
+	} {
+		if err := controllable(off, key); err == nil || err.Error() != want {
+			t.Errorf("%s: %v, want %s", key, err, want)
+		}
+	}
+}
+
 func TestSetControl(t *testing.T) {
 	t.Setenv("SIMCAM_HOME", t.TempDir())
 	now := time.Now()
@@ -236,18 +257,18 @@ func TestRecordXcodeKeepsRecordOnFailure(t *testing.T) {
 	xcodeActive = func() (xcode.Info, error) { return xcodeInfo("27A266a"), nil }
 	t.Setenv("SIMCTL_CHILD_ASAN_OPTIONS", "detect_leaks=0")
 	t.Setenv("SIMCTL_CHILD_SIMCAM_LAZY", "0")
-	recordXcode("U3", "/h/rr/0123456789ab", "up", false, true)
+	recordXcode("U3", "/h/rr/0123456789ab", "up", noXcodeSummary, signalsFromThisProcess)
 	c, err := arm.ReadConfig("U3")
 	if err != nil || c.Build != "27A266a" || c.RulesDir != "/h/rr/0123456789ab" || !reflect.DeepEqual(c.BootSignals, []string{"ASAN_OPTIONS=detect_leaks=0"}) {
 		t.Fatalf("%+v %v", c, err)
 	}
 	xcodeActive = func() (xcode.Info, error) { return xcode.Info{}, errors.New("xcodebuild timed out after 20s") }
-	recordXcode("U3", "/h/rr/ffffffffffff", "swap", false, false)
+	recordXcode("U3", "/h/rr/ffffffffffff", "swap", noXcodeSummary, signalsFromLaunchdSim)
 	// the Xcode is kept; the rules dir, boot signals and source are this arm's
 	if c2, _ := arm.ReadConfig("U3"); c2.Build != "27A266a" || c2.RulesDir != "/h/rr/ffffffffffff" || c2.Source != "swap" || len(c2.BootSignals) != 0 {
 		t.Fatalf("record not kept/updated: %+v", c2)
 	}
-	recordXcode("U4", "", "up", false, false) // no record yet: one is written, without a build (the loader says unverified)
+	recordXcode("U4", "", "up", noXcodeSummary, signalsFromLaunchdSim) // no record yet: one is written, without a build (the loader says unverified)
 	if c3, err := arm.ReadConfig("U4"); err != nil || c3.Build != "" {
 		t.Fatalf("%+v %v", c3, err)
 	}
@@ -256,7 +277,7 @@ func TestRecordXcodeKeepsRecordOnFailure(t *testing.T) {
 	bootEnv = func(string) (map[string]string, error) {
 		return map[string]string{"IDB_COMPANION": "1", "DYLD_INSERT_LIBRARIES": "/x/libsimcamstub.dylib", "HOME": "/h"}, nil
 	}
-	recordXcode("U5", "", "env", false, false)
+	recordXcode("U5", "", "env", noXcodeSummary, signalsFromLaunchdSim)
 	if c5, _ := arm.ReadConfig("U5"); !reflect.DeepEqual(c5.BootSignals, []string{"IDB_COMPANION=1"}) {
 		t.Fatalf("%+v", c5)
 	}
@@ -354,6 +375,48 @@ func TestParseRunningXcodes(t *testing.T) {
 	if got := parseRunningXcodes(ps); !reflect.DeepEqual(got, want) {
 		t.Fatalf("%q", got)
 	}
+}
+
+// parseRunningXcodesOffsets is parseRunningXcodes as it was written with bare offsets (25 and 4: the lengths of
+// ".app/Contents/MacOS/Xcode" and ".app"), kept to check that the strings.Cut version returns the same lists.
+func parseRunningXcodesOffsets(ps string) []string {
+	var apps []string
+	seen := map[string]bool{}
+	for _, l := range strings.Split(ps, "\n") {
+		i := strings.Index(l, ".app/Contents/MacOS/Xcode")
+		if i < 0 || (len(l) > i+25 && l[i+25] != ' ') {
+			continue
+		}
+		app := strings.TrimSpace(l[:i+4])
+		if !seen[app] {
+			seen[app] = true
+			apps = append(apps, app)
+		}
+	}
+	return apps
+}
+
+func FuzzParseRunningXcodesMatchesOffsets(f *testing.F) {
+	for _, seed := range []string{
+		"",
+		"\n\n",
+		"/Applications/Xcode.app/Contents/MacOS/Xcode",
+		"/Applications/Xcode.app/Contents/MacOS/Xcode ",
+		"/Applications/Xcode.app/Contents/MacOS/XcodeHelper",
+		"/Applications/Xcode.app/Contents/MacOS/Xcode\t-psn",
+		"  /Applications/Xcode.app/Contents/MacOS/Xcode -ApplePersistenceIgnoreState YES",
+		".app/Contents/MacOS/Xcode",
+		"/A/Xcode.app/Contents/MacOS/XcodeX /B/Xcode.app/Contents/MacOS/Xcode",
+		"/A/Xcode.app/Contents/MacOS/Xcode /B/Xcode.app/Contents/MacOS/Xcode\n/A/Xcode.app/Contents/MacOS/Xcode",
+		"/Users/x/xcodes/Xcode 27.1.app/Contents/MacOS/Xcode\n/Applications/Xcode-beta.app/Contents/MacOS/Xcode",
+	} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, ps string) {
+		if got, want := parseRunningXcodes(ps), parseRunningXcodesOffsets(ps); !reflect.DeepEqual(got, want) {
+			t.Fatalf("parseRunningXcodes(%q) = %q, the offset version gives %q", ps, got, want)
+		}
+	})
 }
 
 // captureStdout runs f with os.Stdout redirected and returns what it printed.
@@ -484,9 +547,8 @@ func TestUncheckedText(t *testing.T) {
 func TestFallbackTimeoutSkipsSim(t *testing.T) {
 	t.Setenv("SIMCAM_HOME", t.TempDir())
 	oldT := fallbackTimeout
-	t.Cleanup(func() { fallbackTimeout = oldT; fallbackSkip = map[string]string{} })
+	t.Cleanup(func() { fallbackTimeout = oldT })
 	fallbackTimeout = 300 * time.Millisecond
-	fallbackSkip = map[string]string{}
 	bin := t.TempDir()
 	devs := `{"devices":{"com.apple.CoreSimulator.SimRuntime.iOS-26-3":[{"udid":"T","name":"w","state":"Booted","isAvailable":true}]}}`
 	script := "#!/bin/sh\ncase \"$*\" in\n" +

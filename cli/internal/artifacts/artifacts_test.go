@@ -408,29 +408,49 @@ func TestInstalledWithoutVerdictsOrHook(t *testing.T) {
 func TestInstalledRejectsChangedFiles(t *testing.T) {
 	for _, c := range []struct {
 		name string
-		edit func(share string)
+		edit func(t *testing.T, share string)
 		want string
 	}{
-		{"changed restore-rules file", func(sh string) { write(t, filepath.Join(sh, "restore-rules", "27A266a.json"), `{"rules": ["evil"]}`) }, "restore-rules/27A266a.json has sha256"},
-		{"added restore-rules file", func(sh string) { write(t, filepath.Join(sh, "restore-rules", "27Z1.json"), "{}") }, "restore-rules/27Z1.json is not in manifest.txt"},
-		{"changed media", func(sh string) { write(t, filepath.Join(sh, "media", "qr.png"), "x") }, "media/qr.png has sha256"},
-		{"changed profile", func(sh string) { write(t, filepath.Join(sh, "profiles", "cfg-m10.plist"), "x") }, "profiles/cfg-m10.plist has sha256"},
-		{"changed verdict", func(sh string) { write(t, filepath.Join(sh, "verdicts", "k.json"), `{"verdict":"pass"}`) }, "verdicts/k.json has sha256"},
-		{"added verdict", func(sh string) { write(t, filepath.Join(sh, "verdicts", "x.json"), "{}") }, "verdicts/x.json is not in manifest.txt"},
-		{"missing profile", func(sh string) { os.Remove(filepath.Join(sh, "profiles", "cfg-m10.plist")) }, "profiles/cfg-m10.plist is missing"},
-		{"changed payload", func(sh string) {
+		{"changed restore-rules file", func(t *testing.T, sh string) {
+			write(t, filepath.Join(sh, "restore-rules", "27A266a.json"), `{"rules": ["evil"]}`)
+		}, "restore-rules/27A266a.json has sha256"},
+		{"added restore-rules file", func(t *testing.T, sh string) {
+			write(t, filepath.Join(sh, "restore-rules", "27Z1.json"), "{}")
+		}, "restore-rules/27Z1.json is not in manifest.txt"},
+		{"changed media", func(t *testing.T, sh string) {
+			write(t, filepath.Join(sh, "media", "qr.png"), "x")
+		}, "media/qr.png has sha256"},
+		{"changed profile", func(t *testing.T, sh string) {
+			write(t, filepath.Join(sh, "profiles", "cfg-m10.plist"), "x")
+		}, "profiles/cfg-m10.plist has sha256"},
+		{"changed verdict", func(t *testing.T, sh string) {
+			write(t, filepath.Join(sh, "verdicts", "k.json"), `{"verdict":"pass"}`)
+		}, "verdicts/k.json has sha256"},
+		{"added verdict", func(t *testing.T, sh string) {
+			write(t, filepath.Join(sh, "verdicts", "x.json"), "{}")
+		}, "verdicts/x.json is not in manifest.txt"},
+		{"missing profile", func(t *testing.T, sh string) {
+			os.Remove(filepath.Join(sh, "profiles", "cfg-m10.plist"))
+		}, "profiles/cfg-m10.plist is missing"},
+		{"changed payload", func(t *testing.T, sh string) {
 			b, _ := os.ReadFile(filepath.Join(sh, PayloadName))
 			write(t, filepath.Join(sh, PayloadName), strings.Replace(string(b), "engine", "enginX", 1))
 		}, "payload.tar has sha256"},
-		{"loose dylib next to the payload", func(sh string) { write(t, filepath.Join(sh, "builds", "x", EngineName), "e") }, "builds/x/libsimcam.dylib is not in manifest.txt"},
-		{"symlink", func(sh string) { os.Symlink("/etc/hosts", filepath.Join(sh, "media", "link")) }, "media/link is not a regular file"},
+		{"loose dylib next to the payload", func(t *testing.T, sh string) {
+			write(t, filepath.Join(sh, "builds", "x", EngineName), "e")
+		}, "builds/x/libsimcam.dylib is not in manifest.txt"},
+		{"symlink", func(t *testing.T, sh string) {
+			os.Symlink("/etc/hosts", filepath.Join(sh, "media", "link"))
+		}, "media/link is not a regular file"},
 	} {
-		prefix := t.TempDir()
-		installedTree(t, prefix, true)
-		c.edit(filepath.Join(prefix, "share", "stuntcam"))
-		if _, err := Installed(prefix); err == nil || !strings.Contains(err.Error(), "changed after packaging") || !strings.Contains(err.Error(), c.want) {
-			t.Errorf("%s: %v", c.name, err)
-		}
+		t.Run(c.name, func(t *testing.T) {
+			prefix := t.TempDir()
+			installedTree(t, prefix, true)
+			c.edit(t, filepath.Join(prefix, "share", "stuntcam"))
+			if _, err := Installed(prefix); err == nil || !strings.Contains(err.Error(), "changed after packaging") || !strings.Contains(err.Error(), c.want) {
+				t.Errorf("%s: %v", c.name, err)
+			}
+		})
 	}
 }
 

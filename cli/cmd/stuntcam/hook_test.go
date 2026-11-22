@@ -9,11 +9,24 @@ import (
 )
 
 func TestHookMode(t *testing.T) {
-	for in, want := range map[string]string{"boot": "boot", "launchd": "launchd", "booted-unarmed": "unarmed", "env": "unarmed",
-		"armed": "unarmed", "booting": "", "unarmed": ""} {
-		if got := hookMode(statusMode(in)); got != want {
-			t.Errorf("hookMode(%q) = %q, want %q", in, got, want)
-		}
+	tests := []struct {
+		status statusMode
+		want   runnerHookMode
+	}{
+		{modeBoot, hookBoot},
+		{modeLaunchd, hookLaunchd},
+		{modeBootedUnarmed, hookUnarmed},
+		{modeEnv, hookUnarmed},
+		{modeScriptArmed, hookUnarmed},
+		{modeBooting, hookNone},
+		{modeUnarmed, hookNone},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.status), func(t *testing.T) {
+			if got := hookMode(tt.status); got != tt.want {
+				t.Errorf("hookMode(%q) = %q, want %q", tt.status, got, tt.want)
+			}
+		})
 	}
 }
 

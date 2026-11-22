@@ -30,24 +30,51 @@ trap 'rm -f "$list"' EXIT
 git -c core.quotePath=false ls-files -- build.sh engine cli canary scripts tools fixtures > "$list" || exit 2
 while IFS= read -r f; do
   [ -f "$f" ] || continue
-  case "$EXCLUDE" in *"
+  # an excluded path: a whole line of EXCLUDE
+  case "$EXCLUDE" in
+    *"
 $f
-"*) continue;; esac
+"*)
+      continue
+      ;;
+  esac
+
   src=0
   case "$f" in
-    *.c|*.h|*.m|*.inc|*.swift|*.go|*.py|*.sh|*.ts|*.tsx|*.js|*.dart|*.yml|*.yaml|*/go.mod|go.mod) src=1;;
-    *.png|*.jpg|*.jpeg|*.mov|*.mp4|*.heic|*.plist|*.json|*.pbxproj|*.xcscheme|*.md|*.txt|*.ttf) continue;;
+    *.c|*.h|*.m|*.inc|*.swift|*.go|*.py|*.sh|*.ts|*.tsx|*.js|*.dart|*.yml|*.yaml|*/go.mod|go.mod)
+      src=1
+      ;;
+    *.png|*.jpg|*.jpeg|*.mov|*.mp4|*.heic|*.plist|*.json|*.pbxproj|*.xcscheme|*.md|*.txt|*.ttf)
+      continue
+      ;;
   esac
+
   first=$(head -n 1 "$f" | tr -d '\r')
-  case "$first" in '#!'*) src=1;; esac
-  [ "$src" = 1 ] || continue
   case "$first" in
-    '#!'*) line=$(sed -n 2p "$f");;
-    *) line=$first;;
+    '#!'*)
+      src=1
+      ;;
   esac
+
+  [ "$src" = 1 ] || continue
+
+  # The SPDX line: line 2 after a shebang, else line 1.
+  case "$first" in
+    '#!'*)
+      line=$(sed -n 2p "$f")
+      ;;
+    *)
+      line=$first
+      ;;
+  esac
+
   case "$line" in
-    *SPDX-License-Identifier:\ Apache-2.0*) ;;
-    *) echo "$f"; missing=$((missing + 1));;
+    *SPDX-License-Identifier:\ Apache-2.0*)
+      ;;
+    *)
+      echo "$f"
+      missing=$((missing + 1))
+      ;;
   esac
 done < "$list"
 
@@ -55,4 +82,5 @@ if [ "$missing" -gt 0 ]; then
   echo "spdx-check: $missing file(s) without an SPDX-License-Identifier header" >&2
   exit 1
 fi
+
 echo "spdx-check: ok" >&2

@@ -13,77 +13,168 @@
 #   switch     scene -> webcam -> scene through the control file mid-run: the pump goes back to its nominal schedule
 #   idle       the helper closes the camera 10 s after the last active reader and quits after --quit-after (20 s here)
 #   real [ID]  the real camera (default selection, or uniqueID ID), stamped; the helper must already be authorized
-set -u; ROOT="$(cd "$(dirname "$0")/.." && pwd)"; source $ROOT/scripts/env.sh; source $ROOT/scripts/common.sh
-G=${1:?group}; shift
-APP=$ROOT/scripts/webcam-app.sh; H=$ROOT/helper/dev.sh
-res() { print -r -- "$SIMCAM_RESULTS/webcam-$1-$2"; }
-cam_of() { python3 -c "
+set -u
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+source "$ROOT/scripts/env.sh"
+source "$ROOT/scripts/common.sh"
+
+GROUP=${1:?group}
+shift
+
+APP=$ROOT/scripts/webcam-app.sh
+HELPER=$ROOT/helper/dev.sh
+
+# run_dir <rt> <tag>: webcam-app.sh's result dir for that run.
+run_dir() { print -r -- "$SIMCAM_RESULTS/webcam-$1-$2"; }
+
+# cam_of <camera>: the helper's file stem for that camera: the low 32 bits, in hex, of the 64-bit FNV-1a hash of
+# "$SIMCAM_HOME<NUL><camera>".
+cam_of() {
+  python3 -c "
 import sys
-h=0xcbf29ce484222325
-for b in sys.argv[1].encode()+b'\0'+sys.argv[2].encode(): h=((h^b)*0x100000001b3)&0xffffffffffffffff
-print('%08x'%(h&0xffffffff))" "$SIMCAM_HOME" "$1"; }
+
+FNV_OFFSET_BASIS = 0xcbf29ce484222325
+FNV_PRIME = 0x100000001b3
+digest = FNV_OFFSET_BASIS
+for byte in sys.argv[1].encode() + b'\0' + sys.argv[2].encode():
+    digest = ((digest ^ byte) * FNV_PRIME) & 0xffffffffffffffff
+print('%08x' % (digest & 0xffffffff))" "$SIMCAM_HOME" "$1"
+}
+
+# pidfile_pid <camera>: the pid in that camera's helper pid file (empty if there is none).
 pidfile_pid() { sed -n 's/^pid=//p' $SIMCAM_HOME/webcam/$(cam_of $1).pid 2>/dev/null; }
+
+# helperlog <camera>: the path of that camera's helper log.
 helperlog() { print -r -- "$SIMCAM_HOME/logs/webcam-$(cam_of $1).log"; }
-# wait_running <result dir>: up to 15 s (150 polls of 0.1 s) for the app's wc.running line
-wait_running() { local i; for i in {1..150}; do sleep 0.1; grep -q wc.running $1/app.log 2>/dev/null && break; done; }
-case $G in
+
+# wait_running <result dir>: waits up to 15 s (150 polls of 0.1 s) for the app's wc.running line.
+wait_running() {
+  local i
+  for i in {1..150}; do
+    sleep 0.1
+    # app.log may not exist yet
+    grep -q wc.running $1/app.log 2>/dev/null && break
+  done
+}
+
+case $GROUP in
   synth)
-    $H start --synthetic >/dev/null || exit 1
-    for rt in 263 27; do $APP $rt syn WC_SECS=10 WC_MOVIE=5; $APP $rt syn-free WC_SECS=10 WC_MOVIE=0 WC_PHOTO=0 SIMCAM_WEBCAM_PHASE=0; done
-    $H stop;;
+    $HELPER start --synthetic >/dev/null || exit 1
+    for rt in 263 27; do
+      $APP $rt syn WC_SECS=10 WC_MOVIE=5
+      $APP $rt syn-free WC_SECS=10 WC_MOVIE=0 WC_PHOTO=0 SIMCAM_WEBCAM_PHASE=0
+    done
+    $HELPER stop
+    ;;
+
   rate60)
-    $H start --synthetic >/dev/null || exit 1
-    for rt in 263 27; do $APP $rt syn60 WC_SECS=10 WC_FPS=60 WC_MOVIE=0 WC_PHOTO=0; done
-    $H stop;;
+    $HELPER start --synthetic >/dev/null || exit 1
+    for rt in 263 27; do
+      $APP $rt syn60 WC_SECS=10 WC_FPS=60 WC_MOVIE=0 WC_PHOTO=0
+    done
+    $HELPER stop
+    ;;
+
   stopstart)
     for how in term kill; do
-      $H start --synthetic >/dev/null || exit 1
+      $HELPER start --synthetic >/dev/null || exit 1
       $APP 263 ss-$how WC_SECS=20 WC_MOVIE=0 WC_PHOTO=0 > $SIMCAM_RESULTS/webcam-ss-$how.txt 2>&1 &
-      AP=$!; O=$(res 263 ss-$how)
-      wait_running $O
-      sleep 7; P=$(pidfile_pid synthetic); echo "$(date +%T) stopping helper $P ($how)"
-      if [[ $how == term ]]; then $H stop; else kill -9 $P; fi
-      sleep 5; echo "$(date +%T) starting the helper again"; $H start --synthetic >/dev/null
-      wait $AP; cat $SIMCAM_RESULTS/webcam-ss-$how.txt
-      grep -E "WCSEC" $O/app.log | cut -c8- | tr '\n' ' ' | sed 's/WCSEC //g'; echo
-      grep -hE "webcam: (live|offline|ring /)" $O/dylib.log | cut -c20-200
-      $H stop
-    done;;
+      APP_PID=$!
+      dir=$(run_dir 263 ss-$how)
+      wait_running $dir
+      sleep 7
+      HELPER_PID=$(pidfile_pid synthetic)
+      echo "$(date +%T) stopping helper $HELPER_PID ($how)"
+      if [[ $how == term ]]; then
+        $HELPER stop
+      else
+        kill -9 $HELPER_PID
+      fi
+      sleep 5
+      echo "$(date +%T) starting the helper again"
+      $HELPER start --synthetic >/dev/null
+      wait $APP_PID
+      cat $SIMCAM_RESULTS/webcam-ss-$how.txt
+      grep -E "WCSEC" $dir/app.log | cut -c8- | tr '\n' ' ' | sed 's/WCSEC //g'
+      echo
+      grep -hE "webcam: (live|offline|ring /)" $dir/dylib.log | cut -c20-200
+      $HELPER stop
+    done
+    ;;
+
   two)
-    $H start --synthetic >/dev/null || exit 1
-    $APP 263 two WC_SECS=10 WC_MOVIE=5 > $SIMCAM_RESULTS/webcam-two-263.txt 2>&1 & A1=$!
-    $APP 27 two WC_SECS=10 WC_MOVIE=5 > $SIMCAM_RESULTS/webcam-two-27.txt 2>&1 & A2=$!
-    wait $A1 $A2; cat $SIMCAM_RESULTS/webcam-two-263.txt $SIMCAM_RESULTS/webcam-two-27.txt
+    $HELPER start --synthetic >/dev/null || exit 1
+    $APP 263 two WC_SECS=10 WC_MOVIE=5 > $SIMCAM_RESULTS/webcam-two-263.txt 2>&1 &
+    APP_PID_263=$!
+    $APP 27 two WC_SECS=10 WC_MOVIE=5 > $SIMCAM_RESULTS/webcam-two-27.txt 2>&1 &
+    APP_PID_27=$!
+    wait $APP_PID_263 $APP_PID_27
+    cat $SIMCAM_RESULTS/webcam-two-263.txt $SIMCAM_RESULTS/webcam-two-27.txt
     grep -E "readers:" "$(helperlog synthetic)" | tail -3 | cut -c1-300
-    $H stop;;
+    $HELPER stop
+    ;;
+
   nohelper)
-    $H stop >/dev/null
-    $APP 263 nohelper WC_SECS=6 WC_MOVIE=0 > $SIMCAM_RESULTS/webcam-nohelper.txt 2>&1 & AP=$!
-    O=$(res 263 nohelper); wait_running $O
-    sleep 3; xcrun simctl io $SIMCAM_UDID_263 screenshot $O/band.png >/dev/null 2>&1
-    wait $AP; cat $SIMCAM_RESULTS/webcam-nohelper.txt;;
+    $HELPER stop >/dev/null
+    $APP 263 nohelper WC_SECS=6 WC_MOVIE=0 > $SIMCAM_RESULTS/webcam-nohelper.txt 2>&1 &
+    APP_PID=$!
+    dir=$(run_dir 263 nohelper)
+    wait_running $dir
+    sleep 3
+    # a screenshot is evidence only: one that fails changes no verdict
+    xcrun simctl io $SIMCAM_UDID_263 screenshot $dir/band.png >/dev/null 2>&1
+    wait $APP_PID
+    cat $SIMCAM_RESULTS/webcam-nohelper.txt
+    ;;
+
   switch)
-    $H start --synthetic >/dev/null || exit 1
-    SRC=scene $APP 263 switch WC_SECS=15 WC_MOVIE=0 WC_PHOTO=0 > $SIMCAM_RESULTS/webcam-switch.txt 2>&1 & AP=$!
-    O=$(res 263 switch); wait_running $O
-    sleep 3; echo "source=webcam:synthetic" > $O/control.txt; sleep 6; echo "source=scene" > $O/control.txt
-    wait $AP; cat $SIMCAM_RESULTS/webcam-switch.txt
-    grep -E "WCSEC" $O/app.log | cut -c8- | tr '\n' ' ' | sed 's/WCSEC //g'; echo
-    grep -hE "source (->|applied)|webcam: (live|pump|source left|reader)" $O/dylib.log | cut -c20-200
+    $HELPER start --synthetic >/dev/null || exit 1
+    SRC=scene $APP 263 switch WC_SECS=15 WC_MOVIE=0 WC_PHOTO=0 > $SIMCAM_RESULTS/webcam-switch.txt 2>&1 &
+    APP_PID=$!
+    dir=$(run_dir 263 switch)
+    wait_running $dir
+    sleep 3
+    echo "source=webcam:synthetic" > $dir/control.txt
+    sleep 6
+    echo "source=scene" > $dir/control.txt
+    wait $APP_PID
+    cat $SIMCAM_RESULTS/webcam-switch.txt
+    grep -E "WCSEC" $dir/app.log | cut -c8- | tr '\n' ' ' | sed 's/WCSEC //g'
+    echo
+    grep -hE "source (->|applied)|webcam: (live|pump|source left|reader)" $dir/dylib.log | cut -c20-200
     ls $SIMCAM_HOME/webcam/readers/
-    $H stop;;
+    $HELPER stop
+    ;;
+
   idle)
-    $H start --synthetic --quit-after 20 >/dev/null || exit 1
+    $HELPER start --synthetic --quit-after 20 >/dev/null || exit 1
+    # its output stays in its result dir
     $APP 263 idle WC_SECS=3 WC_MOVIE=0 WC_PHOTO=0 >/dev/null 2>&1
-    T=$(date +%s); P=$(pidfile_pid synthetic)
-    for i in {1..60}; do sleep 1; kill -0 $P 2>/dev/null || break; done
-    echo "helper $P gone $(( $(date +%s) - T )) s after the app finished"
-    grep -E "readers:|opening|closing|quitting|retired|exit" "$(helperlog synthetic)" | tail -7 | cut -c1-200;;
+    START_S=$(date +%s)
+    HELPER_PID=$(pidfile_pid synthetic)
+    for i in {1..60}; do   # up to 60 s for the helper to quit
+      sleep 1
+      kill -0 $HELPER_PID 2>/dev/null || break
+    done
+    echo "helper $HELPER_PID gone $(( $(date +%s) - START_S )) s after the app finished"
+    grep -E "readers:|opening|closing|quitting|retired|exit" "$(helperlog synthetic)" | tail -7 | cut -c1-200
+    ;;
+
   real)
-    ID=${1:-}; typeset -a CA; CA=(); [[ -n $ID ]] && CA=(--camera $ID)
-    $H start --stamp $CA >/dev/null || exit 1
-    for rt in 263 27; do SRC=webcam${ID:+:$ID} $APP $rt real WC_SECS=10 WC_MOVIE=5
-      SRC=webcam${ID:+:$ID} $APP $rt real-free WC_SECS=10 WC_MOVIE=0 WC_PHOTO=0 SIMCAM_WEBCAM_PHASE=0; done
-    $H stop;;
-  *) print_usage $0; exit 2;;
+    ID=${1:-}
+    typeset -a CAMERA_ARGS
+    CAMERA_ARGS=()
+    [[ -n $ID ]] && CAMERA_ARGS=(--camera $ID)
+    $HELPER start --stamp $CAMERA_ARGS >/dev/null || exit 1
+    for rt in 263 27; do
+      SRC=webcam${ID:+:$ID} $APP $rt real WC_SECS=10 WC_MOVIE=5
+      SRC=webcam${ID:+:$ID} $APP $rt real-free WC_SECS=10 WC_MOVIE=0 WC_PHOTO=0 SIMCAM_WEBCAM_PHASE=0
+    done
+    $HELPER stop
+    ;;
+
+  *)
+    print_usage $0
+    exit 2
+    ;;
 esac

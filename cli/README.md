@@ -7,13 +7,13 @@ Go, standard library only. `./build.sh` builds it; `go test ./...` runs the unit
 | `up [--udid U] [--mode boot\|launchd] [--reboot] [--grant BUNDLE]… [--source S] [--log] [--build DIR]` | Stages the build under the host directory and arms a simulator: boot mode if it is shut down (or `--reboot`), launchd mode if it is booted. Grants camera + mic to each `--grant` bundle |
 | `verify [--runtime V] [--fresh] [--keep] [--json]` | Canary verdict for this build on a runtime, on a throwaway device in the private set (`$SIMCAM_HOME/devices`, never listed by Xcode); pass/fail cached per (runtime build, engine build, stub build, canary executable, profile) in the same files and under the same per-runtime lock as `scripts/verify.sh`; inconclusive never cached, nor any run with exported `SIMCTL_CHILD_*`. A canary that crashes twice is a fail. Ctrl-C shuts the device down. Exit 0 pass, 1 fail, 2 inconclusive, 64 couldn't start |
 | `down [--udid U]` | New launches stop loading stuntcam (removes the sim's `current`; launchd mode also unsets its variables, keeping other tools' entries). No reboot. Ends the sim's webcam session: the camera helper stops unless another booted sim still has `webcam` selected |
-| `status [--json]` | Booted and previously armed simulators: mode (boot, launchd, booted-unarmed), build, the Xcode build recorded at arm time, chain, latched apps. Boot mode is read from the booted simulator's `launchd_sim` environment on the host (`BootEnv`: `stub` / `no stub`), since `launchctl getenv` in the sim can't see it |
+| `status [--json]` | Booted and previously armed simulators: mode (boot, launchd, booted-unarmed), build, the Xcode build recorded at arm time, the source set with `source` or `up --source` (`qr:` text shown Go-quoted; `Source` in JSON, unquoted, with any invalid UTF-8 as U+FFFD), chain, latched apps. Boot mode is read from the booted simulator's `launchd_sim` environment on the host (`BootEnv`: `stub` / `no stub`), since `launchctl getenv` in the sim can't see it |
 | `swap [--udid U] [LOADER]` | Points an armed sim at another build, from the next launch |
 | `chain add\|rm\|ls [--udid U] [LIB]` | Extra libraries every app launch loads (another tool's loader, an in-house debug dylib) |
 | `sentinel ls\|clear [--udid U] [--bundle B]` | Crash/hang records and latches per app |
 | `trace [--json] [--udid U] [--pid N] BUNDLE` | The app's last 64 camera ops, from the newest `trace-<pid>.txt` in its state dir or its container-tmp fallback (`--pid` picks another process's): op, host time, Δ ms from that photo's shutter, settings id; then one line per photo (slot 12, timestamp − slot 12, still-complete and did-finish times; incomplete, out-of-order or time-going-back photos are flagged) and the older traces. Works while the app runs (the file is at most ~150 ms behind) and after it exits. No trace: a message on stderr and exit 1 (no JSON, also with `--json`) |
 | `env [--udid U]` | `export SIMCTL_CHILD_…` lines for per-launch arming |
-| `source [--udid U] [--front NAME] [--back NAME] scene\|image:PATH\|video:PATH\|webcam[:NAME]` | Switches the picture live through the simulator's control file (`$SIMCAM_HOME/sims/<udid>/control`, polled by the engine every 250 ms); apps launched later start with it. Images and videos are copied under `$SIMCAM_HOME/data/<hash>/` first, so a file in `~/Documents` works too. A simulator armed by an older stuntcam needs `up` again. `webcam[:NAME]`: the Mac camera (see below) |
+| `source [--udid U] [--front NAME] [--back NAME] scene\|image:PATH\|video:PATH\|qr:TEXT\|webcam[:NAME]` | Switches the picture live through the simulator's control file (`$SIMCAM_HOME/sims/<udid>/control`, polled by the engine every 250 ms); apps launched later start with it. Images and videos are copied under `$SIMCAM_HOME/data/<hash>/` first, so a file in `~/Documents` works too. A simulator armed by an older stuntcam needs `up` again. `qr:TEXT`: a QR code of TEXT (see below). `webcam[:NAME]`: the Mac camera (see below) |
 | `orient [--udid U] portrait\|upsideDown\|landscapeLeft\|landscapeRight\|auto` | Sets the virtual device orientation live, the same way |
 | `doctor [--json]` | Xcode in use (`DEVELOPER_DIR`, else `xcode-select`) and whether `restore-rules/<its build>.json` exists and is usable; warnings for `DEVELOPER_DIR` ≠ `xcode-select -p` (`…/Xcode.app` and `…/Xcode.app/Contents/Developer` are the same), a running Xcode.app that isn't the one in use, and an armed simulator recorded for another Xcode; several installed Xcodes as information (a warning only with one of those); runtimes, host directory, build signatures, each booted simulator with its boot environment. `--json`: `{version, host, xcode, checks: [{level: ok/warn/fail/info, msg}], failed, booted_sims: [status]}` for bug reports |
 | `exec [--build DIR] -- CMD…` | Runs a command (e.g. `xcodebuild test`, a CI script) so simulators it boots come up armed; for `xcodebuild test` on a launchd-armed or unarmed destination it also inserts a runner hook so UI tests' apps get the camera. Reports which apps used the camera. [Details](#stuntcam-exec) |
@@ -30,6 +30,14 @@ Go, standard library only. `./build.sh` builds it; `go test ./...` runs the unit
   app uses it, and turns off 10 s after. The helper quits once no booted simulator has the webcam selected (`down`,
   `source <other>`), or after 10 minutes unused. `doctor` shows its state. **Privacy:** while the webcam source is on, other programs running as you on this Mac can read the
   camera feed without their own camera permission. Other users on the Mac can't.
+- **QR code** (`source qr:TEXT`, or `up --source qr:TEXT`): a QR code of TEXT, centred on white, in both camera
+  positions and every orientation. TEXT is everything after `qr:`, byte for byte (scanners read it back as text, so use
+  UTF-8), so quote it for the shell:
+  `qr:'WIFI:S:net;T:WPA;P:secret;;'`, or `qr:$'line 1\nline 2'` for newlines. Up to 2331 bytes of UTF-8 (a QR code's
+  limit at error correction M); longer text is refused. Each app makes the code itself (Core Image), so there is no
+  file to stage, and the engine's barcode metadata (`AVCaptureMetadataOutput`, VisionCamera's and expo-camera's
+  scanners) reports TEXT as the payload. On the way to the engine the text is percent-encoded (`%`, space, control and
+  non-ASCII bytes as `%XX`); `status` shows it decoded.
 - **Which simulator:** `--udid`, else the only booted one, else the most recently booted. `up` says which.
 - **Which build:** the installed package's own files. `--build DIR` (or `STUNTCAM_BUILD`) uses another build; a stuntcam
   checkout in the working directory is used only with `STUNTCAM_USE_CHECKOUT=1`.
@@ -102,6 +110,7 @@ statuses) and flag parsing.
 | `doctor.go` | `doctor` and its Xcode checks |
 | `version.go` | `version` |
 | `sims.go`, `xcoderecord.go`, `fallback.go`, `helpers.go` | shared: picking a simulator, its boot environment, SpringBoard; `config.json`'s Xcode record; the container-tmp fallback; text helpers |
+| `seams.go` | the hooks tests replace to stand in for the Mac (each defaults to the real implementation or value) |
 | `golden_test.go`, `testdata/golden.txt` | the CLI's output, exit codes, simctl calls and files for a set of scenarios, run against fake tools (`go test -run TestGolden -update` rewrites it) |
 
 ## `stuntcam trace --json` (schema 1)

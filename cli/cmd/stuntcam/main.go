@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Command stuntcam gives the iOS Simulator a camera for your own app's camera code (design §4.5).
+// Command stuntcam gives the iOS Simulator a camera for your own app's camera code.
 //
 // Files (cli/README.md, "Command files"):
 //   - main.go: the command table, usage, main (dispatch, exit statuses) and flag parsing
@@ -10,6 +10,7 @@
 //   - source.go, orient.go, control.go, webcam.go: live control of an armed simulator, and the Mac camera
 //   - service.go, gc.go, version.go: the login service, cleanup, the version
 //   - sims.go, xcoderecord.go, fallback.go, helpers.go: shared helpers
+//   - seams.go: the hooks tests replace
 package main
 
 import (
@@ -39,11 +40,12 @@ func init() {
 		{"exec", "[--build DIR] -- COMMAND [ARGS…]",
 			"run a command (xcodebuild test, a CI script) so simulators it boots come up armed", cmdExec},
 		{"service", "install [--preboot U] [--only U]…|uninstall|status|run [--only U]…",
-			"notify-only helper: arms simulators Xcode/Simulator boot (launchd mode) and says when Xcode Run needs `up`",
+			"notify-only helper: arms simulators Xcode/Simulator boot (launchd mode) and says when Xcode Run " +
+				"needs `up`",
 			cmdService},
 		{"gc", "[--dry-run] [--keep-builds N]",
-			"remove private canary devices for removed runtimes, unused builds and unpacked canaries, and state of deleted " +
-				"simulators",
+			"remove private canary devices for removed runtimes, unused builds and unpacked canaries, and state of " +
+				"deleted simulators",
 			cmdGC},
 		{"down", "[--udid U]", "stop arming new launches (no reboot needed)", cmdDown},
 		{"status", "[--json]", "every simulator stuntcam knows about: mode, build, latches", cmdStatus},
@@ -56,21 +58,23 @@ func init() {
 			"an app's last 64 camera ops with host-clock times (shutter -> slot 12 -> still complete -> timestamp)",
 			cmdTrace},
 		{"env", "[--udid U]", "print SIMCTL_CHILD_* exports for per-launch arming (Detox, scripts)", cmdEnv},
-		{"source", "[--udid U] [--front NAME] [--back NAME] scene|image:PATH|video:PATH|webcam[:NAME]",
-			"switch the picture live, in running apps and the next ones (webcam: the Mac camera)", cmdSource},
+		{"source", "[--udid U] [--front NAME] [--back NAME] scene|image:PATH|video:PATH|qr:TEXT|webcam[:NAME]",
+			"switch the picture live, in running apps and the next ones (qr: a QR code of TEXT; webcam: the Mac camera)",
+			cmdSource},
 		{"orient", "[--udid U] portrait|upsideDown|landscapeLeft|landscapeRight|auto",
 			"set the virtual device orientation, live", cmdOrient},
 		{"doctor", "[--json]", "check Xcode, runtimes, the host directory, the build and each simulator", cmdDoctor},
 		{"version", "[--check]",
-			"print the version and the commit it was built from (--check: verify the installed files and unpack the payload)",
+			"print the version and the commit it was built from (--check: verify the installed files and unpack the " +
+				"payload)",
 			cmdVersion},
 	}
 }
 
 func usage() {
 	fmt.Fprint(os.Stderr, "usage: stuntcam <command> [options]\n\n")
-	for _, c := range commands {
-		fmt.Fprintf(os.Stderr, "  %-9s %s\n            %s\n", c.name, c.help, c.args)
+	for _, cmd := range commands {
+		fmt.Fprintf(os.Stderr, "  %-9s %s\n            %s\n", cmd.name, cmd.help, cmd.args)
 	}
 }
 
@@ -106,56 +110,80 @@ func main() {
 		usage()
 		os.Exit(exitUsage)
 	}
-	if os.Args[1] == "-h" || os.Args[1] == "--help" || os.Args[1] == "help" {
+
+	name := os.Args[1]
+	args := os.Args[2:]
+	if name == "-h" || name == "--help" || name == "help" {
 		usage()
 		return
 	}
-	if os.Args[1] == verify.ShutdownCommand { // not listed: the detached child a verify hands its device's shutdown to
-		os.Exit(cmdPrivateShutdown(os.Args[2:]))
+
+	if name == verify.ShutdownCommand { // not listed: the detached child a verify hands its device's shutdown to
+		os.Exit(cmdPrivateShutdown(args))
 	}
-	for _, c := range commands {
-		if c.name == os.Args[1] {
-			if err := c.run(os.Args[2:]); err != nil {
-				if errors.Is(err, flag.ErrHelp) { // `stuntcam up -h`: the flag package printed the options
-					return
-				}
-				var status exitStatus
-				if errors.As(err, &status) {
-					os.Exit(int(status))
-				}
-				fmt.Fprintln(os.Stderr, "stuntcam:", err)
-				var u usageError
-				if errors.As(err, &u) {
-					os.Exit(exitUsage)
-				}
-				os.Exit(exitFailed)
+
+	for _, cmd := range commands {
+		if cmd.name == name {
+			if err := cmd.run(args); err != nil {
+				exitForError(err)
 			}
+
 			return
 		}
 	}
-	fmt.Fprintf(os.Stderr, "stuntcam: unknown command %q\n", os.Args[1])
+
+	fmt.Fprintf(os.Stderr, "stuntcam: unknown command %q\n", name)
 	usage()
 	os.Exit(exitUsage)
 }
 
+// exitForError ends stuntcam with a failed command's exit status, printing the error unless the command has already
+// said what happened (an exitStatus). It returns only for a help request, which the flag package has answered.
+func exitForError(err error) {
+	if errors.Is(err, flag.ErrHelp) { // `stuntcam up -h`: the flag package printed the options
+		return
+	}
+
+	var status exitStatus
+	if errors.As(err, &status) {
+		os.Exit(int(status))
+	}
+
+	fmt.Fprintln(os.Stderr, "stuntcam:", err)
+	var usageErr usageError
+	if errors.As(err, &usageErr) {
+		os.Exit(exitUsage)
+	}
+
+	os.Exit(exitFailed)
+}
+
 // parse parses flags and allows at most maxPos positional arguments, all after the flags: Go's flag package stops at
 // the first non-flag, so `stuntcam swap LOADER --udid X` would silently drop --udid and act on another simulator.
-func parse(fs *flag.FlagSet, args []string, maxPos int) error {
-	if err := fs.Parse(args); err != nil {
+func parse(flags *flag.FlagSet, args []string, maxPos int) error {
+	if err := flags.Parse(args); err != nil {
 		return usageError{err}
 	}
-	for _, a := range fs.Args() {
-		if strings.HasPrefix(a, "-") {
-			return usagef("%s: options go before the arguments (%q)", fs.Name(), a)
+
+	for _, arg := range flags.Args() {
+		if strings.HasPrefix(arg, "-") {
+			return usagef("%s: options go before the arguments (%q)", flags.Name(), arg)
 		}
 	}
-	if fs.NArg() > maxPos {
-		return usagef("%s: unexpected argument %q", fs.Name(), fs.Arg(maxPos))
+
+	if flags.NArg() > maxPos {
+		return usagef("%s: unexpected argument %q", flags.Name(), flags.Arg(maxPos))
 	}
+
 	return nil
 }
 
+// multi is a repeatable string flag (up's --grant): each use adds a value.
 type multi []string
 
-func (m *multi) String() string     { return strings.Join(*m, ",") }
-func (m *multi) Set(v string) error { *m = append(*m, v); return nil }
+func (m *multi) String() string { return strings.Join(*m, ",") }
+
+func (m *multi) Set(value string) error {
+	*m = append(*m, value)
+	return nil
+}

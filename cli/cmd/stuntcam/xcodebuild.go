@@ -16,19 +16,19 @@ import (
 var xcodebuildValueOpts = map[string]bool{}
 
 func init() {
-	for _, o := range strings.Fields(`-project -workspace -scheme -target -configuration -arch -sdk -destination
-		-destination-timeout -derivedDataPath -resultBundlePath -resultBundleVersion -resultStreamPath -xctestrun -testPlan
-		-only-testing -skip-testing -only-test-configuration -skip-test-configuration -testLanguage -testRegion
+	for _, opt := range strings.Fields(`-project -workspace -scheme -target -configuration -arch -sdk -destination
+		-destination-timeout -derivedDataPath -resultBundlePath -resultBundleVersion -resultStreamPath -xctestrun
+		-testPlan -only-testing -skip-testing -only-test-configuration -skip-test-configuration -testLanguage -testRegion
 		-enableAddressSanitizer -enableThreadSanitizer -enableUndefinedBehaviorSanitizer -enableCodeCoverage
-		-test-iterations -test-timeouts-enabled -default-test-execution-time-allowance -maximum-test-execution-time-allowance
-		-parallel-testing-enabled -parallel-testing-worker-count -maximum-parallel-testing-workers
+		-test-iterations -test-timeouts-enabled -default-test-execution-time-allowance
+		-maximum-test-execution-time-allowance -parallel-testing-enabled -parallel-testing-worker-count -maximum-parallel-testing-workers
 		-maximum-concurrent-test-device-destinations -maximum-concurrent-test-simulator-destinations
 		-test-repetition-relaunch-enabled -collect-test-diagnostics -testProductsPath -xcconfig -toolchain -jobs
 		-archivePath -exportPath -exportOptionsPlist -clonedSourcePackagesDirPath -packageCachePath
 		-authenticationKeyPath -authenticationKeyID -authenticationKeyIssuerID -localizationPath -exportLanguage
 		-defaultPackageRegistryURL -packageDependencySchedulerPolicy -scmProvider -test-enumeration-style
 		-test-enumeration-format -test-enumeration-output-path -runFirstLaunch -resultBundleFormat`) {
-		xcodebuildValueOpts[o] = true
+		xcodebuildValueOpts[opt] = true
 	}
 }
 
@@ -46,7 +46,7 @@ type xbCommand struct {
 // N=V] [-c]` and `xcrun [options]` wrappers (in any order, nested). A script that runs xcodebuild inside isn't
 // recognized.
 func parseXcodebuild(cmdline []string) xbCommand {
-	c := xbCommand{Env: map[string]string{}}
+	cmd := xbCommand{Env: map[string]string{}}
 	args := cmdline
 	for len(args) > 0 {
 		switch filepath.Base(args[0]) {
@@ -54,19 +54,20 @@ func parseXcodebuild(cmdline []string) xbCommand {
 			args = args[1:]
 		envOpts:
 			for len(args) > 0 {
-				a := args[0]
+				arg := args[0]
 				switch {
-				case a == "-i" || a == "-" || a == "--ignore-environment":
-					c.Cleared = true
-				case (a == "-u" || a == "-P" || a == "-C" || a == "-S") && len(args) > 1:
+				case arg == "-i" || arg == "-" || arg == "--ignore-environment":
+					cmd.Cleared = true
+				case (arg == "-u" || arg == "-P" || arg == "-C" || arg == "-S") && len(args) > 1:
 					args = args[1:]
-				case strings.HasPrefix(a, "-") && len(a) > 1:
-				case strings.Contains(a, "=") && !strings.HasPrefix(a, "="):
-					k, v, _ := strings.Cut(a, "=")
-					c.Env[k] = v
+				case strings.HasPrefix(arg, "-") && len(arg) > 1:
+				case strings.Contains(arg, "=") && !strings.HasPrefix(arg, "="):
+					key, value, _ := strings.Cut(arg, "=")
+					cmd.Env[key] = value
 				default:
 					break envOpts
 				}
+
 				args = args[1:]
 			}
 		case "arch":
@@ -74,37 +75,42 @@ func parseXcodebuild(cmdline []string) xbCommand {
 			for len(args) > 0 && strings.HasPrefix(args[0], "-") {
 				switch args[0] {
 				case "-c":
-					c.Cleared = true
+					cmd.Cleared = true
 				case "-arch", "-d":
 					if len(args) > 1 {
 						args = args[1:]
 					}
 				case "-e":
 					if len(args) > 1 {
-						k, v, _ := strings.Cut(args[1], "=")
-						c.Env[k] = v
+						key, value, _ := strings.Cut(args[1], "=")
+						cmd.Env[key] = value
 						args = args[1:]
 					}
 				}
+
 				args = args[1:]
 			}
 		case "xcrun":
 			args = args[1:]
 			for len(args) > 0 && strings.HasPrefix(args[0], "-") { // xcrun's own options: --sdk X, --toolchain X, -v, …
-				takesValue := args[0] == "--sdk" || args[0] == "-sdk" || args[0] == "--toolchain" || args[0] == "-toolchain"
+				takesValue := args[0] == "--sdk" || args[0] == "-sdk" || args[0] == "--toolchain" ||
+					args[0] == "-toolchain"
 				if takesValue && len(args) > 1 {
 					args = args[1:]
 				}
+
 				args = args[1:]
 			}
 		case "xcodebuild":
-			c.OK, c.Args = true, args[1:]
-			return c
+			cmd.OK = true
+			cmd.Args = args[1:]
+			return cmd
 		default:
-			return c
+			return cmd
 		}
 	}
-	return c
+
+	return cmd
 }
 
 // actions are xcodebuild's action words: the arguments that are neither an option, an option's value nor a NAME=VALUE
@@ -112,17 +118,18 @@ func parseXcodebuild(cmdline []string) xbCommand {
 func (c xbCommand) actions() []string {
 	var out []string
 	for i := 0; i < len(c.Args); i++ {
-		a := c.Args[i]
+		arg := c.Args[i]
 		switch {
-		case strings.HasPrefix(a, "-"):
-			if xcodebuildValueOpts[a] && i+1 < len(c.Args) {
+		case strings.HasPrefix(arg, "-"):
+			if xcodebuildValueOpts[arg] && i+1 < len(c.Args) {
 				i++
 			}
-		case strings.Contains(a, "="):
+		case strings.Contains(arg, "="):
 		default:
-			out = append(out, a)
+			out = append(out, arg)
 		}
 	}
+
 	return out
 }
 
@@ -152,6 +159,7 @@ func optValues(args []string, opt string) []string {
 			out = append(out, v)
 		}
 	}
+
 	return out
 }
 
@@ -163,16 +171,19 @@ func lastOpt(args []string, opt string) string {
 	return v[len(v)-1]
 }
 
-// isIOSRuntime: a simulator runtime identifier of iOS (not tvOS, watchOS, visionOS).
+// isIOSRuntime reports whether a simulator runtime identifier is an iOS one (not tvOS, watchOS or visionOS).
 func isIOSRuntime(id string) bool {
 	return strings.HasPrefix(id, "com.apple.CoreSimulator.SimRuntime.iOS-")
 }
 
-// destinations sorts the command's -destination arguments (design §4.5): IOS, iOS simulators named by id= that simctl
-// lists (UDIDs upper case); Named, `platform=iOS Simulator` destinations with no id (exec can't tell their arming in
-// advance; the hook still covers a launchd-armed one from the runner's own environment); Foreign, everything else
-// (another platform's simulator, a physical device, macOS / Mac Catalyst, an id simctl doesn't list): the runner hook
-// is an iOS-simulator library, so exec doesn't use it at all then. generic/ destinations (build only) are ignored.
+// destinations sorts the command's -destination arguments into three groups:
+//   - IOS: iOS simulators named by an id= that simctl lists. The UDIDs are upper case.
+//   - Named: `platform=iOS Simulator` destinations with no id. exec can't tell in advance whether they are armed. The
+//     hook still covers a launchd-armed one, from the runner's own environment.
+//   - Foreign: everything else, such as another platform's simulator, a physical device, macOS or Mac Catalyst, or an
+//     id simctl doesn't list. The runner hook is an iOS-simulator library, so then exec doesn't use it at all.
+//
+// generic/ destinations are for builds only, and are ignored.
 type destSet struct {
 	IOS, Named, Foreign []string
 }
@@ -180,36 +191,41 @@ type destSet struct {
 func destinations(args []string, devs []simctl.Device) destSet {
 	var out destSet
 	byID := map[string]simctl.Device{}
-	for _, d := range devs {
-		byID[strings.ToUpper(d.UDID)] = d
+	for _, device := range devs {
+		byID[strings.ToUpper(device.UDID)] = device
 	}
+
 	for _, spec := range optValues(args, "-destination") {
-		kv := map[string]string{}
-		for _, p := range strings.Split(spec, ",") {
-			if k, v, ok := strings.Cut(strings.TrimSpace(p), "="); ok {
-				kv[strings.TrimSpace(k)] = strings.TrimSpace(v)
+		settings := map[string]string{}
+		for _, part := range strings.Split(spec, ",") {
+			if key, value, ok := strings.Cut(strings.TrimSpace(part), "="); ok {
+				settings[strings.TrimSpace(key)] = strings.TrimSpace(value)
 			}
 		}
-		if _, ok := kv["generic/platform"]; ok {
+
+		if _, ok := settings["generic/platform"]; ok {
 			continue
 		}
-		switch id := strings.ToUpper(kv["id"]); {
+
+		switch id := strings.ToUpper(settings["id"]); {
 		case id != "":
-			d, ok := byID[id]
+			device, ok := byID[id]
 			switch {
 			case !ok:
 				out.Foreign = append(out.Foreign, spec+" (not a simulator simctl lists)")
-			case !isIOSRuntime(d.RuntimeID):
-				out.Foreign = append(out.Foreign, fmt.Sprintf("%s (%s, %s)", spec, d.Name, runtimeName(d.RuntimeID)))
+			case !isIOSRuntime(device.RuntimeID):
+				out.Foreign = append(out.Foreign,
+					fmt.Sprintf("%s (%s, %s)", spec, device.Name, runtimeName(device.RuntimeID)))
 			case !slices.Contains(out.IOS, id):
 				out.IOS = append(out.IOS, id)
 			}
-		case strings.EqualFold(kv["platform"], "iOS Simulator"):
+		case strings.EqualFold(settings["platform"], "iOS Simulator"):
 			out.Named = append(out.Named, spec)
 		default:
 			out.Foreign = append(out.Foreign, spec)
 		}
 	}
+
 	return out
 }
 
@@ -221,14 +237,17 @@ func destinationIDs(args []string) []string {
 		if args[i] != "-destination" {
 			continue
 		}
+
 		for _, kv := range strings.Split(args[i+1], ",") {
-			if k, v, ok := strings.Cut(strings.TrimSpace(kv), "="); ok && k == "id" && v != "" {
-				if u := strings.ToUpper(v); !seen[u] { // simctl lists UDIDs in upper case; xcodebuild takes either
-					seen[u] = true
-					out = append(out, u)
+			if key, value, ok := strings.Cut(strings.TrimSpace(kv), "="); ok && key == "id" && value != "" {
+				// simctl lists UDIDs in upper case; xcodebuild takes either
+				if udid := strings.ToUpper(value); !seen[udid] {
+					seen[udid] = true
+					out = append(out, udid)
 				}
 			}
 		}
 	}
+
 	return out
 }

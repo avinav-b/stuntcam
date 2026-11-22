@@ -73,7 +73,7 @@ func (f *fakeSim) Setenv(_ string, k, v string) error {
 	return nil
 }
 
-func set(t *testing.T) artifacts.Set {
+func stagedSet(t *testing.T) artifacts.Set {
 	return artifacts.Set{Stub: "/h/builds/s1/libsimcamstub.dylib", Loader: "/h/builds/b1/libsimcamloader.dylib", Engine: "/h/builds/b1/libsimcam.dylib"}
 }
 
@@ -96,7 +96,7 @@ func TestMergeInsert(t *testing.T) {
 func TestLaunchdArmAndDisarmKeepOtherTools(t *testing.T) {
 	t.Setenv("SIMCAM_HOME", t.TempDir())
 	f := &fakeSim{env: map[string]string{"DYLD_INSERT_LIBRARIES": "/t3/serve-sim.dylib"}, flaky: 1}
-	s := set(t)
+	s := stagedSet(t)
 	if err := ArmLaunchd(f, "U", s, Vars("U", s, Options{})); err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +126,7 @@ func TestLaunchdArmAndDisarmKeepOtherTools(t *testing.T) {
 func TestBootArmPassesVarsAndRecords(t *testing.T) {
 	t.Setenv("SIMCAM_HOME", t.TempDir())
 	f := &fakeSim{env: map[string]string{}}
-	s := set(t)
+	s := stagedSet(t)
 	vars := Vars("U", s, Options{StubLog: true, Extra: map[string]string{"SIMCAM_LAZY": "0"}})
 	if err := ArmBoot(f, "U", s, vars); err != nil {
 		t.Fatal(err)
@@ -148,7 +148,7 @@ func TestBootArmPassesVarsAndRecords(t *testing.T) {
 
 func TestLaunchdArmRollsBack(t *testing.T) {
 	t.Setenv("SIMCAM_HOME", t.TempDir())
-	s := set(t)
+	s := stagedSet(t)
 	// an earlier arm on another build, then a re-arm that can't set SIMCAM_CHAIN
 	if err := home.WriteCurrent("U", "/h/builds/b0/libsimcamloader.dylib"); err != nil {
 		t.Fatal(err)
@@ -201,50 +201,52 @@ func TestLaunchdArmRollbackRecordTellsTheTruth(t *testing.T) {
 		{name: "launchd record, an unset fails", earlier: true, unsetErrKey: "SIMCAM_LAZY", wantRecord: true, wantBuild: "b1",
 			wantVars: []string{"SIMCAM_LAZY", "SIMCAM_SOURCE", "DYLD_INSERT_LIBRARIES"}},
 	} {
-		t.Setenv("SIMCAM_HOME", t.TempDir())
-		f := &fakeSim{env: map[string]string{}}
-		os.MkdirAll(home.Sim("U"), 0o755)
-		if c.current {
-			if err := home.WriteCurrent("U", "/h/builds/b0/libsimcamloader.dylib"); err != nil {
-				t.Fatal(err)
+		t.Run(c.name, func(t *testing.T) {
+			t.Setenv("SIMCAM_HOME", t.TempDir())
+			f := &fakeSim{env: map[string]string{}}
+			os.MkdirAll(home.Sim("U"), 0o755)
+			if c.current {
+				if err := home.WriteCurrent("U", "/h/builds/b0/libsimcamloader.dylib"); err != nil {
+					t.Fatal(err)
+				}
 			}
-		}
-		if c.earlier {
-			s1 := set(t)
-			if err := ArmLaunchd(f, "U", s1, Vars("U", s1, Options{Extra: map[string]string{"SIMCAM_SOURCE": "scene"}})); err != nil {
-				t.Fatal(err)
+			if c.earlier {
+				s1 := stagedSet(t)
+				if err := ArmLaunchd(f, "U", s1, Vars("U", s1, Options{Extra: map[string]string{"SIMCAM_SOURCE": "scene"}})); err != nil {
+					t.Fatal(err)
+				}
 			}
-		}
-		if c.ownBooting {
-			booting := Record{Mode: Launchd, Build: "b2", At: time.Now().Unix(), Booting: true, Pid: os.Getpid()}
-			if err := WriteRecord("U", booting); err != nil {
-				t.Fatal(err)
+			if c.ownBooting {
+				booting := Record{Mode: Launchd, Build: "b2", At: time.Now().Unix(), Booting: true, Pid: os.Getpid()}
+				if err := WriteRecord("U", booting); err != nil {
+					t.Fatal(err)
+				}
 			}
-		}
-		f.failKey, f.unsetErrKey = "DYLD_INSERT_LIBRARIES", c.unsetErrKey
-		vars := Vars("U", b2, Options{Extra: map[string]string{"SIMCAM_LAZY": "0"}})
-		if err := ArmLaunchd(f, "U", b2, vars); err == nil || !strings.Contains(err.Error(), "rolled back") {
-			t.Fatalf("%s: err %v", c.name, err)
-		}
-		r, err := ReadRecord("U")
-		if !c.wantRecord {
-			if err == nil {
-				t.Errorf("%s: a record is left: %+v", c.name, r)
+			f.failKey, f.unsetErrKey = "DYLD_INSERT_LIBRARIES", c.unsetErrKey
+			vars := Vars("U", b2, Options{Extra: map[string]string{"SIMCAM_LAZY": "0"}})
+			if err := ArmLaunchd(f, "U", b2, vars); err == nil || !strings.Contains(err.Error(), "rolled back") {
+				t.Fatalf("%s: err %v", c.name, err)
 			}
-			continue
-		}
-		if err != nil {
-			t.Errorf("%s: no record; want a launchd record for build %s", c.name, c.wantBuild)
-			continue
-		}
-		if r.Mode != Launchd || r.Build != c.wantBuild || r.Booting || InProgress(r) {
-			t.Errorf("%s: record %+v, want a finished launchd record for build %s", c.name, r, c.wantBuild)
-		}
-		for _, n := range c.wantVars {
-			if !slices.Contains(r.Vars, n) {
-				t.Errorf("%s: the record doesn't name %s: %v", c.name, n, r.Vars)
+			r, err := ReadRecord("U")
+			if !c.wantRecord {
+				if err == nil {
+					t.Errorf("%s: a record is left: %+v", c.name, r)
+				}
+				return
 			}
-		}
+			if err != nil {
+				t.Errorf("%s: no record; want a launchd record for build %s", c.name, c.wantBuild)
+				return
+			}
+			if r.Mode != Launchd || r.Build != c.wantBuild || r.Booting || InProgress(r) {
+				t.Errorf("%s: record %+v, want a finished launchd record for build %s", c.name, r, c.wantBuild)
+			}
+			for _, n := range c.wantVars {
+				if !slices.Contains(r.Vars, n) {
+					t.Errorf("%s: the record doesn't name %s: %v", c.name, n, r.Vars)
+				}
+			}
+		})
 	}
 }
 
@@ -270,48 +272,63 @@ func TestLaunchdArmRollbackOverBootAndEnvRecords(t *testing.T) {
 		{name: "env record, an unset fails", before: Record{Mode: Env, Build: "b0", At: 42}, unsetErrKey: "SIMCAM_CHAIN",
 			wantMode: Launchd},
 	} {
-		t.Setenv("SIMCAM_HOME", t.TempDir())
-		f := &fakeSim{env: map[string]string{}}
-		os.MkdirAll(home.Sim("U"), 0o755)
-		if err := home.WriteCurrent("U", "/h/builds/b0/libsimcamloader.dylib"); err != nil {
-			t.Fatal(err)
-		}
-		if err := WriteRecord("U", c.before); err != nil {
-			t.Fatal(err)
-		}
-		rec, _ := os.ReadFile(recordPath("U"))
-		f.failKey, f.unsetErrKey = "DYLD_INSERT_LIBRARIES", c.unsetErrKey
-		if err := ArmLaunchd(f, "U", b2, Vars("U", b2, Options{})); err == nil || !strings.Contains(err.Error(), "rolled back") {
-			t.Fatalf("%s: err %v", c.name, err)
-		}
-		after, _ := os.ReadFile(recordPath("U"))
-		r, err := ReadRecord("U")
-		if err != nil || r.Mode != c.wantMode || r.Build != "b0" || (c.wantSame && string(after) != string(rec)) {
-			t.Errorf("%s: record %s (%v), want mode %s for build b0 (unchanged: %v)", c.name, after, err, c.wantMode, c.wantSame)
-		}
-		if c.unsetErrKey != "" && !slices.Contains(r.Vars, c.unsetErrKey) {
-			t.Errorf("%s: the record doesn't name %s, which is still set: %v", c.name, c.unsetErrKey, r.Vars)
-		}
-		if _, left := f.env[c.unsetErrKey]; c.unsetErrKey != "" && !left {
-			t.Fatalf("%s: %s is not set after the rollback: the case tests nothing", c.name, c.unsetErrKey)
-		}
-		// the unset works at the next try: `down` must then leave nothing of stuntcam's
-		f.unsetErrKey = ""
-		if err := Disarm(f, "U", true); err != nil {
-			t.Fatalf("%s: down: %v", c.name, err)
-		}
-		if len(f.env) != 0 {
-			t.Errorf("%s: after down: %v", c.name, f.env)
-		}
+		t.Run(c.name, func(t *testing.T) {
+			t.Setenv("SIMCAM_HOME", t.TempDir())
+			f := &fakeSim{env: map[string]string{}}
+			os.MkdirAll(home.Sim("U"), 0o755)
+			if err := home.WriteCurrent("U", "/h/builds/b0/libsimcamloader.dylib"); err != nil {
+				t.Fatal(err)
+			}
+			if err := WriteRecord("U", c.before); err != nil {
+				t.Fatal(err)
+			}
+			rec, _ := os.ReadFile(recordPath("U"))
+			f.failKey, f.unsetErrKey = "DYLD_INSERT_LIBRARIES", c.unsetErrKey
+			if err := ArmLaunchd(f, "U", b2, Vars("U", b2, Options{})); err == nil || !strings.Contains(err.Error(), "rolled back") {
+				t.Fatalf("%s: err %v", c.name, err)
+			}
+			after, _ := os.ReadFile(recordPath("U"))
+			r, err := ReadRecord("U")
+			if err != nil || r.Mode != c.wantMode || r.Build != "b0" || (c.wantSame && string(after) != string(rec)) {
+				t.Errorf("%s: record %s (%v), want mode %s for build b0 (unchanged: %v)", c.name, after, err, c.wantMode, c.wantSame)
+			}
+			if c.unsetErrKey != "" && !slices.Contains(r.Vars, c.unsetErrKey) {
+				t.Errorf("%s: the record doesn't name %s, which is still set: %v", c.name, c.unsetErrKey, r.Vars)
+			}
+			if _, left := f.env[c.unsetErrKey]; c.unsetErrKey != "" && !left {
+				t.Fatalf("%s: %s is not set after the rollback: the case tests nothing", c.name, c.unsetErrKey)
+			}
+			// the unset works at the next try: `down` must then leave nothing of stuntcam's
+			f.unsetErrKey = ""
+			if err := Disarm(f, "U", true); err != nil {
+				t.Fatalf("%s: down: %v", c.name, err)
+			}
+			if len(f.env) != 0 {
+				t.Errorf("%s: after down: %v", c.name, f.env)
+			}
+		})
 	}
 }
 
 func TestLaunchdArmAbortsOnUnreadableEnv(t *testing.T) {
 	t.Setenv("SIMCAM_HOME", t.TempDir())
-	s := set(t)
+	s := stagedSet(t)
 	f := &fakeSim{env: map[string]string{"DYLD_INSERT_LIBRARIES": "/t3/serve-sim.dylib"}, getErr: true}
-	if err := ArmLaunchd(f, "U", s, Vars("U", s, Options{})); err == nil {
+	if err := os.MkdirAll(filepath.Dir(DownMarker("U")), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(DownMarker("U"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := ArmLaunchd(f, "U", s, Vars("U", s, Options{}))
+	if err == nil {
 		t.Fatal("armed although the current value couldn't be read")
+	}
+	if want := "reading the simulator's DYLD_INSERT_LIBRARIES failed, not arming: spawn failed"; err.Error() != want {
+		t.Fatalf("error %q, want %q", err, want)
+	}
+	if _, err := os.Stat(DownMarker("U")); err != nil {
+		t.Fatalf("the down marker went before anything was read: %v", err)
 	}
 	if len(f.order) != 0 || f.env["DYLD_INSERT_LIBRARIES"] != "/t3/serve-sim.dylib" {
 		t.Fatalf("changed something: %v %v", f.order, f.env)
@@ -326,7 +343,7 @@ func TestLaunchdArmAbortsOnUnreadableEnv(t *testing.T) {
 
 func TestDisarmShutDownLaunchdSim(t *testing.T) {
 	t.Setenv("SIMCAM_HOME", t.TempDir())
-	s := set(t)
+	s := stagedSet(t)
 	f := &fakeSim{env: map[string]string{}}
 	if err := ArmLaunchd(f, "U", s, Vars("U", s, Options{})); err != nil {
 		t.Fatal(err)
@@ -342,7 +359,7 @@ func TestDisarmShutDownLaunchdSim(t *testing.T) {
 
 func TestDownMarker(t *testing.T) {
 	t.Setenv("SIMCAM_HOME", t.TempDir())
-	s := set(t)
+	s := stagedSet(t)
 	f := &fakeSim{env: map[string]string{}}
 	if err := ArmLaunchd(f, "U", s, Vars("U", s, Options{})); err != nil {
 		t.Fatal(err)
@@ -363,7 +380,7 @@ func TestDownMarker(t *testing.T) {
 
 func TestArmBootRecords(t *testing.T) {
 	t.Setenv("SIMCAM_HOME", t.TempDir())
-	s := set(t)
+	s := stagedSet(t)
 	f := &fakeSim{env: map[string]string{}}
 	if err := ArmBoot(f, "U", s, Vars("U", s, Options{})); err != nil {
 		t.Fatal(err)
@@ -479,7 +496,7 @@ func TestWriteConfigEmptyRulesDirAndSize(t *testing.T) {
 // a re-arm unsets what an earlier launchd arm set and this one doesn't, records both, and sets DYLD_INSERT_LIBRARIES last
 func TestLaunchdArmDropsEarlierVars(t *testing.T) {
 	t.Setenv("SIMCAM_HOME", t.TempDir())
-	s := set(t)
+	s := stagedSet(t)
 	f := &fakeSim{env: map[string]string{}}
 	if err := ArmLaunchd(f, "U", s, Vars("U", s, Options{Extra: map[string]string{"SIMCAM_SOURCE": "scene"}})); err != nil {
 		t.Fatal(err)
@@ -506,7 +523,7 @@ func TestLaunchdArmDropsEarlierVars(t *testing.T) {
 func TestLaunchdArmRollbackRestoresCurrentAndOtherTools(t *testing.T) {
 	for _, failKey := range []string{"SIMCAM_CHAIN", "DYLD_INSERT_LIBRARIES"} {
 		t.Setenv("SIMCAM_HOME", t.TempDir())
-		s := set(t)
+		s := stagedSet(t)
 		const before = "/x/libother.dylib:/old/builds/s0/libsimcamstub.dylib"
 		f := &fakeSim{env: map[string]string{"DYLD_INSERT_LIBRARIES": before}, failKey: failKey}
 		os.MkdirAll(home.Sim("U"), 0o755)
@@ -540,7 +557,7 @@ func TestLaunchdArmRollbackRestoresCurrentAndOtherTools(t *testing.T) {
 // says it rolled back
 func TestLaunchdArmRollbackKeepsBootRecordAndDown(t *testing.T) {
 	t.Setenv("SIMCAM_HOME", t.TempDir())
-	s := set(t)
+	s := stagedSet(t)
 	f := &fakeSim{env: map[string]string{}, failKey: "SIMCAM_CHAIN"}
 	os.MkdirAll(home.Sim("U"), 0o755)
 	boot := Record{Mode: Boot, Build: "b0", At: 42, Vars: []string{"DYLD_INSERT_LIBRARIES"}}
@@ -575,7 +592,7 @@ func TestLaunchdArmRollbackKeepsBootRecordAndDown(t *testing.T) {
 func TestLaunchdArmRollbackPutsBackTheRecordItFound(t *testing.T) {
 	for _, before := range []string{"none", "boot", "launchd"} {
 		t.Setenv("SIMCAM_HOME", t.TempDir())
-		s := set(t)
+		s := stagedSet(t)
 		f := &fakeSim{env: map[string]string{}}
 		os.MkdirAll(home.Sim("U"), 0o755)
 		switch before {

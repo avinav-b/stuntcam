@@ -1,35 +1,51 @@
 // SPDX-License-Identifier: Apache-2.0
-// simcam loader (libsimcamloader.dylib): dlopened by the frozen boot stub from the path in $SIMCAM_SIM_DIR/current, so
-// it can change without a reboot (design §4.1, B-MF4). libSystem only (it runs inside the stub's constructor). In app
-// processes (an executable in a .app bundle, in the device's data dir or an Xcode build-products dir, not under the
-// runtime root) it:
-//   1. restores what Xcode/XCTest would have inserted (the boot env's DYLD_INSERT_LIBRARIES displaced it):
-//      XCTestBundleInjectPath set (hosted tests)  -> exactly that list;
-//      else XCODE_SCHEME_NAME set (UI-test target) -> the rules file's "ui-test-target" libs;
-//      else Xcode-launched (MTC_/PERFC_/IDE_ vars, DYLD_LIBRARY_PATH in DerivedData) -> its "xcode-run" libs.
-//      The rules file is <rules_dir>/<xcode_build>.json, the build being the one `stuntcam up` (or scripts/boot.sh)
-//      recorded in $SIMCAM_SIM_DIR/config.json, and rules_dir the per-content dir it staged
-//      ($SIMCAM_HOME/restore-rules/<hash>/, so an armed sim's rules never change under it): under ⌘R nothing in the app
-//      names the launching Xcode, so the arm-time record is the source. No record or no file for that build: the newest
-//      rules file (else the built-in 27A266a rules) plus ONE line, "restore rules unverified for Xcode <build>; …"
-//      (design §4.1 "Which Xcode's libs", B-MF5).
-//      Never dlopened, in any rule or the chain: libraries that only work when inserted at launch (sanitizer runtimes
-//      libclang_rt.*, libgmalloc). A sanitized app links its own runtime; dlopening the test bundle's copy aborts ASan
-//      and maps a second TSan. Nor a second copy of a library whose basename is already mapped from another path. Both
-//      are logged in one line, "skipped (must load at launch, or a second copy)"; a chain entry skipped as a second
-//      copy is also said on stderr (the chain is the user's own list).
-//      SIMCAM_XCODE_LIBS=0 skips all restores; SIMCAM_MTC=0 skips MTC.
-//   2. says, in ONE line on stderr and in the log, when boot mode displaced another tool's per-launch insert (design
-//      §4.1 rule 4): Detox launch arguments, IDB_* variables, sanitizer / Guard Malloc settings with their runtime
-//      absent, a launch-only library from step 1 that isn't mapped, while the insert list is our stub alone (a launch
-//      that merged its list with ours displaced nothing). A signal variable whose NAME=value config.json lists in
-//      "boot_signals" (it was in the boot environment, so every process has it) is not a signal.
-//   3. dlopens the engine: $SIMCAM_DYLIB, else libsimcam.dylib next to this loader (a build dir holds a matching pair).
-//      Not in *-Runner.app (UI-test runners) or app extensions (.appex).
-//   4. dlopens each line of the chain file ($SIMCAM_CHAIN, else $SIMCAM_SIM_DIR/chain.txt), so tools that arrive after
-//      boot can still add libraries without a reboot. Lines starting with '#' and our own libraries (libsimcam*) are
-//      skipped.
-// SIMCAM=0 -> nothing. SIMCAM_STUB_LOG=<file> logs; SIMCAM_STUB_ENVDUMP=1 also logs the whole env.
+// simcam loader (libsimcamloader.dylib).
+//
+// Who loads it: the frozen boot stub (engine/stub) dlopens it from the stub's constructor, at the path named in
+// $SIMCAM_SIM_DIR/current (or in SIMCAM_LOADER), so the loader can change without a simulator reboot while the stub
+// never changes. It runs before the engine and before any of the app's code, so it uses libSystem only and allocates
+// nothing: every buffer is fixed-size, static or on the stack.
+//
+// What it provides: one constructor, simcam_loader(), and no functions for other code. In an app process (an
+// executable in a .app bundle, in the device's data dir or an Xcode build-products dir, and not under the runtime
+// root) it does four things:
+//   1. It restores the libraries that Xcode or XCTest would have inserted, which the boot environment's
+//      DYLD_INSERT_LIBRARIES displaced. Which list it uses:
+//      - XCTestBundleInjectPath is set (hosted tests): exactly that list.
+//      - Else XCODE_SCHEME_NAME is set (a UI-test target): the rules file's "ui-test-target" libs.
+//      - Else Xcode launched the app (MTC_, PERFC_ or IDE_ variables, or DYLD_LIBRARY_PATH in DerivedData): the
+//        rules file's "xcode-run" libs.
+//      The rules file is <rules_dir>/<xcode_build>.json. `stuntcam up` (or scripts/boot.sh) records the Xcode build
+//      and the rules_dir it staged in $SIMCAM_SIM_DIR/config.json. The rules_dir is a per-content directory
+//      ($SIMCAM_HOME/restore-rules/<hash>/), so an armed simulator's rules never change under it. The record made at
+//      arm time is the only source, because under ⌘R nothing in the app names the Xcode that launched it. With no
+//      record, or no file for that build, the loader uses the newest rules file (else the built-in 27A266a rules)
+//      and says ONE line: "restore rules unverified for Xcode <build>; …".
+//      Some libraries are never dlopened, by any rule or by the chain. Libraries that only work when inserted at
+//      launch (the sanitizer runtimes libclang_rt.* and libgmalloc): a sanitized app links its own runtime, and
+//      dlopening the test bundle's copy aborts ASan and maps a second TSan. And a second copy of a library whose
+//      basename is already mapped from another path. Both kinds are logged in one line, "skipped (must load at
+//      launch, or a second copy)". A chain entry skipped as a second copy is also said on stderr, because the chain
+//      is the user's own list.
+//      SIMCAM_XCODE_LIBS=0 skips all restores; SIMCAM_MTC=0 skips the Main Thread Checker.
+//   2. It says, in ONE line on stderr and in the log, when boot mode displaced another tool's per-launch insert, so the
+//      user can switch to launchd mode. The signals are Detox launch arguments, IDB_* variables, sanitizer or Guard
+//      Malloc settings whose runtime is absent, and a launch-only library from the restore lists that isn't mapped.
+//      They count only while the insert list is our stub alone: a launch that merged its own list with ours displaced
+//      nothing. A variable whose NAME=value config.json lists in "boot_signals" is not a signal: it was in the boot
+//      environment, so every process has it.
+//   3. It dlopens the engine: $SIMCAM_DYLIB, else libsimcam.dylib next to this loader (a build dir holds a matching
+//      pair). It skips this step in *-Runner.app (UI-test runners) and in app extensions (.appex).
+//   4. It dlopens each line of the chain file ($SIMCAM_CHAIN, else $SIMCAM_SIM_DIR/chain.txt), so tools that arrive
+//      after boot can still add libraries without a reboot. Lines starting with '#' and our own libraries
+//      (libsimcam*) are skipped.
+// SIMCAM=0 turns it off. SIMCAM_STUB_LOG=<file> turns on the log; SIMCAM_STUB_ENVDUMP=1 also logs the whole
+// environment.
+//
+// State: file-scope globals, all written on the constructor's thread before the app's code runs. The log descriptor
+// (gLogFd); config.json and the rules file in use, each read at most once (gConfigJson, gRulesJson, gXcodeBuild,
+// gRulesSource, gRulesVerified, gConfigUnusable, gSimDir, gConfigRead); and the one-line lists that announce() prints
+// at the end (gSkipped, gChainSkipped, gDisplaced).
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -44,706 +60,1115 @@ extern char **environ;
 
 // Buffer sizes. Every buffer is fixed-size and static or on the stack: the loader allocates nothing.
 enum {
-    LOADER_PATH_MAX = 1024,      // one path (an executable, a library, a directory)
-    PATH_NOTE_MAX = 1100,        // a path plus a short suffix or note ("<dir>/config.json", "<path> [second copy; …]")
-    LOG_LINE_MAX = 4096,         // one stub.log line
-    SAID_LINE_MAX = 1024,        // one line said on stderr
-    LIST_LINE_MAX = 1024,        // the one-line lists of skipped libraries
-    INSERT_LIST_MAX = 8192,      // a ':'-separated insert list (XCTestBundleInjectPath) or the chain file
-    INSERT_ENV_COPY_MAX = 4096,  // the copy of DYLD_INSERT_LIBRARIES that detect_displaced() splits
-    BOOT_SIGNAL_MAX = 4096,      // one config.json "boot_signals" entry
-    CONFIG_FILE_MAX = 16384,     // $SIMCAM_SIM_DIR/config.json
-    RULES_FILE_MAX = 32768,      // a restore-rules/<build>.json file
-    INJECT_LIST_ENTRIES_MAX = 32,  // distinct XCTestBundleInjectPath entries restored
+    LOADER_PATH_MAX = 1024,          // one path (an executable, a library, a directory)
+    PATH_NOTE_MAX = 1100,            // a path plus a short note ("<dir>/config.json", "<path> [second copy; …]")
+    LOG_LINE_MAX = 4096,             // one stub.log line
+    SAID_LINE_MAX = 1024,            // one line said on stderr
+    LIST_LINE_MAX = 1024,            // the one-line lists of skipped libraries
+    DISPLACED_LIST_MAX = 256,        // the list of displaced tools
+    INSERT_LIST_MAX = 8192,          // a ':'-separated insert list (XCTestBundleInjectPath) or the chain file
+    INSERT_ENV_COPY_MAX = 4096,      // the copy of DYLD_INSERT_LIBRARIES that detect_displaced() splits
+    BOOT_SIGNAL_MAX = 4096,          // one config.json "boot_signals" entry
+    CONFIG_FILE_MAX = 16384,         // $SIMCAM_SIM_DIR/config.json
+    RULES_FILE_MAX = 32768,          // a restore-rules/<build>.json file
+    INJECT_LIST_ENTRIES_MAX = 32,    // distinct XCTestBundleInjectPath entries restored
+    LIB_FAMILY_MAX = 64,             // a sanitizer runtime's family name ("libclang_rt.asan")
+    JSON_KEY_MAX = 64,               // one object key in a JSON file
+    RULE_NAME_MAX = 64,              // a rule's "name" in the rules file
+    RULE_LIB_PATH_MAX = 512,         // a lib's "path" in the rules file
+    CONDITION_MAX = 128,             // a lib's "if" or "unless" condition, or the variable name in one
+    XCODE_BUILD_MAX = 64,            // the recorded Xcode build ("27A266a")
+    BUILD_NAME_MAX = 128,            // a build read from a rules file name (see RULES_FILE_NAME_MAX)
+    RESTORE_INPUTS_LINE_MAX = 160,   // the "restore inputs:" log detail
+    UNVERIFIED_LINE_MAX = 256,       // the "restore rules unverified" line
+    DISPLACED_LINE_MAX = 400,        // the "boot mode displaced" line
 };
+
 #define CLANG_RT_PREFIX "libclang_rt."
 enum { CLANG_RT_PREFIX_LEN = sizeof CLANG_RT_PREFIX - 1 };   // 12
+#define JSON_SUFFIX ".json"
+enum {
+    JSON_SUFFIX_LEN = sizeof JSON_SUFFIX - 1,    // 5
+    RULES_FILE_NAME_MIN = JSON_SUFFIX_LEN + 1,   // a one-character build and ".json"
+    RULES_FILE_NAME_MAX = 100,                   // longer names are not Xcode builds (and fit BUILD_NAME_MAX)
+};
+
+// the runtime-relative directories of an inject-list entry (see inject_entry_path())
+#define USR_PREFIX "/usr/"
+#define SYSTEM_PREFIX "/System/"
+enum {
+    USR_PREFIX_LEN = sizeof USR_PREFIX - 1,         // 5
+    SYSTEM_PREFIX_LEN = sizeof SYSTEM_PREFIX - 1,   // 8
+};
+
 enum { SUPPORTED_CONFIG_PROTO = 1 };   // the config.json "proto" this loader reads
 
-static int gfd = -1;
-static void slog(const char *a, const char *b) {
-    if (gfd < 0) return;
+static int gLogFd = -1;
+
+static void log_line(const char *message, const char *detail) {
+    if (gLogFd < 0) {
+        return;
+    }
     char buf[LOG_LINE_MAX];
-    struct timespec ts;
-    clock_gettime(CLOCK_REALTIME, &ts);
-    int n = snprintf(buf, sizeof buf, "%ld.%06ld [loader %d] %s%s\n", (long)ts.tv_sec, ts.tv_nsec / 1000, getpid(), a,
-                     b ? b : "");
-    write(gfd, buf, n > (int)sizeof buf ? (int)sizeof buf : n);
-}
-// a user-facing line: stderr (Xcode's console, `simctl launch --console-pty`) and the log
-static void say(const char *line) {
-    char buf[SAID_LINE_MAX];
-    int n = snprintf(buf, sizeof buf, "%s\n", line);
-    write(2, buf, n > (int)sizeof buf ? (int)sizeof buf : n);
-    slog("said: ", line);
-}
-static int hasprefix(const char *s, const char *p) { return strncmp(s, p, strlen(p)) == 0; }
-static const char *base(const char *p) {
-    const char *b = strrchr(p, '/');
-    return b ? b + 1 : p;
+    struct timespec now;
+    clock_gettime(CLOCK_REALTIME, &now);
+    // seconds and microseconds
+    int length = snprintf(buf, sizeof buf, "%ld.%06ld [loader %d] %s%s\n", (long)now.tv_sec, now.tv_nsec / 1000,
+                          getpid(), message, detail ? detail : "");
+    // a log line that can't be written is dropped: the loader never fails an app launch over its log
+    (void)write(gLogFd, buf, length > (int)sizeof buf ? (int)sizeof buf : length);
 }
 
-// ---- images already mapped -------------------------------------------------------------------------------------------
-// the path of a mapped image whose basename starts with pre (exact basename when exact), else NULL
-static const char *mapped(const char *pre, int exact) {
-    for (uint32_t i = 0, n = _dyld_image_count(); i < n; i++) {
-        const char *nm = _dyld_get_image_name(i);
-        if (!nm) continue;
-        const char *b = base(nm);
-        if (exact ? !strcmp(b, pre) : hasprefix(b, pre)) return nm;
+// A user-facing line: on stderr (Xcode's console, `simctl launch --console-pty`) and in the log.
+static void say(const char *line) {
+    char buf[SAID_LINE_MAX];
+    int length = snprintf(buf, sizeof buf, "%s\n", line);
+    (void)write(STDERR_FILENO, buf, length > (int)sizeof buf ? (int)sizeof buf : length);   // the log has it too
+    log_line("said: ", line);
+}
+
+static int has_prefix(const char *str, const char *prefix) {
+    return strncmp(str, prefix, strlen(prefix)) == 0;
+}
+
+static const char *base_name(const char *path) {
+    const char *slash = strrchr(path, '/');
+    return slash ? slash + 1 : path;
+}
+
+// ---- images already mapped ------------------------------------------------------------------------------------------
+// The path of a mapped image whose basename starts with prefix (or equals it, when exact is set), else NULL.
+static const char *mapped_image(const char *prefix, int exact) {
+    for (uint32_t i = 0, count = _dyld_image_count(); i < count; i++) {
+        const char *name = _dyld_get_image_name(i);
+        if (!name) {
+            continue;
+        }
+        const char *leaf = base_name(name);
+        if (exact ? !strcmp(leaf, prefix) : has_prefix(leaf, prefix)) {
+            return name;
+        }
     }
     return NULL;
 }
 
-// ---- libraries that only work inserted at launch ---------------------------------------------------------------------
-// a launch-only library (a sanitizer runtime or Guard Malloc): never dlopened. runnerhook.m's launchOnly() is the same
-// test; restore-rules/*.json documents it as "never_dlopened".
+// ---- libraries that only work inserted at launch --------------------------------------------------------------------
+// A launch-only library (a sanitizer runtime or Guard Malloc) is never dlopened. runnerhook.m's launchOnly() makes the
+// same test, and restore-rules/*.json documents it as "never_dlopened".
 static int launch_only(const char *path) {
-    const char *b = base(path);
-    return hasprefix(b, CLANG_RT_PREFIX) || !strcmp(b, "libgmalloc.dylib");
+    const char *leaf = base_name(path);
+    return has_prefix(leaf, CLANG_RT_PREFIX) || !strcmp(leaf, "libgmalloc.dylib");
 }
-static const char *toolof(const char *path) {   // the tool a launch-only library belongs to (for the displaced line)
-    const char *b = base(path);
-    if (hasprefix(b, "libclang_rt.asan")) return "AddressSanitizer";
-    if (hasprefix(b, "libclang_rt.tsan")) return "ThreadSanitizer";
-    if (hasprefix(b, "libclang_rt.ubsan")) return "UndefinedBehaviorSanitizer";
-    if (!strcmp(b, "libgmalloc.dylib")) return "Guard Malloc";
+
+// The tool a launch-only library belongs to, for the "displaced" line.
+static const char *tool_of(const char *path) {
+    const char *leaf = base_name(path);
+    if (has_prefix(leaf, "libclang_rt.asan")) {
+        return "AddressSanitizer";
+    }
+    if (has_prefix(leaf, "libclang_rt.tsan")) {
+        return "ThreadSanitizer";
+    }
+    if (has_prefix(leaf, "libclang_rt.ubsan")) {
+        return "UndefinedBehaviorSanitizer";
+    }
+    if (!strcmp(leaf, "libgmalloc.dylib")) {
+        return "Guard Malloc";
+    }
     return "a sanitizer runtime";
 }
-static char skipped[LIST_LINE_MAX];   // "skipped (must load at launch)" entries, logged as one line
-static char displaced[256];           // tools whose launch-time insert is missing, said as one line
-static void addto(char *buf, size_t n, const char *s) {
-    if (strstr(buf, s)) return;
-    size_t l = strlen(buf);
-    snprintf(buf + l, n - l, "%s%s", l ? ", " : "", s);
+
+static char gSkipped[LIST_LINE_MAX];         // "skipped (must load at launch)" entries, logged as one line
+static char gDisplaced[DISPLACED_LIST_MAX];  // tools whose launch-time insert is missing, said as one line
+
+// Appends entry to a ", "-separated list, unless the list already holds it.
+static void list_add(char *list, size_t size, const char *entry) {
+    if (strstr(list, entry)) {
+        return;
+    }
+    size_t used = strlen(list);
+    snprintf(list + used, size - used, "%s%s", used ? ", " : "", entry);
 }
-// what tryload() did with a library
+
+// What try_load() did with a library.
 enum tryload_result {
     TRYLOAD_DLOPENED = 0,              // dlopen tried (logged with its result)
     TRYLOAD_SKIPPED_LAUNCH_ONLY = 1,   // a library that only works inserted at launch
     TRYLOAD_SKIPPED_SECOND_COPY = 2,   // its basename is already mapped from another path
 };
-// restores and chain entries; the engine itself is dlopened directly (its singleton handles a second copy)
-static enum tryload_result tryload(const char *path, const char *what) {
+
+// Loads a restored library or a chain entry. The engine itself is dlopened directly: its singleton handles a second
+// copy.
+static enum tryload_result try_load(const char *path, const char *what) {
     if (launch_only(path)) {
-        // same family already mapped (the app links its runtime): nothing lost. Else that tool is off in this launch.
-        // The family is the basename up to the first '_' or '.' after "libclang_rt." ("libclang_rt.asan").
-        const char *b = base(path);
-        char fam[64];
-        snprintf(fam, sizeof fam, "%.*s", (int)(strcspn(b + CLANG_RT_PREFIX_LEN, "_.") + CLANG_RT_PREFIX_LEN), b);
-        const char *have = hasprefix(b, CLANG_RT_PREFIX) ? mapped(fam, 0) : mapped(b, 1);
-        char e[PATH_NOTE_MAX];
-        snprintf(e, sizeof e, "%s [%s%s]", path, have ? "already loaded: " : "not in this process", have ? have : "");
-        addto(skipped, sizeof skipped, e);
-        if (!have) addto(displaced, sizeof displaced, toolof(path));
+        // If the same family is already mapped (the app links its runtime), nothing is lost. Otherwise that tool is
+        // off in this launch. The family is the basename up to the first '_' or '.' after "libclang_rt."
+        // ("libclang_rt.asan").
+        const char *leaf = base_name(path);
+        char family[LIB_FAMILY_MAX];
+        size_t family_len = strcspn(leaf + CLANG_RT_PREFIX_LEN, "_.") + CLANG_RT_PREFIX_LEN;
+        snprintf(family, sizeof family, "%.*s", (int)family_len, leaf);
+        const char *loaded = has_prefix(leaf, CLANG_RT_PREFIX) ? mapped_image(family, 0) : mapped_image(leaf, 1);
+        char entry[PATH_NOTE_MAX];
+        snprintf(entry, sizeof entry, "%s [%s%s]", path, loaded ? "already loaded: " : "not in this process",
+                 loaded ? loaded : "");
+        list_add(gSkipped, sizeof gSkipped, entry);
+        if (!loaded) {
+            list_add(gDisplaced, sizeof gDisplaced, tool_of(path));
+        }
         return TRYLOAD_SKIPPED_LAUNCH_ONLY;
     }
-    const char *have = mapped(base(path), 1);
-    if (have && strcmp(have, path)) {
-        char e[PATH_NOTE_MAX];
-        snprintf(e, sizeof e, "%s [second copy; already loaded: %s]", path, have);
-        addto(skipped, sizeof skipped, e);
+
+    const char *loaded = mapped_image(base_name(path), 1);
+
+    if (loaded && strcmp(loaded, path)) {
+        char entry[PATH_NOTE_MAX];
+        snprintf(entry, sizeof entry, "%s [second copy; already loaded: %s]", path, loaded);
+        list_add(gSkipped, sizeof gSkipped, entry);
         return TRYLOAD_SKIPPED_SECOND_COPY;
     }
-    void *h = dlopen(path, RTLD_NOW | RTLD_GLOBAL);
-    slog(what, h ? " loaded" : dlerror());
+
+    void *handle = dlopen(path, RTLD_NOW | RTLD_GLOBAL);
+    log_line(what, handle ? " loaded" : dlerror());
     return TRYLOAD_DLOPENED;
 }
-static char chainskip[LIST_LINE_MAX];   // chain entries skipped as a second copy (said on stderr: the user's list)
-static void chain(void) {
-    const char *cf = getenv("SIMCAM_CHAIN");
-    char dflt[LOADER_PATH_MAX];
-    const char *sd = getenv("SIMCAM_SIM_DIR");
-    if (!cf && sd && *sd) {   // never "/chain.txt"
-        snprintf(dflt, sizeof dflt, "%s/chain.txt", sd);
-        cf = dflt;
+
+// Chain entries skipped as a second copy. They are said on stderr, because the chain is the user's own list.
+static char gChainSkipped[LIST_LINE_MAX];
+
+static void load_chain(void) {
+    const char *chain_path = getenv("SIMCAM_CHAIN");
+    char default_path[LOADER_PATH_MAX];
+    const char *sim_dir_env = getenv("SIMCAM_SIM_DIR");
+
+    if (!chain_path && sim_dir_env && *sim_dir_env) {   // never "/chain.txt"
+        snprintf(default_path, sizeof default_path, "%s/chain.txt", sim_dir_env);
+        chain_path = default_path;
     }
-    if (!cf) return;
-    int fd = open(cf, O_RDONLY);
-    if (fd < 0) {
-        slog("chain file absent ", cf);
+
+    if (!chain_path) {
         return;
     }
-    char buf[INSERT_LIST_MAX];
-    ssize_t n = read(fd, buf, sizeof buf - 1);
-    close(fd);
-    if (n <= 0) return;
-    buf[n] = 0;
-    if ((size_t)n >= sizeof buf - 1) {   // longer than we read: drop the cut-off last line rather than dlopen half a path
-        char *nl = strrchr(buf, '\n');
-        if (nl) *nl = 0;
-        else buf[0] = 0;
-        slog("chain file longer than 8 KB; entries past it ignored: ", cf);
+    int fd = open(chain_path, O_RDONLY);
+
+    if (fd < 0) {
+        log_line("chain file absent ", chain_path);
+        return;
     }
-    char *sv = NULL;
-    for (char *line = strtok_r(buf, "\n", &sv); line; line = strtok_r(NULL, "\n", &sv)) {
-        if (!line[0] || line[0] == '#') continue;
-        if (hasprefix(base(line), "libsimcam")) {
-            slog("chain: skipping our own library ", line);
+
+    char contents[INSERT_LIST_MAX];
+    ssize_t length = read(fd, contents, sizeof contents - 1);
+    close(fd);
+    if (length <= 0) {
+        return;
+    }
+    contents[length] = 0;
+
+    // The file is longer than the buffer: drop the cut-off last line rather than dlopen half a path.
+    if ((size_t)length >= sizeof contents - 1) {
+        char *last_newline = strrchr(contents, '\n');
+        if (last_newline) {
+            *last_newline = 0;
+        } else {
+            contents[0] = 0;
+        }
+        log_line("chain file longer than 8 KB; entries past it ignored: ", chain_path);
+    }
+
+    char *strtok_state = NULL;
+
+    for (char *line = strtok_r(contents, "\n", &strtok_state); line; line = strtok_r(NULL, "\n", &strtok_state)) {
+        if (!line[0] || line[0] == '#') {
             continue;
         }
-        if (tryload(line, "chain lib") == TRYLOAD_SKIPPED_SECOND_COPY) addto(chainskip, sizeof chainskip, line);
+        if (has_prefix(base_name(line), "libsimcam")) {
+            log_line("chain: skipping our own library ", line);
+            continue;
+        }
+        if (try_load(line, "chain lib") == TRYLOAD_SKIPPED_SECOND_COPY) {
+            list_add(gChainSkipped, sizeof gChainSkipped, line);
+        }
     }
 }
 
-// ---- a small JSON reader (no allocation): enough for config.json and restore-rules/<build>.json ----------------------
-static const char *jws(const char *p) {
-    while (*p == ' ' || *p == '\n' || *p == '\r' || *p == '\t') p++;
-    return p;
+// ---- a small JSON reader (no allocation): enough for config.json and restore-rules/<build>.json ---------------------
+// Each function takes a cursor into a NUL-terminated document and returns where it stopped.
+enum {
+    HEX4_DIGITS = 4,                   // the XXXX of a \uXXXX escape
+    UNICODE_ESCAPE_LEN = 6,            // "\uXXXX"
+    SURROGATE_HIGH_FIRST = 0xD800,     // UTF-16 surrogates: high (first) 0xD800-0xDBFF, low (second) 0xDC00-0xDFFF
+    SURROGATE_LOW_FIRST = 0xDC00,
+    SURROGATE_END = 0xE000,            // one past the last low surrogate
+    SUPPLEMENTARY_FIRST = 0x10000,     // the first code point that needs a surrogate pair
+};
+
+static int is_json_space(char c) {
+    return c == ' ' || c == '\n' || c == '\r' || c == '\t';
 }
-static const char *jskip(const char *p) {   // past one value; NULL on malformed input
-    p = jws(p);
-    if (*p == '"') {
-        for (p++; *p && *p != '"'; p++)
-            if (*p == '\\' && p[1]) p++;
-        return *p ? p + 1 : NULL;
+
+static const char *json_skip_space(const char *cursor) {
+    while (is_json_space(*cursor)) {
+        cursor++;
     }
-    if (*p == '{' || *p == '[') {
-        char close = *p == '{' ? '}' : ']';
-        p = jws(p + 1);
-        if (*p == close) return p + 1;
-        for (;;) {
-            if (close == '}') {   // a key and its ':'
-                p = jskip(p);
-                if (!p) return NULL;
-                p = jws(p);
-                if (*p != ':') return NULL;
-                p++;
+    return cursor;
+}
+
+// Past one value; NULL on malformed input.
+static const char *json_skip_value(const char *cursor) {
+    cursor = json_skip_space(cursor);
+
+    if (*cursor == '"') {
+        for (cursor++; *cursor && *cursor != '"'; cursor++) {
+            if (*cursor == '\\' && cursor[1]) {
+                cursor++;
             }
-            p = jskip(p);
-            if (!p) return NULL;
-            p = jws(p);
-            if (*p == ',') {
-                p = jws(p + 1);
+        }
+        return *cursor ? cursor + 1 : NULL;
+    }
+
+    if (*cursor == '{' || *cursor == '[') {
+        char closer = *cursor == '{' ? '}' : ']';
+        cursor = json_skip_space(cursor + 1);
+        if (*cursor == closer) {
+            return cursor + 1;
+        }
+        for (;;) {
+            if (closer == '}') {   // a key and its ':'
+                cursor = json_skip_value(cursor);
+                if (!cursor) {
+                    return NULL;
+                }
+                cursor = json_skip_space(cursor);
+                if (*cursor != ':') {
+                    return NULL;
+                }
+                cursor++;
+            }
+            cursor = json_skip_value(cursor);
+            if (!cursor) {
+                return NULL;
+            }
+            cursor = json_skip_space(cursor);
+            if (*cursor == ',') {
+                cursor = json_skip_space(cursor + 1);
                 continue;
             }
-            return *p == close ? p + 1 : NULL;
+            return *cursor == closer ? cursor + 1 : NULL;
         }
     }
-    if (!*p) return NULL;
-    while (*p && *p != ',' && *p != '}' && *p != ']' && *p != ' ' && *p != '\n' && *p != '\r' && *p != '\t') p++;
-    return p;
-}
-static int jhex4(const char *p) {   // 4 hex digits -> 0..0xFFFF, else -1
-    int v = 0;
-    for (int i = 0; i < 4; i++) {
-        char c = p[i];
-        v <<= 4;
-        if (c >= '0' && c <= '9') v |= c - '0';
-        else if (c >= 'a' && c <= 'f') v |= c - 'a' + 10;
-        else if (c >= 'A' && c <= 'F') v |= c - 'A' + 10;
-        else return -1;
+
+    if (!*cursor) {
+        return NULL;
     }
-    return v;
+
+    // a bare value (number, true, false, null) runs to the next separator, closing bracket or space
+    while (*cursor && *cursor != ',' && *cursor != '}' && *cursor != ']' && !is_json_space(*cursor)) {
+        cursor++;
+    }
+    return cursor;
 }
-// a string value into out (JSON escapes, \uXXXX as UTF-8); 0 if not a string. On failure out holds what was read so far.
-static int jstr(const char *p, char *out, size_t n) {
-    if (!n) return 0;
+
+// Four hex digits as 0 to 0xFFFF, else -1.
+static int json_hex4(const char *digits) {
+    int value = 0;
+    for (int i = 0; i < HEX4_DIGITS; i++) {
+        char digit = digits[i];
+        value <<= 4;
+        if (digit >= '0' && digit <= '9') {
+            value |= digit - '0';
+        } else if (digit >= 'a' && digit <= 'f') {
+            value |= digit - 'a' + 10;
+        } else if (digit >= 'A' && digit <= 'F') {
+            value |= digit - 'A' + 10;
+        } else {
+            return -1;
+        }
+    }
+    return value;
+}
+
+// Reads a string value into out (JSON escapes decoded, \uXXXX as UTF-8). Returns 0 if the value is not a string, or
+// on failure; out then holds what was read so far.
+static int json_string(const char *cursor, char *out, size_t size) {
+    if (!size) {
+        return 0;
+    }
     out[0] = 0;
-    p = jws(p);
-    if (*p != '"') return 0;
-    size_t k = 0;
-    for (p++; *p && *p != '"'; p++) {
-        char u[4];   // the next character's UTF-8 bytes
-        int ul = 1;
-        u[0] = *p;
-        if (*p == '\\' && p[1]) {
-            char c = *++p;
-            if (c == 'n') u[0] = '\n';
-            else if (c == 't') u[0] = '\t';
-            else if (c == 'r') u[0] = '\r';
-            else if (c == 'b') u[0] = '\b';
-            else if (c == 'f') u[0] = '\f';
-            else if (c == 'u') {   // Go's encoder writes \u0026 for '&' unless told not to
-                int cp = jhex4(p + 1);
-                if (cp < 0) {
-                    out[k] = 0;
+    cursor = json_skip_space(cursor);
+    if (*cursor != '"') {
+        return 0;
+    }
+    size_t used = 0;
+
+    for (cursor++; *cursor && *cursor != '"'; cursor++) {
+        char utf8[4];   // the next character's UTF-8 bytes
+        int utf8_len = 1;
+        utf8[0] = *cursor;
+        if (*cursor == '\\' && cursor[1]) {
+            char escaped = *++cursor;
+            if (escaped == 'n') {
+                utf8[0] = '\n';
+            } else if (escaped == 't') {
+                utf8[0] = '\t';
+            } else if (escaped == 'r') {
+                utf8[0] = '\r';
+            } else if (escaped == 'b') {
+                utf8[0] = '\b';
+            } else if (escaped == 'f') {
+                utf8[0] = '\f';
+            } else if (escaped == 'u') {   // Go's encoder writes & for '&' unless told not to
+                int codepoint = json_hex4(cursor + 1);
+                if (codepoint < 0) {
+                    out[used] = 0;
                     return 0;
                 }
-                p += 4;
-                if (cp >= 0xD800 && cp < 0xDC00 && p[1] == '\\' && p[2] == 'u') {   // a surrogate pair
-                    int lo = jhex4(p + 3);
-                    if (lo >= 0xDC00 && lo < 0xE000) {
-                        cp = 0x10000 + ((cp - 0xD800) << 10) + (lo - 0xDC00);
-                        p += 6;
+                cursor += HEX4_DIGITS;   // on the last hex digit
+                // a high surrogate followed by another \u escape: a surrogate pair
+                if (codepoint >= SURROGATE_HIGH_FIRST && codepoint < SURROGATE_LOW_FIRST && cursor[1] == '\\' &&
+                    cursor[2] == 'u') {
+                    int low = json_hex4(cursor + 3);
+                    if (low >= SURROGATE_LOW_FIRST && low < SURROGATE_END) {
+                        // each surrogate carries 10 bits of the code point
+                        codepoint = SUPPLEMENTARY_FIRST + ((codepoint - SURROGATE_HIGH_FIRST) << 10) +
+                                    (low - SURROGATE_LOW_FIRST);
+                        cursor += UNICODE_ESCAPE_LEN;
                     }
                 }
-                if (cp >= 0xD800 && cp < 0xE000) cp = '?';   // a lone surrogate
-                if (cp < 0x80) {
-                    u[0] = (char)cp;
-                } else if (cp < 0x800) {
-                    u[0] = (char)(0xC0 | cp >> 6);
-                    u[1] = (char)(0x80 | (cp & 0x3F));
-                    ul = 2;
-                } else if (cp < 0x10000) {
-                    u[0] = (char)(0xE0 | cp >> 12);
-                    u[1] = (char)(0x80 | (cp >> 6 & 0x3F));
-                    u[2] = (char)(0x80 | (cp & 0x3F));
-                    ul = 3;
+                if (codepoint >= SURROGATE_HIGH_FIRST && codepoint < SURROGATE_END) {
+                    codepoint = '?';   // a lone one
+                }
+                // UTF-8: one byte below 0x80, two below 0x800, three below 0x10000, else four
+                if (codepoint < 0x80) {
+                    utf8[0] = (char)codepoint;
+                } else if (codepoint < 0x800) {
+                    utf8[0] = (char)(0xC0 | codepoint >> 6);
+                    utf8[1] = (char)(0x80 | (codepoint & 0x3F));
+                    utf8_len = 2;
+                } else if (codepoint < 0x10000) {
+                    utf8[0] = (char)(0xE0 | codepoint >> 12);
+                    utf8[1] = (char)(0x80 | (codepoint >> 6 & 0x3F));
+                    utf8[2] = (char)(0x80 | (codepoint & 0x3F));
+                    utf8_len = 3;
                 } else {
-                    u[0] = (char)(0xF0 | cp >> 18);
-                    u[1] = (char)(0x80 | (cp >> 12 & 0x3F));
-                    u[2] = (char)(0x80 | (cp >> 6 & 0x3F));
-                    u[3] = (char)(0x80 | (cp & 0x3F));
-                    ul = 4;
+                    utf8[0] = (char)(0xF0 | codepoint >> 18);
+                    utf8[1] = (char)(0x80 | (codepoint >> 12 & 0x3F));
+                    utf8[2] = (char)(0x80 | (codepoint >> 6 & 0x3F));
+                    utf8[3] = (char)(0x80 | (codepoint & 0x3F));
+                    utf8_len = 4;
                 }
             } else {
-                u[0] = c;   // \" \\ \/
+                utf8[0] = escaped;   // \" \\ \/
             }
         }
-        if (k + ul >= n) {   // doesn't fit: a prefix, reported as a failure
-            out[k] = 0;
+        if (used + utf8_len >= size) {   // it doesn't fit: a prefix, reported as a failure
+            out[used] = 0;
             return 0;
         }
-        memcpy(out + k, u, ul);
-        k += ul;
+        memcpy(out + used, utf8, utf8_len);
+        used += utf8_len;
     }
-    out[k] = 0;
-    return *p == '"';
+
+    out[used] = 0;
+    return *cursor == '"';
 }
-static const char *jget(const char *obj, const char *key) {   // the value of key in the object at obj, else NULL
-    obj = jws(obj);
-    if (*obj != '{') return NULL;
-    const char *p = jws(obj + 1);
-    while (*p == '"') {
-        char k[64];
-        int match = jstr(p, k, sizeof k) && !strcmp(k, key);
-        p = jskip(p);
-        if (!p) return NULL;
-        p = jws(p);
-        if (*p != ':') return NULL;
-        p = jws(p + 1);
-        if (match) return p;
-        p = jskip(p);
-        if (!p) return NULL;
-        p = jws(p);
-        if (*p != ',') return NULL;
-        p = jws(p + 1);
+
+// The value of key in the object at obj, else NULL.
+static const char *json_get(const char *obj, const char *key) {
+    obj = json_skip_space(obj);
+    if (*obj != '{') {
+        return NULL;
     }
+    const char *cursor = json_skip_space(obj + 1);
+
+    while (*cursor == '"') {
+        char name[JSON_KEY_MAX];
+        int match = json_string(cursor, name, sizeof name) && !strcmp(name, key);
+        cursor = json_skip_value(cursor);
+        if (!cursor) {
+            return NULL;
+        }
+        cursor = json_skip_space(cursor);
+        if (*cursor != ':') {
+            return NULL;
+        }
+        cursor = json_skip_space(cursor + 1);
+        if (match) {
+            return cursor;
+        }
+        cursor = json_skip_value(cursor);
+        if (!cursor) {
+            return NULL;
+        }
+        cursor = json_skip_space(cursor);
+        if (*cursor != ',') {
+            return NULL;
+        }
+        cursor = json_skip_space(cursor + 1);
+    }
+
     return NULL;
 }
-static const char *jfirst(const char *arr) {   // the first element of the array at arr, else NULL
-    arr = jws(arr);
-    if (*arr != '[') return NULL;
-    arr = jws(arr + 1);
+
+// The first element of the array at arr, else NULL.
+static const char *json_first(const char *arr) {
+    arr = json_skip_space(arr);
+    if (*arr != '[') {
+        return NULL;
+    }
+    arr = json_skip_space(arr + 1);
     return *arr == ']' ? NULL : arr;
 }
-static const char *jnext(const char *el) {   // the element after el, else NULL
-    const char *p = jskip(el);
-    if (!p) return NULL;
-    p = jws(p);
-    return *p == ',' ? jws(p + 1) : NULL;
+
+// The array element after element, else NULL.
+static const char *json_next(const char *element) {
+    const char *cursor = json_skip_value(element);
+    if (!cursor) {
+        return NULL;
+    }
+    cursor = json_skip_space(cursor);
+    return *cursor == ',' ? json_skip_space(cursor + 1) : NULL;
 }
-// the whole file into buf (NUL-terminated); -1 if unreadable or if it fills the buffer (it may be truncated)
-static ssize_t slurp(const char *path, char *buf, size_t n) {
+
+// Reads the whole file into buf, NUL-terminated. Returns -1 if it is unreadable or fills the buffer (it may be
+// truncated).
+static ssize_t read_whole_file(const char *path, char *buf, size_t size) {
     buf[0] = 0;
     int fd = open(path, O_RDONLY | O_CLOEXEC);
-    if (fd < 0) return -1;
-    ssize_t k = read(fd, buf, n - 1);
+    if (fd < 0) {
+        return -1;
+    }
+    ssize_t length = read(fd, buf, size - 1);
     close(fd);
-    if (k < 0 || (size_t)k >= n - 1) {
+    if (length < 0 || (size_t)length >= size - 1) {
         buf[0] = 0;
         return -1;
     }
-    buf[k] = 0;
-    return k;
-}
-// a usable rules file: the whole document parses and has a "rules" value that parses (the CLI's xcode.Rules checks the
-// same)
-static int rulesok(const char *buf) {
-    const char *r;
-    return jskip(buf) && (r = jget(buf, "rules")) && jskip(r);
+    buf[length] = 0;
+    return length;
 }
 
-// ---- which Xcode's rules ---------------------------------------------------------------------------------------------
-// Apple build numbers: <major><train letter><number><suffix> (27A266a < 27A9275 < 27B52); returns <0, 0, >0
-static int buildcmp(const char *a, const char *b) {
-    long ma = strtol(a, (char **)&a, 10), mb = strtol(b, (char **)&b, 10);
-    if (ma != mb) return ma < mb ? -1 : 1;
-    if (*a != *b) return *a < *b ? -1 : 1;
-    if (*a) {
-        a++;
-        b++;
-    }
-    long na = strtol(a, (char **)&a, 10), nb = strtol(b, (char **)&b, 10);
-    if (na != nb) return na < nb ? -1 : 1;
-    return strcmp(a, b);
+// A usable rules file: the whole document parses, and it has a "rules" value that parses. The CLI's xcode.Rules
+// checks the same.
+static int rules_usable(const char *buf) {
+    const char *rules;
+    return json_skip_value(buf) && (rules = json_get(buf, "rules")) && json_skip_value(rules);
 }
-static char rulesbuf[RULES_FILE_MAX];   // the rules file in use ("" = built-in)
-static char rulesfrom[PATH_NOTE_MAX];
-static char xbuild[64];                 // the recorded Xcode build, "" if none
-static int rulesverified;
-static char cfgbuf[CONFIG_FILE_MAX];    // $SIMCAM_SIM_DIR/config.json ("" if absent, unreadable or of an unknown proto)
-static int cfgbad;                      // config.json exists but can't be used (unreadable, truncated, unknown proto)
-static char simdir[LOADER_PATH_MAX];    // $SIMCAM_SIM_DIR without trailing slashes
-static int cfgdone;
-static void readcfg(void) {             // once per process, on first use
-    if (cfgdone) return;
-    cfgdone = 1;
-    const char *sd = getenv("SIMCAM_SIM_DIR");
-    if (!sd || !*sd) return;
-    snprintf(simdir, sizeof simdir, "%s", sd);
-    for (size_t l = strlen(simdir); l > 1 && simdir[l - 1] == '/'; l--) simdir[l - 1] = 0;
-    char cf[PATH_NOTE_MAX];
-    snprintf(cf, sizeof cf, "%s/config.json", simdir);
-    if (slurp(cf, cfgbuf, sizeof cfgbuf) <= 0 || !jskip(cfgbuf)) {
-        cfgbuf[0] = 0;
-        cfgbad = access(cf, F_OK) == 0;
-        slog("no readable config.json (Xcode build not recorded): ", cf);
+
+// ---- which Xcode's rules --------------------------------------------------------------------------------------------
+// Orders Apple build numbers, <major><train letter><number><suffix> (27A266a < 27A9275 < 27B52). Returns <0, 0 or >0.
+static int build_compare(const char *left, const char *right) {
+    long left_major = strtol(left, (char **)&left, 10);
+    long right_major = strtol(right, (char **)&right, 10);
+    if (left_major != right_major) {
+        return left_major < right_major ? -1 : 1;
+    }
+    if (*left != *right) {
+        return *left < *right ? -1 : 1;
+    }
+    if (*left) {
+        left++;
+        right++;
+    }
+    long left_number = strtol(left, (char **)&left, 10);
+    long right_number = strtol(right, (char **)&right, 10);
+    if (left_number != right_number) {
+        return left_number < right_number ? -1 : 1;
+    }
+    return strcmp(left, right);
+}
+
+// A rules file name: "<build>.json", the build starting with a digit and short enough for the build buffers below.
+static int is_rules_file_name(const char *name, size_t len) {
+    if (len < RULES_FILE_NAME_MIN || len > RULES_FILE_NAME_MAX) {
+        return 0;
+    }
+    if (strcmp(name + len - JSON_SUFFIX_LEN, JSON_SUFFIX)) {
+        return 0;
+    }
+    return name[0] >= '0' && name[0] <= '9';
+}
+
+static char gRulesJson[RULES_FILE_MAX];     // the rules file in use ("" means the built-in rules)
+static char gRulesSource[PATH_NOTE_MAX];  // where the rules in use came from (a path, or "built-in (27A266a)")
+static char gXcodeBuild[XCODE_BUILD_MAX]; // the recorded Xcode build, "" if none
+static int gRulesVerified;                // the rules file is the recorded build's own
+
+// $SIMCAM_SIM_DIR/config.json ("" if absent, unreadable or of unknown proto)
+static char gConfigJson[CONFIG_FILE_MAX];
+static int gConfigUnusable;               // config.json exists but can't be used (unreadable, truncated, unknown proto)
+static char gSimDir[LOADER_PATH_MAX];     // $SIMCAM_SIM_DIR without trailing slashes
+static int gConfigRead;                   // read_config() has run
+
+// Reads config.json once per process, on first use.
+static void read_config(void) {
+    if (gConfigRead) {
         return;
     }
-    const char *v = jget(cfgbuf, "proto");
-    int proto = v ? atoi(v) : 0;
+    gConfigRead = 1;
+    const char *sim_dir_env = getenv("SIMCAM_SIM_DIR");
+    if (!sim_dir_env || !*sim_dir_env) {
+        return;
+    }
+    snprintf(gSimDir, sizeof gSimDir, "%s", sim_dir_env);
+    for (size_t len = strlen(gSimDir); len > 1 && gSimDir[len - 1] == '/'; len--) {
+        gSimDir[len - 1] = 0;   // a trailing slash
+    }
+
+    char config_path[PATH_NOTE_MAX];
+    snprintf(config_path, sizeof config_path, "%s/config.json", gSimDir);
+
+    if (read_whole_file(config_path, gConfigJson, sizeof gConfigJson) <= 0 || !json_skip_value(gConfigJson)) {
+        gConfigJson[0] = 0;
+        gConfigUnusable = access(config_path, F_OK) == 0;
+        log_line("no readable config.json (Xcode build not recorded): ", config_path);
+        return;
+    }
+
+    const char *proto_value = json_get(gConfigJson, "proto");
+    int proto = proto_value ? atoi(proto_value) : 0;
+
     if (proto != SUPPORTED_CONFIG_PROTO) {
-        cfgbuf[0] = 0;
-        cfgbad = 1;
-        slog("config.json: unknown proto; Xcode build ignored: ", cf);
+        gConfigJson[0] = 0;
+        gConfigUnusable = 1;
+        log_line("config.json: unknown proto; Xcode build ignored: ", config_path);
     }
 }
-// a NAME=value that config.json's "boot_signals" lists: it was in the boot environment, so it says nothing about this
-// launch
-static int bootsig(const char *kv) {
-    readcfg();
-    const char *a = cfgbuf[0] ? jget(cfgbuf, "boot_signals") : NULL;
-    for (const char *e = a ? jfirst(a) : NULL; e; e = jnext(e)) {
-        char s[BOOT_SIGNAL_MAX];
-        if (jstr(e, s, sizeof s) && !strcmp(s, kv)) return 1;
+
+// A NAME=value that config.json's "boot_signals" lists. It was in the boot environment, so it says nothing about this
+// launch.
+static int is_boot_signal(const char *name_value) {
+    read_config();
+    const char *signals = gConfigJson[0] ? json_get(gConfigJson, "boot_signals") : NULL;
+    for (const char *element = signals ? json_first(signals) : NULL; element; element = json_next(element)) {
+        char signal[BOOT_SIGNAL_MAX];
+        if (json_string(element, signal, sizeof signal) && !strcmp(signal, name_value)) {
+            return 1;
+        }
     }
     return 0;
 }
-static void pickrules(void) {
+
+// Picks the rules file (gRulesJson, gRulesSource, gRulesVerified): the recorded build's own, else the newest build's in
+// the same dir, else the built-in rules.
+static void pick_rules(void) {
     char dir[LOADER_PATH_MAX] = "";
-    const char *v;
-    int hasdir = 0;
-    readcfg();
-    if (cfgbuf[0]) {
-        // jstr's result is deliberately unused: a value that is not a string leaves "" (no Xcode build recorded; for
-        // rules_dir, the built-in rules), and one too long for the buffer (the CLI writes short ones) or with a bad
-        // \u escape leaves the prefix read so far, used as read
-        if ((v = jget(cfgbuf, "xcode_build"))) (void)jstr(v, xbuild, sizeof xbuild);
-        if ((v = jget(cfgbuf, "rules_dir"))) {   // "" = no rules staged: built-in
-            (void)jstr(v, dir, sizeof dir);
-            hasdir = 1;
+    const char *value;
+    int has_dir = 0;
+    read_config();
+
+    if (gConfigJson[0]) {
+        // json_string's result is deliberately unused. A value that is not a string leaves "": no Xcode build
+        // recorded, or for rules_dir, the built-in rules. A value too long for the buffer (the CLI writes short ones)
+        // or with a bad \u escape leaves the prefix read so far, which is used as read.
+        if ((value = json_get(gConfigJson, "xcode_build"))) {
+            (void)json_string(value, gXcodeBuild, sizeof gXcodeBuild);
+        }
+        if ((value = json_get(gConfigJson, "rules_dir"))) {   // "" means no rules were staged: the built-in rules
+            (void)json_string(value, dir, sizeof dir);
+            has_dir = 1;
         }
     }
-    if (!hasdir && cfgbad) hasdir = 1;   // a record we can't use: the built-in rules, never the stale flat dir
-    // no record of a dir (older records): $SIMCAM_HOME/sims/<udid> -> $SIMCAM_HOME/restore-rules
-    if (!hasdir && simdir[0]) {
-        snprintf(dir, sizeof dir, "%s", simdir);
-        char *s = strrchr(dir, '/');
-        if (s) *s = 0;
-        s = strrchr(dir, '/');
-        if (s) *s = 0;
+
+    // A record we can't use means the built-in rules, never the stale flat dir.
+    if (!has_dir && gConfigUnusable) {
+        has_dir = 1;
+    }
+
+    // No dir recorded (an older record): $SIMCAM_HOME/sims/<udid> gives $SIMCAM_HOME/restore-rules.
+    if (!has_dir && gSimDir[0]) {
+        snprintf(dir, sizeof dir, "%s", gSimDir);
+        char *slash = strrchr(dir, '/');
+        if (slash) {
+            *slash = 0;
+        }
+        slash = strrchr(dir, '/');
+        if (slash) {
+            *slash = 0;
+        }
         strncat(dir, "/restore-rules", sizeof dir - strlen(dir) - 1);
     }
-    rulesbuf[0] = 0;
-    rulesfrom[0] = 0;
-    if (xbuild[0] && dir[0]) {
-        snprintf(rulesfrom, sizeof rulesfrom, "%s/%s.json", dir, xbuild);
-        if (slurp(rulesfrom, rulesbuf, sizeof rulesbuf) > 0 && rulesok(rulesbuf)) {
-            rulesverified = 1;
-            slog("rules: ", rulesfrom);
+
+    gRulesJson[0] = 0;
+    gRulesSource[0] = 0;
+
+    if (gXcodeBuild[0] && dir[0]) {
+        snprintf(gRulesSource, sizeof gRulesSource, "%s/%s.json", dir, gXcodeBuild);
+        if (read_whole_file(gRulesSource, gRulesJson, sizeof gRulesJson) > 0 && rules_usable(gRulesJson)) {
+            gRulesVerified = 1;
+            log_line("rules: ", gRulesSource);
             return;
         }
-        rulesbuf[0] = 0;
+        gRulesJson[0] = 0;
     }
-    char best[128] = "";   // best guess: the newest build that has rules
-    DIR *d = dir[0] ? opendir(dir) : NULL;
-    for (struct dirent *e; d && (e = readdir(d));) {
-        size_t l = strlen(e->d_name);
-        if (l < 6 || l > 100 || strcmp(e->d_name + l - 5, ".json") || e->d_name[0] < '0' || e->d_name[0] > '9') continue;
-        char b[128];
-        snprintf(b, sizeof b, "%.*s", (int)(l - 5), e->d_name);
-        if (!best[0] || buildcmp(b, best) > 0) snprintf(best, sizeof best, "%s", b);
+
+    char best[BUILD_NAME_MAX] = "";   // the best guess: the newest build that has rules
+    DIR *dir_stream = dir[0] ? opendir(dir) : NULL;
+
+    for (struct dirent *entry; dir_stream && (entry = readdir(dir_stream));) {
+        size_t name_len = strlen(entry->d_name);
+        if (!is_rules_file_name(entry->d_name, name_len)) {
+            continue;
+        }
+        char build[BUILD_NAME_MAX];
+        snprintf(build, sizeof build, "%.*s", (int)(name_len - JSON_SUFFIX_LEN), entry->d_name);
+        if (!best[0] || build_compare(build, best) > 0) {
+            snprintf(best, sizeof best, "%s", build);
+        }
     }
-    if (d) closedir(d);
+
+    if (dir_stream) {
+        closedir(dir_stream);
+    }
+
     if (best[0]) {
-        snprintf(rulesfrom, sizeof rulesfrom, "%s/%s.json", dir, best);
-        if (slurp(rulesfrom, rulesbuf, sizeof rulesbuf) > 0 && rulesok(rulesbuf)) {
-            slog("rules (best guess, newest): ", rulesfrom);
+        snprintf(gRulesSource, sizeof gRulesSource, "%s/%s.json", dir, best);
+        if (read_whole_file(gRulesSource, gRulesJson, sizeof gRulesJson) > 0 && rules_usable(gRulesJson)) {
+            log_line("rules (best guess, newest): ", gRulesSource);
             return;
         }
-        rulesbuf[0] = 0;
+        gRulesJson[0] = 0;
     }
-    snprintf(rulesfrom, sizeof rulesfrom, "built-in (27A266a)");
-    slog("rules: built-in 27A266a; none readable in ", dir);
+
+    snprintf(gRulesSource, sizeof gRulesSource, "built-in (27A266a)");
+    log_line("rules: built-in 27A266a; none readable in ", dir);
 }
-// the built-in rules = restore-rules/27A266a.json's "xcode-run" and "ui-test-target" libs (used when no rules file can
-// be read). Keep them in step with that file; runnerhook.m's builtinRunnerLibs() is the same file's "test-runner" rule.
-struct lib { const char *path, *cond, *unless; };
-static const struct lib builtin_xcode[] = {
+
+// The built-in rules are restore-rules/27A266a.json's "xcode-run" and "ui-test-target" libs, used when no rules file
+// can be read. Keep them in step with that file; runnerhook.m's builtinRunnerLibs() is the same file's "test-runner"
+// rule.
+struct restore_lib {
+    const char *path;
+    const char *condition;   // the rule's "if"
+    const char *unless;
+};
+
+static const struct restore_lib builtin_xcode[] = {
     {"/usr/lib/libLogRedirect.dylib", "IDE_CHOSEN_LOGGING_METHOD=2", NULL},
     {"/usr/lib/libMainThreadChecker.dylib", NULL, "SIMCAM_MTC=0"},
     {"/usr/lib/libRPAC.dylib", "PERFC_*", NULL},
     {"/usr/lib/libViewDebuggerSupport.dylib", NULL, NULL},
     {NULL, NULL, NULL}};
-static const struct lib builtin_ui[] = {
+static const struct restore_lib builtin_ui[] = {
     {"/usr/lib/libLogRedirect.dylib", "IDE_CHOSEN_LOGGING_METHOD=2", NULL},
     {"/usr/lib/libMainThreadChecker.dylib", NULL, "SIMCAM_MTC=0"},
     {"/usr/lib/libRPAC.dylib", "PERFC_*", NULL},
     {NULL, NULL, NULL}};
-// a condition: VAR=value (equal), PREFIX* (any variable with that prefix), VAR (set): the restore-rules "if"/"unless"
-// syntax. runnerhook.m's cond() matches the same syntax against an NSDictionary; the two must stay in step (they are
-// separate builds: this file is libSystem-only C, that one Foundation)
-static int cond(const char *c) {
-    if (!c || !*c) return 1;
-    size_t l = strlen(c);
-    if (c[l - 1] == '*') {
-        for (char **e = environ; *e; e++)
-            if (!strncmp(*e, c, l - 1)) return 1;
+
+// Tests a condition in the restore-rules "if"/"unless" syntax: VAR=value (equal), PREFIX* (any variable with that
+// prefix) or VAR (set). runnerhook.m's condHolds() matches the same syntax against an NSDictionary. The two must stay
+// in step; they are separate builds, because this file is libSystem-only C and that one uses Foundation.
+static int cond_holds(const char *condition) {
+    if (!condition || !*condition) {
+        return 1;
+    }
+    size_t len = strlen(condition);
+    if (condition[len - 1] == '*') {
+        for (char **var = environ; *var; var++) {
+            if (!strncmp(*var, condition, len - 1)) {
+                return 1;
+            }
+        }
         return 0;
     }
-    const char *eq = strchr(c, '=');
-    if (!eq) return getenv(c) != NULL;
-    char k[128];
-    snprintf(k, sizeof k, "%.*s", (int)(eq - c), c);
-    const char *v = getenv(k);
-    return v && !strcmp(v, eq + 1);
+    const char *eq = strchr(condition, '=');
+    if (!eq) {
+        return getenv(condition) != NULL;
+    }
+    char name[CONDITION_MAX];
+    snprintf(name, sizeof name, "%.*s", (int)(eq - condition), condition);
+    const char *value = getenv(name);
+    return value && !strcmp(value, eq + 1);
 }
-static void loadlib(const char *root, const char *rel) {
-    char p[LOADER_PATH_MAX];
-    snprintf(p, sizeof p, "%s%s", rel[0] == '/' ? root : "", rel);
-    tryload(p, base(rel));
+
+// Loads one lib of a rule; an absolute path gets the runtime root in front.
+static void load_rule_lib(const char *root, const char *rel) {
+    char path[LOADER_PATH_MAX];
+    snprintf(path, sizeof path, "%s%s", rel[0] == '/' ? root : "", rel);
+    try_load(path, base_name(rel));
 }
-static void restore(const char *rule, const struct lib *dflt, const char *root) {
-    const char *rs = rulesbuf[0] ? jget(rulesbuf, "rules") : NULL, *libs = NULL;
-    for (const char *r = rs ? jfirst(rs) : NULL; r; r = jnext(r)) {
-        char nm[64];
-        const char *v = jget(r, "name");
-        if (v && jstr(v, nm, sizeof nm) && !strcmp(nm, rule)) {
-            libs = jget(r, "libs");
+
+// Loads the libs of the named rule from the rules file, else from builtin.
+static void restore_rule(const char *rule, const struct restore_lib *builtin, const char *root) {
+    const char *rules = gRulesJson[0] ? json_get(gRulesJson, "rules") : NULL;
+    const char *libs = NULL;
+
+    for (const char *entry = rules ? json_first(rules) : NULL; entry; entry = json_next(entry)) {
+        char name[RULE_NAME_MAX];
+        const char *value = json_get(entry, "name");
+        if (value && json_string(value, name, sizeof name) && !strcmp(name, rule)) {
+            libs = json_get(entry, "libs");
             break;
         }
     }
+
     if (!libs) {
-        if (rulesbuf[0]) slog("rules file has no libs for this rule; built-in used: ", rule);
-        for (const struct lib *l = dflt; l->path; l++)
-            if (cond(l->cond) && !(l->unless && cond(l->unless))) loadlib(root, l->path);
+        if (gRulesJson[0]) {
+            log_line("rules file has no libs for this rule; built-in used: ", rule);
+        }
+        for (const struct restore_lib *lib = builtin; lib->path; lib++) {
+            if (cond_holds(lib->condition) && !(lib->unless && cond_holds(lib->unless))) {
+                load_rule_lib(root, lib->path);
+            }
+        }
         return;
     }
-    for (const char *l = jfirst(libs); l; l = jnext(l)) {
-        char path[512] = "", c[128] = "", u[128] = "";
-        const char *v;
-        if (!(v = jget(l, "path")) || !jstr(v, path, sizeof path) || !path[0]) continue;
-        if ((v = jget(l, "if")) && !jstr(v, c, sizeof c)) {
-            slog("rules: unreadable condition; lib skipped: ", path);
+
+    for (const char *lib = json_first(libs); lib; lib = json_next(lib)) {
+        char path[RULE_LIB_PATH_MAX] = "";
+        char if_cond[CONDITION_MAX] = "";
+        char unless_cond[CONDITION_MAX] = "";
+        const char *value;
+        if (!(value = json_get(lib, "path")) || !json_string(value, path, sizeof path) || !path[0]) {
             continue;
         }
-        if ((v = jget(l, "unless")) && !jstr(v, u, sizeof u)) {
-            slog("rules: unreadable condition; lib skipped: ", path);
+        if ((value = json_get(lib, "if")) && !json_string(value, if_cond, sizeof if_cond)) {
+            log_line("rules: unreadable condition; lib skipped: ", path);
             continue;
         }
-        if (cond(c) && !(u[0] && cond(u))) loadlib(root, path);
+        if ((value = json_get(lib, "unless")) && !json_string(value, unless_cond, sizeof unless_cond)) {
+            log_line("rules: unreadable condition; lib skipped: ", path);
+            continue;
+        }
+        if (cond_holds(if_cond) && !(unless_cond[0] && cond_holds(unless_cond))) {
+            load_rule_lib(root, path);
+        }
     }
 }
 
-// ---- displaced per-launch inserts (design §4.1 rule 4) ---------------------------------------------------------------
+// ---- displaced per-launch inserts (item 2 of the header) --------------------------------------------------------
+// One of Guard Malloc's own settings (NAME=value). libmalloc's MallocGuardEdges, MallocScribble and MallocStackLogging
+// work without the insert, so they are not signals.
+static int is_guard_malloc_setting(const char *var) {
+    return has_prefix(var, "MALLOC_PROTECT_BEFORE=") || has_prefix(var, "MALLOC_FILL_SPACE=") ||
+           has_prefix(var, "MALLOC_STRICT_SIZE=") || has_prefix(var, "MALLOC_ALLOW_READS=") ||
+           has_prefix(var, "MALLOC_VECTOR_SIZE=") || has_prefix(var, "MALLOC_PERMIT_INSANE_REQUESTS=");
+}
+
+// Adds to gDisplaced each tool whose per-launch insert boot mode displaced.
 static void detect_displaced(void) {
-    // a launch whose own list still holds something besides our stub merged it with ours (stuntcam env): nothing displaced
-    const char *il = getenv("DYLD_INSERT_LIBRARIES");
-    if (il) {
-        char l[INSERT_ENV_COPY_MAX];
-        snprintf(l, sizeof l, "%s", il);
-        char *sv = NULL;
-        for (char *e = strtok_r(l, ":", &sv); e; e = strtok_r(NULL, ":", &sv))
-            if (*e && !hasprefix(base(e), "libsimcam")) return;
+    // A launch whose own list still holds something besides our stub merged it with ours (the stuntcam env): nothing
+    // was displaced.
+    const char *insert_env = getenv("DYLD_INSERT_LIBRARIES");
+
+    if (insert_env) {
+        char list[INSERT_ENV_COPY_MAX];
+        snprintf(list, sizeof list, "%s", insert_env);
+        char *strtok_state = NULL;
+        for (char *entry = strtok_r(list, ":", &strtok_state); entry; entry = strtok_r(NULL, ":", &strtok_state)) {
+            if (*entry && !has_prefix(base_name(entry), "libsimcam")) {
+                return;
+            }
+        }
     }
+
     int *argc = _NSGetArgc();
     char ***argv = _NSGetArgv();
-    for (int i = 1; argc && argv && *argv && i < *argc; i++)
+    int have_args = argc && argv && *argv;
+
+    for (int i = 1; have_args && i < *argc; i++) {
         if (!strcmp((*argv)[i], "-detoxServer") || !strcmp((*argv)[i], "-detoxSessionId")) {
-            if (!mapped("Detox", 1)) addto(displaced, sizeof displaced, "Detox");
+            if (!mapped_image("Detox", 1)) {
+                list_add(gDisplaced, sizeof gDisplaced, "Detox");
+            }
             break;
         }
-    int idb = 0, gm = 0, asan = 0, tsan = 0;
-    for (char **e = environ; *e; e++) {   // (bootsig reads config.json only when a variable looks like a signal)
-        if (hasprefix(*e, "IDB_") && !bootsig(*e)) idb = 1;
-        if ((hasprefix(*e, "MALLOC_PROTECT_BEFORE=") || hasprefix(*e, "MALLOC_FILL_SPACE=") ||
-             hasprefix(*e, "MALLOC_STRICT_SIZE=") || hasprefix(*e, "MALLOC_ALLOW_READS=") ||
-             hasprefix(*e, "MALLOC_VECTOR_SIZE=") || hasprefix(*e, "MALLOC_PERMIT_INSANE_REQUESTS=")) &&
-            !bootsig(*e))
-            gm = 1;
-        if (hasprefix(*e, "ASAN_OPTIONS=") && !bootsig(*e)) asan = 1;
-        if (hasprefix(*e, "TSAN_OPTIONS=") && !bootsig(*e)) tsan = 1;
     }
-    if (idb) addto(displaced, sizeof displaced, "idb");
-    if (gm && !mapped("libgmalloc.dylib", 1)) addto(displaced, sizeof displaced, "Guard Malloc");
-    if (asan && !mapped("libclang_rt.asan", 0)) addto(displaced, sizeof displaced, "AddressSanitizer");
-    if (tsan && !mapped("libclang_rt.tsan", 0)) addto(displaced, sizeof displaced, "ThreadSanitizer");
+
+    int idb = 0;
+    int guard_malloc = 0;
+    int asan = 0;
+    int tsan = 0;
+
+    // is_boot_signal() reads config.json only when a variable looks like a signal
+    for (char **var = environ; *var; var++) {
+        if (has_prefix(*var, "IDB_") && !is_boot_signal(*var)) {
+            idb = 1;
+        }
+        if (is_guard_malloc_setting(*var) && !is_boot_signal(*var)) {
+            guard_malloc = 1;
+        }
+        if (has_prefix(*var, "ASAN_OPTIONS=") && !is_boot_signal(*var)) {
+            asan = 1;
+        }
+        if (has_prefix(*var, "TSAN_OPTIONS=") && !is_boot_signal(*var)) {
+            tsan = 1;
+        }
+    }
+
+    if (idb) {
+        list_add(gDisplaced, sizeof gDisplaced, "idb");
+    }
+    if (guard_malloc && !mapped_image("libgmalloc.dylib", 1)) {
+        list_add(gDisplaced, sizeof gDisplaced, "Guard Malloc");
+    }
+    if (asan && !mapped_image("libclang_rt.asan", 0)) {
+        list_add(gDisplaced, sizeof gDisplaced, "AddressSanitizer");
+    }
+    if (tsan && !mapped_image("libclang_rt.tsan", 0)) {
+        list_add(gDisplaced, sizeof gDisplaced, "ThreadSanitizer");
+    }
 }
 
-// ---- the constructor's steps -----------------------------------------------------------------------------------------
-// an app process this loader acts in (the same test as the stub): an executable in a .app bundle, in the device's data
-// dir or an Xcode build-products dir, not under the runtime root
+// ---- the constructor's steps ----------------------------------------------------------------------------------------
+// An app process this loader acts in, by the same test as the stub: an executable in a .app bundle, in the device's
+// data dir or an Xcode build-products dir, and not under the runtime root.
 static int is_app_process(const char *exe, const char *root) {
-    if (!strstr(exe, ".app/") || (!strstr(exe, "/data/") && !strstr(exe, "/Build/Products/")) ||
-        (root && *root && !strncmp(exe, root, strlen(root))))
+    if (!strstr(exe, ".app/")) {
         return 0;
+    }
+    if (!strstr(exe, "/data/") && !strstr(exe, "/Build/Products/")) {
+        return 0;
+    }
+    if (root && *root && !strncmp(exe, root, strlen(root))) {
+        return 0;   // under the runtime root
+    }
     return 1;
 }
+
 static void open_log(void) {
-    const char *lg = getenv("SIMCAM_STUB_LOG");
-    if (lg) gfd = open(lg, O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC, 0644);
+    const char *log_path = getenv("SIMCAM_STUB_LOG");
+    if (log_path) {
+        gLogFd = open(log_path, O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC, 0644);
+    }
 }
-// what the environment says about who launched this process
+
+// What the environment says about who launched this process.
 struct launch_markers {
     int xcode;    // Xcode launched it (MTC_/PERFC_/IDE_ variables, DYLD_LIBRARY_PATH in DerivedData)
     int xctest;   // an XCTest process (XCInjectBundleInto, XCTestConfigurationFilePath, ...)
     int perfc;    // a PERFC_ variable is set
 };
-// one pass over the environment; with SIMCAM_STUB_ENVDUMP set, each variable is also logged
+
+// A variable (NAME=value) that only an XCTest process has.
+static int is_xctest_marker(const char *var) {
+    return has_prefix(var, "XCInjectBundleInto=") || has_prefix(var, "XCTestConfigurationFilePath=") ||
+           has_prefix(var, "XCTestBundlePath=") || has_prefix(var, "XCTestSessionIdentifier=");
+}
+
+// One pass over the environment. With SIMCAM_STUB_ENVDUMP set, each variable is also logged.
 static struct launch_markers scan_launch_env(void) {
-    struct launch_markers m = {0, 0, 0};
-    for (char **e = environ; *e; e++) {
-        if (hasprefix(*e, "MTC_") || hasprefix(*e, "PERFC_") || hasprefix(*e, "IDE_")) m.xcode = 1;
-        if (hasprefix(*e, "PERFC_")) m.perfc = 1;
-        if (hasprefix(*e, "DYLD_LIBRARY_PATH=") && strstr(*e, "/DerivedData/")) m.xcode = 1;
-        if (hasprefix(*e, "XCInjectBundleInto=") || hasprefix(*e, "XCTestConfigurationFilePath=") ||
-            hasprefix(*e, "XCTestBundlePath=") || hasprefix(*e, "XCTestSessionIdentifier="))
-            m.xctest = 1;
-        if (getenv("SIMCAM_STUB_ENVDUMP")) slog("env ", *e);
+    struct launch_markers markers = {0, 0, 0};
+    for (char **var = environ; *var; var++) {
+        if (has_prefix(*var, "MTC_") || has_prefix(*var, "PERFC_") || has_prefix(*var, "IDE_")) {
+            markers.xcode = 1;
+        }
+        if (has_prefix(*var, "PERFC_")) {
+            markers.perfc = 1;
+        }
+        if (has_prefix(*var, "DYLD_LIBRARY_PATH=") && strstr(*var, "/DerivedData/")) {
+            markers.xcode = 1;
+        }
+        if (is_xctest_marker(*var)) {
+            markers.xctest = 1;
+        }
+        if (getenv("SIMCAM_STUB_ENVDUMP")) {
+            log_line("env ", *var);
+        }
     }
-    return m;
+    return markers;
 }
-static void log_restore_inputs(struct launch_markers m) {
-    char d[160];
-    snprintf(d, sizeof d, "xctest=%d inject=%d xcode=%d perfc=%d uitarget=%d logmethod=%s", m.xctest,
-             getenv("XCTestBundleInjectPath") != NULL, m.xcode, m.perfc, getenv("XCODE_SCHEME_NAME") != NULL,
+
+static void log_restore_inputs(struct launch_markers markers) {
+    char line[RESTORE_INPUTS_LINE_MAX];
+    snprintf(line, sizeof line, "xctest=%d inject=%d xcode=%d perfc=%d uitarget=%d logmethod=%s", markers.xctest,
+             getenv("XCTestBundleInjectPath") != NULL, markers.xcode, markers.perfc,
+             getenv("XCODE_SCHEME_NAME") != NULL,
              getenv("IDE_CHOSEN_LOGGING_METHOD") ? getenv("IDE_CHOSEN_LOGGING_METHOD") : "-");
-    slog("restore inputs: ", d);
+    log_line("restore inputs: ", line);
 }
-// the path an inject-list entry loads from, into p: runtime-relative entries (/usr/lib/libRPAC.dylib) get the runtime
-// root when that file exists; everything else (DerivedData anywhere, incl. /Volumes, /private/var, /tmp; paths already
-// under the root) loads as given
-static void inject_entry_path(const char *e, const char *root, char *p, size_t n) {
-    snprintf(p, n, "%s", e);
-    if (root && (!strncmp(e, "/usr/", 5) || !strncmp(e, "/System/", 8)) && strncmp(e, root, strlen(root))) {
-        char q[LOADER_PATH_MAX];
-        snprintf(q, sizeof q, "%s%s", root, e);
-        if (access(q, F_OK) == 0) snprintf(p, n, "%s", q);
+
+// Writes into out the path an inject-list entry loads from. A runtime-relative entry (/usr/lib/libRPAC.dylib) gets the
+// runtime root in front when that file exists. Everything else loads as given: DerivedData anywhere (including
+// /Volumes, /private/var and /tmp), and paths already under the root.
+static void inject_entry_path(const char *entry, const char *root, char *out, size_t out_size) {
+    snprintf(out, out_size, "%s", entry);
+    if (!root) {
+        return;
+    }
+    int runtime_relative = !strncmp(entry, USR_PREFIX, USR_PREFIX_LEN) ||
+                           !strncmp(entry, SYSTEM_PREFIX, SYSTEM_PREFIX_LEN);
+    if (!runtime_relative) {
+        return;
+    }
+    if (!strncmp(entry, root, strlen(root))) {
+        return;   // already under the root
+    }
+    char rooted[LOADER_PATH_MAX];
+    snprintf(rooted, sizeof rooted, "%s%s", root, entry);
+    if (access(rooted, F_OK) == 0) {
+        snprintf(out, out_size, "%s", rooted);
     }
 }
-// hosted tests: XCTest copied the displaced DYLD_INSERT_LIBRARIES list to XCTestBundleInjectPath; each entry is loaded
-// once, in order, except our own libraries. The list is XCTest's own, and what never loads late is fixed in launch_only():
-// the rules play no part here and are picked only for the "unverified" line.
+
+// Hosted tests: XCTest copied the displaced DYLD_INSERT_LIBRARIES list to XCTestBundleInjectPath. Each entry is loaded
+// once, in order, except our own libraries. The list is XCTest's own, and launch_only() alone decides what never loads
+// late: the rules play no part here, and are picked only for the "unverified" line.
 static void restore_inject_list(const char *inject_path, const char *root) {
-    pickrules();
-    char p[LOADER_PATH_MAX];
+    pick_rules();
+    char load_path[LOADER_PATH_MAX];
     char list[INSERT_LIST_MAX];
     strncpy(list, inject_path, sizeof list - 1);
     list[sizeof list - 1] = 0;
     char seen[INJECT_LIST_ENTRIES_MAX][LOADER_PATH_MAX];
-    int ns = 0;
-    char *sv = NULL;   // strtok_r: tryload runs the library's initializers (test-bundle code), which may use strtok
-    for (char *e = strtok_r(list, ":", &sv); e; e = strtok_r(NULL, ":", &sv)) {
-        int dup = 0;
-        for (int i = 0; i < ns; i++)
-            if (!strcmp(seen[i], e)) dup = 1;
-        if (dup) continue;
-        if (ns >= INJECT_LIST_ENTRIES_MAX || strlen(e) >= LOADER_PATH_MAX - 1) {
-            slog("inject list: entry skipped (more than 32, or path too long): ", e);
+    int seen_count = 0;
+
+    // strtok_r, not strtok: try_load runs the library's initializers (test-bundle code), which may use strtok
+    char *strtok_state = NULL;
+
+    for (char *entry = strtok_r(list, ":", &strtok_state); entry; entry = strtok_r(NULL, ":", &strtok_state)) {
+        int duplicate = 0;
+        for (int i = 0; i < seen_count; i++) {
+            if (!strcmp(seen[i], entry)) {
+                duplicate = 1;
+            }
+        }
+        if (duplicate) {
             continue;
         }
-        strncpy(seen[ns], e, LOADER_PATH_MAX - 1);
-        seen[ns++][LOADER_PATH_MAX - 1] = 0;
-        if (strstr(e, "libsimcamstub") || strstr(e, "libsimcamloader")) continue;
-        inject_entry_path(e, root, p, sizeof p);
-        tryload(p, p);   // log the path actually loaded (it may carry the runtime root)
+        if (seen_count >= INJECT_LIST_ENTRIES_MAX || strlen(entry) >= LOADER_PATH_MAX - 1) {
+            log_line("inject list: entry skipped (more than 32, or path too long): ", entry);
+            continue;
+        }
+        strncpy(seen[seen_count], entry, LOADER_PATH_MAX - 1);
+        seen[seen_count++][LOADER_PATH_MAX - 1] = 0;
+        if (strstr(entry, "libsimcamstub") || strstr(entry, "libsimcamloader")) {
+            continue;
+        }
+        inject_entry_path(entry, root, load_path, sizeof load_path);
+        try_load(load_path, load_path);   // log the path actually loaded (it may carry the runtime root)
     }
 }
-// an Xcode launch without a hosted-test inject list: the rules file's "ui-test-target" libs for an XCUIApplication target (MTC +
-// RPAC, + LogRedirect under the Xcode GUI, no view debugger), else its "xcode-run" libs
+
+// An Xcode launch without a hosted-test inject list. For an XCUIApplication target, the rules file's "ui-test-target"
+// libs: MTC and RPAC, plus LogRedirect under the Xcode GUI, but no view debugger. Otherwise its "xcode-run" libs.
 static void restore_xcode_libs(const char *root) {
     int uitarget = getenv("XCODE_SCHEME_NAME") != NULL;
-    pickrules();
-    slog(uitarget ? "ui-test target: restoring MTC/RPAC, root=" : "xcode run: restoring Xcode's libraries, root=", root);
-    restore(uitarget ? "ui-test-target" : "xcode-run", uitarget ? builtin_ui : builtin_xcode, root);
+    pick_rules();
+    if (uitarget) {
+        log_line("ui-test target: restoring MTC/RPAC, root=", root);
+        restore_rule("ui-test-target", builtin_ui, root);
+    } else {
+        log_line("xcode run: restoring Xcode's libraries, root=", root);
+        restore_rule("xcode-run", builtin_xcode, root);
+    }
 }
-// the engine ($SIMCAM_DYLIB, else libsimcam.dylib next to this loader), except in UI-test runners and app extensions
+
+// Loads the engine ($SIMCAM_DYLIB, else libsimcam.dylib next to this loader), except in UI-test runners and app
+// extensions.
 static void load_engine(const char *exe, const Dl_info *self) {
     if (strstr(exe, "-Runner.app/")) {
-        slog("xctest runner: not loading our dylib", 0);
+        log_line("xctest runner: not loading our dylib", 0);
         return;
     }
+
     if (strstr(exe, ".appex/")) {
-        slog("app extension: not loading our dylib", 0);
+        log_line("app extension: not loading our dylib", 0);
         return;
     }
-    const char *real = getenv("SIMCAM_DYLIB");
-    char sib[LOADER_PATH_MAX];
-    if (!real && self->dli_fname) {   // the engine next to this loader
-        const char *sl = strrchr(self->dli_fname, '/');
-        if (sl) {
-            snprintf(sib, sizeof sib, "%.*s/libsimcam.dylib", (int)(sl - self->dli_fname), self->dli_fname);
-            real = sib;
+
+    const char *engine_path = getenv("SIMCAM_DYLIB");
+    char sibling[LOADER_PATH_MAX];
+
+    if (!engine_path && self->dli_fname) {   // the engine next to this loader
+        const char *slash = strrchr(self->dli_fname, '/');
+        if (slash) {
+            snprintf(sibling, sizeof sibling, "%.*s/libsimcam.dylib", (int)(slash - self->dli_fname), self->dli_fname);
+            engine_path = sibling;
         }
     }
-    if (real) {
-        void *h = dlopen(real, RTLD_NOW | RTLD_GLOBAL);
-        slog("real dylib", h ? " loaded" : dlerror());
+
+    if (engine_path) {
+        void *handle = dlopen(engine_path, RTLD_NOW | RTLD_GLOBAL);
+        log_line("real dylib", handle ? " loaded" : dlerror());
     } else {
-        slog("no engine path", 0);
+        log_line("no engine path", 0);
     }
 }
-// the one-line announcements, after everything that can add to them (restores and the chain); ruled: rules were picked
+
+// The one-line announcements, after everything that can add to them (the restores and the chain). ruled: rules were
+// picked.
 static void announce(int ruled) {
-    if (skipped[0]) slog("skipped (must load at launch, or a second copy): ", skipped);
-    if (chainskip[0]) {
-        char l[PATH_NOTE_MAX];
-        snprintf(l, sizeof l, "stuntcam chain: not loaded, a copy is already loaded: %s", chainskip);
-        say(l);
+    if (gSkipped[0]) {
+        log_line("skipped (must load at launch, or a second copy): ", gSkipped);
     }
-    if (ruled && !rulesverified) {
-        char l[256];
-        snprintf(l, sizeof l, "restore rules unverified for Xcode %s; if console/debugger misbehave use --mode launchd",
-                 xbuild[0] ? xbuild : "(not recorded)");
-        say(l);
-        slog("  rules used: ", rulesfrom);
+
+    if (gChainSkipped[0]) {
+        char line[PATH_NOTE_MAX];
+        snprintf(line, sizeof line, "stuntcam chain: not loaded, a copy is already loaded: %s", gChainSkipped);
+        say(line);
     }
+
+    if (ruled && !gRulesVerified) {
+        char line[UNVERIFIED_LINE_MAX];
+        snprintf(line, sizeof line,
+                 "restore rules unverified for Xcode %s; if console/debugger misbehave use --mode launchd",
+                 gXcodeBuild[0] ? gXcodeBuild : "(not recorded)");
+        say(line);
+        log_line("  rules used: ", gRulesSource);
+    }
+
     detect_displaced();
-    if (displaced[0]) {
-        char l[400];
-        snprintf(l, sizeof l, "stuntcam boot mode displaced %s; use 'stuntcam up --mode launchd'", displaced);
-        say(l);
+
+    if (gDisplaced[0]) {
+        char line[DISPLACED_LINE_MAX];
+        snprintf(line, sizeof line, "stuntcam boot mode displaced %s; use 'stuntcam up --mode launchd'", gDisplaced);
+        say(line);
     }
 }
 
 __attribute__((constructor)) static void simcam_loader(void) {
-    // is this process ours?
+    // Is this process one we act in?
     static char exe[LOADER_PATH_MAX];
-    uint32_t sz = sizeof exe;
-    if (_NSGetExecutablePath(exe, &sz) != 0) return;   // (_dyld_get_image_name(0) is the stub itself at this point)
-    const char *on = getenv("SIMCAM");
-    // the stub checked these too; the loader may also be dlopened directly (SIMCAM_LOADER)
-    if (on && on[0] == '0') return;
-    // the simulator runtime root: read once (both former reads came before any library was loaded)
+    uint32_t size = sizeof exe;
+
+    // (_dyld_get_image_name(0) would name the stub itself at this point)
+    if (_NSGetExecutablePath(exe, &size) != 0) {
+        return;
+    }
+    const char *enabled = getenv("SIMCAM");
+
+    // The stub checked these too, but it can be pointed at this loader directly (SIMCAM_LOADER).
+    if (enabled && enabled[0] == '0') {
+        return;
+    }
+
+    // The simulator runtime root, read once, before any library is loaded.
     const char *root = getenv("SIMULATOR_ROOT");
-    if (!root) root = getenv("DYLD_ROOT_PATH");
-    if (!is_app_process(exe, root)) return;
+    if (!root) {
+        root = getenv("DYLD_ROOT_PATH");
+    }
+    if (!is_app_process(exe, root)) {
+        return;
+    }
     open_log();
     Dl_info self = {0};
     dladdr((const void *)simcam_loader, &self);
-    slog("loader ", self.dli_fname);
-    // 1. restore what Xcode/XCTest would have inserted (the numbers are the file header's)
-    struct launch_markers m = scan_launch_env();
+    log_line("loader ", self.dli_fname);
+
+    // Step 1 of the file header: restore what Xcode or XCTest would have inserted.
+    struct launch_markers markers = scan_launch_env();
     const char *xcode_libs = getenv("SIMCAM_XCODE_LIBS");
     int restores_off = xcode_libs && xcode_libs[0] == '0';
-    log_restore_inputs(m);
+    log_restore_inputs(markers);
     int ruled = 0;   // rules were picked (for the "unverified" line)
     const char *inject_path = getenv("XCTestBundleInjectPath");
-    if (m.xctest && inject_path && !restores_off) {
+
+    if (markers.xctest && inject_path && !restores_off) {
         restore_inject_list(inject_path, root);
         ruled = 1;
-    } else if (m.xcode && !restores_off && root) {
+    } else if (markers.xcode && !restores_off && root) {
         restore_xcode_libs(root);
         ruled = 1;
     }
-    // 3. the engine, 4. the chain file, then 2. the announcements, which the restores and the chain can add to
+
+    // Steps 3 and 4: the engine and the chain file. Then step 2, the announcements, which the restores and the chain
+    // can add to.
     load_engine(exe, &self);
-    chain();
+    load_chain();
     announce(ruled);
-    if (gfd >= 0) {
-        close(gfd);
-        gfd = -1;
+
+    if (gLogFd >= 0) {
+        close(gLogFd);
+        gLogFd = -1;
     }
 }

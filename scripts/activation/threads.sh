@@ -1,52 +1,149 @@
 # SPDX-License-Identifier: Apache-2.0
 # activation/threads.sh — first camera calls from several threads at once.
 # Sourced by scripts/activation.sh, which runs each case <c> as the function c_<c>.
-# tsan_ours <app.log>: "<libsimcam frame> <unrestored stack> <no SUMMARY>" — ThreadSanitizer reports that may be the engine's,
-# by the first reason that applies. A report runs from its WARNING line to its SUMMARY line; one that a new WARNING or the end
-# of the log interrupts first was cut short (the app was killed mid-report) and counts whatever its frames say.
+
+# tsan_ours <app.log>: counts the ThreadSanitizer reports that may be the engine's, and prints three counts:
+# "<with a libsimcam frame> <with an unrestored stack> <with no SUMMARY>". Each report counts once, under the first
+# reason that applies.
+# A report runs from its WARNING line to its SUMMARY line. A report that a new WARNING or the end of the log
+# interrupts first was cut short, because the app was killed mid-report. It is counted by what its frames say, or
+# else as cut short.
 tsan_ours() {
-  awk 'function done() { if (!b) return; if (s) l++; else if (f) u++; else if (!m) c++; b = 0 }
-    /WARNING: ThreadSanitizer/ { done(); b = 1; s = 0; f = 0; m = 0; next }
-    b && /libsimcam/ { s = 1 }
-    b && /\[failed to restore the stack\]/ { f = 1 }
-    b && /SUMMARY: ThreadSanitizer/ { m = 1; done() }
-    END { done(); print l + 0, u + 0, c + 0 }' $1
+  awk '
+    function end_report() {
+      if (!in_report) return
+      if (simcam_frame) simcam_reports++
+      else if (unrestored) unrestored_reports++
+      else if (!summary) cut_reports++
+      in_report = 0
+    }
+    /WARNING: ThreadSanitizer/ {
+      end_report()
+      in_report = 1
+      simcam_frame = 0
+      unrestored = 0
+      summary = 0
+      next
+    }
+    in_report && /libsimcam/ { simcam_frame = 1 }
+    in_report && /\[failed to restore the stack\]/ { unrestored = 1 }
+    in_report && /SUMMARY: ThreadSanitizer/ {
+      summary = 1
+      end_report()
+    }
+    END {
+      end_report()
+      print simcam_reports + 0, unrestored_reports + 0, cut_reports + 0
+    }' $1
 }
+
 c_threads() {
-  clear_sentinel $BP; local n=${THREADS_N:-100} i d okn=0 dl=0 bad1= ts=0 te=0 t e k tk="0 0 0" kl=0 kf=0 kc=0
-  for i in {1..$n}; do
-    run plain th$i M5APP_ORDER=threads; d=$(res plain th$i)
-    # ThreadSanitizer reports (a TSan app + engine: act-tsan's threads x100 half; none on a normal build). A report counts
-    # against the case (as possibly ours) if it has a libsimcam frame, a stack TSan could not restore ("[failed to restore
-    # the stack]": the other access may be ours), or no SUMMARY line (cut short: the app was killed mid-report). plain's own
-    # races (its M9 frame counter: both stacks restored, no libsimcam frame) are counted apart.
-    t=$(cnt 'WARNING: ThreadSanitizer' $d/app.log); ts=$((ts + t))
-    e=0; (( t )) && { cp $d/app.log $SIMCAM_RESULTS/activation-$RT-$TAG-th$i-tsan.log
-      k=$(tsan_ours $d/app.log); e=$(( ${${=k}[1]} + ${${=k}[2]} + ${${=k}[3]} ))
-      kl=$((kl + ${${=k}[1]})); kf=$((kf + ${${=k}[2]})); kc=$((kc + ${${=k}[3]})); }
-    te=$((te + e))
-    if [[ $(cnt DONE $d/app.log) != 1 ]]; then dl=$((dl + 1)); bad1="$bad1 $i:nodone"
-    elif (( e )); then bad1="$bad1 ${i}:tsan-engine=$e"
-    elif [[ $(cnt 'PASS order.threads ' $d/app.log) == 1 && $(cnt 'LAZY armed by' $d/dylib.log) == 1 && $(pass_n $d) == 15 ]]; then okn=$((okn + 1))
-    else bad1="$bad1 $i:$(grep -oE '(PASS|FAIL) order.threads[^|]*' $d/app.log | cut -c1-60)"; fi
-    rm -rf $d   # keep results small; a failing run's verdict is in the line
+  clear_sentinel $PLAIN_BUNDLE
+
+  local launches=${THREADS_N:-100}
+  local passed=0
+  local no_done=0
+  local failures=
+  local tsan_all=0
+  local tsan_engine=0
+  local simcam_frames=0
+  local unrestored=0
+  local cut_short=0
+  local i dir tsan_count engine_count kinds
+
+  for i in {1..$launches}; do
+    run plain th$i M5APP_ORDER=threads
+    dir=$(run_dir plain th$i)
+    # ThreadSanitizer reports come only from a TSan build of the app and the engine, which is the threads x100 half
+    # of act-tsan. A normal build has none.
+    # A report counts against the case, as possibly ours, if it has any of these:
+    #   - a libsimcam frame;
+    #   - a stack TSan could not restore ("[failed to restore the stack]"), since the other access may be ours;
+    #   - no SUMMARY line, because the app was killed mid-report.
+    # plain's own races are counted apart. They are on its M9 frame counter, with both stacks restored and no
+    # libsimcam frame.
+    tsan_count=$(count_matches 'WARNING: ThreadSanitizer' $dir/app.log)
+    tsan_all=$((tsan_all + tsan_count))
+    engine_count=0
+    if (( tsan_count )); then
+      cp $dir/app.log $SIMCAM_RESULTS/activation-$RUNTIME-$TAG-th$i-tsan.log
+      kinds=$(tsan_ours $dir/app.log)
+      local -a ours
+      ours=(${=kinds})   # libsimcam frame, unrestored stack, cut short
+      engine_count=$(( ours[1] + ours[2] + ours[3] ))
+      simcam_frames=$((simcam_frames + ours[1]))
+      unrestored=$((unrestored + ours[2]))
+      cut_short=$((cut_short + ours[3]))
+    fi
+    tsan_engine=$((tsan_engine + engine_count))
+    local threads=$(count_matches 'PASS order.threads ' $dir/app.log)
+    local armed=$(count_matches 'LAZY armed by' $dir/dylib.log)
+    if [[ $(count_matches DONE $dir/app.log) != 1 ]]; then
+      no_done=$((no_done + 1))
+      failures="$failures $i:nodone"
+    elif (( engine_count )); then
+      failures="$failures ${i}:tsan-engine=$engine_count"
+    elif [[ $threads == 1 && $armed == 1 && $(pass_count $dir) == "$ORDER_RUN_CHECKS" ]]; then
+      passed=$((passed + 1))
+    else
+      failures="$failures $i:$(grep -oE '(PASS|FAIL) order.threads[^|]*' $dir/app.log | cut -c1-60)"
+    fi
+    rm -rf $dir   # keep results small; a failing run's verdict is in the line
   done
-  (( okn == n )) &&
-    ok "$n/$n: no deadlock, one armed-by line, all 3 threads saw cameras, 15/15; ThreadSanitizer: $te possibly ours ($kl libsimcam frame, $kf unrestored stack, $kc cut short), $ts in all" ||
-    bad "$okn/$n ok, $dl no DONE, TSan $te possibly ours ($kl libsimcam, $kf unrestored, $kc cut short) / $ts all;${bad1:0:300}"
-  clear_sentinel $BP
+
+  if (( passed == launches )); then
+    ok "$launches/$launches: no deadlock, one armed-by line, all 3 threads saw cameras, 15/15;" \
+      "ThreadSanitizer: $tsan_engine possibly ours ($simcam_frames libsimcam frame, $unrestored unrestored stack," \
+      "$cut_short cut short), $tsan_all in all"
+  else
+    bad "$passed/$launches ok, $no_done no DONE, TSan $tsan_engine possibly ours ($simcam_frames libsimcam," \
+      "$unrestored unrestored, $cut_short cut short) /" \
+      "$tsan_all all;${failures:0:300}"
+  fi
+
+  clear_sentinel $PLAIN_BUNDLE
 }
+
+# thread_first_calls <run dir>: each thread's first-call ms, space-separated (a trailing space)
+thread_first_calls() {
+  grep -oE 'firstcall\.ms thread=[0-9] ms=-?[0-9]+' $1/app.log | grep -oE 'ms=-?[0-9]+$' | cut -d= -f2 | tr '\n' ' '
+}
+
 c_threads-slow() {
-  clear_sentinel $BP; local d1 d2 m1 m2
-  run plain ts1 M5APP_ORDER=threads SIMCAM_TEST_SLOW_ACTIVATE_MS=500; d1=$(res plain ts1)
-  m1=$(grep -oE 'firstcall\.ms thread=[0-9] ms=-?[0-9]+' $d1/app.log | grep -oE 'ms=-?[0-9]+$' | cut -d= -f2 | tr '\n' ' ')
-  clear_sentinel $BP; run plain ts2 M5APP_ORDER=threads SIMCAM_TEST_SLOW_ACTIVATE_MS=1500 M5APP_EXPECT=stock; d2=$(res plain ts2)
-  m2=$(grep -oE 'firstcall\.ms thread=[0-9] ms=-?[0-9]+' $d2/app.log | grep -oE 'ms=-?[0-9]+$' | cut -d= -f2 | tr '\n' ' ')
-  local okA=1 okB=1 x
-  for x in ${=m1}; do in_range $x 450 550 || okA=0; done; for x in ${=m2}; do in_range $x 900 1100 || okB=0; done
-  if [[ $okA == 1 && ${#${=m1}} == 3 && $(cnt 'PASS order.threads ' $d1/app.log) == 1 && $okB == 1 && ${#${=m2}} == 3 &&
-    $(cnt 'PASS order.threads.stock' $d2/app.log) == 1 ]]
-  then ok "500: all armed, per-thread ms $m1; 1500: each returned by t0+1.1 s ($m2), all 3 saw stock"
-  else bad "500: ms '$m1' threads=$(cnt 'PASS order.threads ' $d1/app.log); 1500: ms '$m2' stock=$(cnt 'PASS order.threads.stock' $d2/app.log)"; fi
-  clear_sentinel $BP
+  clear_sentinel $PLAIN_BUNDLE
+
+  local dir1 dir2 ms_500 ms_1500
+  run plain ts1 M5APP_ORDER=threads SIMCAM_TEST_SLOW_ACTIVATE_MS=500
+  dir1=$(run_dir plain ts1)
+  ms_500=$(thread_first_calls $dir1)
+  clear_sentinel $PLAIN_BUNDLE
+  run plain ts2 M5APP_ORDER=threads SIMCAM_TEST_SLOW_ACTIVATE_MS=1500 M5APP_EXPECT=stock
+  dir2=$(run_dir plain ts2)
+  ms_1500=$(thread_first_calls $dir2)
+
+  # With a 500 ms prepare, every thread waits for it (± 50 ms).
+  # With a 1500 ms prepare, every thread times out at 1000 ms (± 100 ms).
+  local ok_500=1
+  local ok_1500=1
+  local ms
+
+  for ms in ${=ms_500}; do
+    in_range $ms 450 550 || ok_500=0
+  done
+
+  for ms in ${=ms_1500}; do
+    in_range $ms 900 1100 || ok_1500=0
+  done
+
+  local threads1=$(count_matches 'PASS order.threads ' $dir1/app.log)
+  local stock2=$(count_matches 'PASS order.threads.stock' $dir2/app.log)
+
+  if [[ $ok_500 == 1 && ${#${=ms_500}} == 3 && $threads1 == 1 && $ok_1500 == 1 && ${#${=ms_1500}} == 3 &&
+    $stock2 == 1 ]]; then
+    ok "500: all armed, per-thread ms $ms_500; 1500: each returned by t0+1.1 s ($ms_1500), all 3 saw stock"
+  else
+    bad "500: ms '$ms_500' threads=$threads1; 1500: ms '$ms_1500' stock=$stock2"
+  fi
+
+  clear_sentinel $PLAIN_BUNDLE
 }

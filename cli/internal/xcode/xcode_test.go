@@ -12,15 +12,28 @@ import (
 )
 
 func TestParseVersion(t *testing.T) {
-	v, b, err := ParseVersion("Xcode 27.0\nBuild version 27A266a\n")
-	if err != nil || v != "27.0" || b != "27A266a" {
-		t.Fatalf("got %q %q %v", v, b, err)
+	tests := []struct {
+		name, out      string
+		version, build string // "" with wantErr
+		wantErr        bool
+	}{
+		{"xcodebuild -version", "Xcode 27.0\nBuild version 27A266a\n", "27.0", "27A266a", false},
+		{"CLT error", "xcode-select: error: tool 'xcodebuild' requires Xcode\n", "", "", true},
+		{"CRLF", "Xcode 26.6\r\nBuild version 17F113\r\n", "26.6", "17F113", false},
 	}
-	if _, _, err := ParseVersion("xcode-select: error: tool 'xcodebuild' requires Xcode\n"); err == nil {
-		t.Fatal("CLT error accepted")
-	}
-	if v, b, err := ParseVersion("Xcode 26.6\r\nBuild version 17F113\r\n"); err != nil || v != "26.6" || b != "17F113" {
-		t.Fatalf("CRLF: %q %q %v", v, b, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v, b, err := ParseVersion(tt.out)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("accepted: %q %q", v, b)
+				}
+				return
+			}
+			if err != nil || v != tt.version || b != tt.build {
+				t.Fatalf("got %q %q %v", v, b, err)
+			}
+		})
 	}
 }
 
@@ -74,16 +87,19 @@ func TestRules(t *testing.T) {
 }
 
 func TestNormalizeDeveloperDir(t *testing.T) {
-	for in, want := range map[string]string{
-		"/Applications/Xcode.app":                     "/Applications/Xcode.app/Contents/Developer",
-		"/Applications/Xcode.app/":                    "/Applications/Xcode.app/Contents/Developer",
-		"/Applications/Xcode.app/Contents/Developer/": "/Applications/Xcode.app/Contents/Developer",
-		"/Library/Developer/CommandLineTools":         "/Library/Developer/CommandLineTools",
-		"":                                            "",
-	} {
-		if got := NormalizeDeveloperDir(in); got != want {
-			t.Errorf("%q -> %q, want %q", in, got, want)
-		}
+	tests := []struct{ name, in, want string }{
+		{"the app", "/Applications/Xcode.app", "/Applications/Xcode.app/Contents/Developer"},
+		{"the app with a slash", "/Applications/Xcode.app/", "/Applications/Xcode.app/Contents/Developer"},
+		{"Contents/Developer", "/Applications/Xcode.app/Contents/Developer/", "/Applications/Xcode.app/Contents/Developer"},
+		{"command line tools", "/Library/Developer/CommandLineTools", "/Library/Developer/CommandLineTools"},
+		{"unset", "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := NormalizeDeveloperDir(tt.in); got != tt.want {
+				t.Errorf("%q -> %q, want %q", tt.in, got, tt.want)
+			}
+		})
 	}
 }
 

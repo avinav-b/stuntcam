@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 package scheme
 
-// What an `xcodebuild test` runs its test runners with: per test configuration, the
-// sanitizers, whether the Main Thread Checker is off, and what the scheme or test plan inserts into the runner itself
-// (Guard Malloc, a DYLD_INSERT_LIBRARIES variable). `stuntcam exec`'s runner hook replaces the runner's insert list
-// (TEST_RUNNER_DYLD_INSERT_LIBRARIES), so it has to put a sanitizer runtime back in front, and can only do that when every
-// runner of the run wants the same one.
+// What an `xcodebuild test` runs its test runners with: per test configuration, the sanitizers, whether the Main Thread
+// Checker is off, and what the scheme or test plan inserts into the runner itself (Guard Malloc, a
+// DYLD_INSERT_LIBRARIES variable). `stuntcam exec`'s runner hook replaces the runner's insert list
+// (TEST_RUNNER_DYLD_INSERT_LIBRARIES), so it has to put a sanitizer runtime back in front, and can only do that when
+// every runner of the run wants the same one.
 
 import (
 	"bytes"
@@ -71,94 +71,115 @@ func FindScheme(root, name string, maxDepth int) string {
 	return found
 }
 
-// ReadTestAction reads the test action of scheme file p. With test plans it reads the one named plan (the -testPlan
-// argument; "" = the scheme's default plan, else its first) and returns one TestConfig per plan configuration that
-// only/skip (-only-test-configuration / -skip-test-configuration) select. Without test plans it returns one TestConfig from
-// the scheme's own attributes. An error means the scheme has test plans that can't be read (or not the one named).
-func ReadTestAction(p, plan string, only, skip []string) (*TestAction, error) {
-	b, err := os.ReadFile(p)
+// schemeSearchDepth is how many directory levels Locate's bounded walk looks down for a scheme.
+const schemeSearchDepth = 8
+
+// ReadTestAction reads the test action of the scheme file at schemePath.
+//   - With test plans, it reads the plan that plan names: the -testPlan argument. "" means the scheme's default plan,
+//     or else its first. It returns one TestConfig per plan configuration that only and skip select
+//     (-only-test-configuration and -skip-test-configuration).
+//   - Without test plans, it returns one TestConfig from the scheme's own attributes.
+//
+// An error means the scheme has test plans that can't be read, or doesn't have the one named.
+func ReadTestAction(schemePath, plan string, only, skip []string) (*TestAction, error) {
+	data, err := os.ReadFile(schemePath)
 	if err != nil {
 		return nil, err
 	}
-	var s testActionXML
-	if err := xml.Unmarshal(b, &s); err != nil {
-		return nil, fmt.Errorf("%s: %v", p, err)
+
+	var parsed testActionXML
+	if err := xml.Unmarshal(data, &parsed); err != nil {
+		return nil, fmt.Errorf("%s: %w", schemePath, err)
 	}
-	ta := &TestAction{Scheme: p}
-	t := s.Test
-	if len(t.Plans) == 0 {
+
+	action := &TestAction{Scheme: schemePath}
+	test := parsed.Test
+	if len(test.Plans) == 0 {
 		if plan != "" {
-			return nil, fmt.Errorf("%s has no test plans (-testPlan %s)", filepath.Base(p), plan)
+			return nil, fmt.Errorf("%s has no test plans (-testPlan %s)", filepath.Base(schemePath), plan)
 		}
-		c := TestConfig{NoMTC: t.NoMTC == "YES"}
-		if t.ASan == "YES" {
-			c.Sanitizers = append(c.Sanitizers, "address")
+
+		config := TestConfig{NoMTC: test.NoMTC == "YES"}
+		if test.ASan == "YES" {
+			config.Sanitizers = append(config.Sanitizers, "address")
 		}
-		if t.TSan == "YES" {
-			c.Sanitizers = append(c.Sanitizers, "thread")
+
+		if test.TSan == "YES" {
+			config.Sanitizers = append(config.Sanitizers, "thread")
 		}
-		env := t.Env
-		if t.UseLaunchEnv == "YES" { // "Use the Run action's arguments and environment variables"
-			env = s.Launch.Env
+
+		env := test.Env
+		if test.UseLaunchEnv == "YES" { // "Use the Run action's arguments and environment variables"
+			env = parsed.Launch.Env
 		}
-		for _, v := range append(append([]envVar{}, env...), t.Opts...) { // AdditionalOptions: Guard Malloc and friends
+
+		// test.Opts are the AdditionalOptions: Guard Malloc and friends
+		for _, v := range append(append([]envVar{}, env...), test.Opts...) {
 			if v.Key == "DYLD_INSERT_LIBRARIES" && v.Enabled != "NO" {
-				c.addInserts(v.Value)
+				config.addInserts(v.Value)
 			}
 		}
-		ta.Configs = []TestConfig{c}
-		return ta, nil
+
+		action.Configs = []TestConfig{config}
+		return action, nil
 	}
+
 	var ref *planRef
-	for i := range t.Plans {
-		r := &t.Plans[i]
+	for i := range test.Plans {
+		candidate := &test.Plans[i]
 		switch {
 		case plan != "":
-			if planName(r.Ref) == plan {
-				ref = r
+			if planName(candidate.Ref) == plan {
+				ref = candidate
 			}
-		case r.Default == "YES":
-			ref = r
+		case candidate.Default == "YES":
+			ref = candidate
 		}
+
 		if ref != nil {
 			break
 		}
 	}
+
 	if ref == nil && plan != "" {
-		return nil, fmt.Errorf("%s has no test plan %q", filepath.Base(p), plan)
+		return nil, fmt.Errorf("%s has no test plan %q", filepath.Base(schemePath), plan)
 	}
+
 	if ref == nil {
-		ref = &t.Plans[0]
+		ref = &test.Plans[0]
 	}
-	pf := resolveRef(ref.Ref, containerDir(p))
-	ta.Plan = pf
-	cs, err := readPlan(pf, only, skip)
+
+	planPath := resolveRef(ref.Ref, containerDir(schemePath))
+	action.Plan = planPath
+	configs, err := readPlan(planPath, only, skip)
 	if err != nil {
 		return nil, err
 	}
-	ta.Configs = cs
-	return ta, nil
+
+	action.Configs = configs
+	return action, nil
 }
 
 func planName(ref string) string {
 	return strings.TrimSuffix(filepath.Base(ref[strings.Index(ref, ":")+1:]), ".xctestplan")
 }
 
-// containerDir is the directory "container:" references in scheme p resolve against: the one holding the .xcodeproj or
-// .xcworkspace the scheme belongs to.
-func containerDir(p string) string {
-	for d := filepath.Dir(p); d != filepath.Dir(d); d = filepath.Dir(d) {
-		if strings.HasSuffix(d, ".xcodeproj") || strings.HasSuffix(d, ".xcworkspace") {
-			return filepath.Dir(d)
+// containerDir is the directory "container:" references in the scheme at schemePath resolve against: the one holding
+// the .xcodeproj or .xcworkspace the scheme belongs to.
+func containerDir(schemePath string) string {
+	for dir := filepath.Dir(schemePath); dir != filepath.Dir(dir); dir = filepath.Dir(dir) {
+		if strings.HasSuffix(dir, ".xcodeproj") || strings.HasSuffix(dir, ".xcworkspace") {
+			return filepath.Dir(dir)
 		}
 	}
-	return filepath.Dir(p)
+	return filepath.Dir(schemePath)
 }
 
 func resolveRef(ref, container string) string {
 	kind, path, ok := strings.Cut(ref, ":")
 	if !ok {
-		path, kind = ref, ""
+		path = ref
+		kind = ""
 	}
 	if kind == "absolute" || filepath.IsAbs(path) {
 		return path
@@ -166,45 +187,57 @@ func resolveRef(ref, container string) string {
 	return filepath.Join(container, path)
 }
 
-// Locate finds the .xcscheme xcodebuild would use for -scheme name: with -project, that project's shared then user
-// schemes; with -workspace, the workspace's own schemes, then those of the projects its contents.xcworkspacedata lists; with
-// neither, the .xcworkspace or .xcodeproj in wd (as xcodebuild picks it), then a bounded walk under wd. "" if not found.
+// Locate finds the .xcscheme that xcodebuild would use for -scheme name, or returns "" if there is none.
+//   - With -project, it looks in that project's shared schemes, then its user schemes.
+//   - With -workspace, it looks in the workspace's own schemes, then in those of the projects that its
+//     contents.xcworkspacedata lists.
+//   - With neither, it looks in the .xcworkspace or .xcodeproj in wd, picked as xcodebuild picks it, and then in a
+//     bounded walk under wd.
 func Locate(wd, workspace, project, name string) string {
 	inProj := func(proj string) string {
-		for _, pat := range []string{"xcshareddata/xcschemes/" + name + ".xcscheme", "xcuserdata/*/xcschemes/" + name + ".xcscheme"} {
-			if m, _ := filepath.Glob(filepath.Join(proj, pat)); len(m) > 0 {
-				return m[0]
+		for _, pat := range []string{"xcshareddata/xcschemes/" + name + ".xcscheme",
+			"xcuserdata/*/xcschemes/" + name + ".xcscheme"} {
+			if matches, _ := filepath.Glob(filepath.Join(proj, pat)); len(matches) > 0 {
+				return matches[0]
 			}
 		}
+
 		return ""
 	}
-	inWorkspace := func(ws string) string {
-		if p := inProj(ws); p != "" {
-			return p
+
+	inWorkspace := func(workspacePath string) string {
+		if found := inProj(workspacePath); found != "" {
+			return found
 		}
-		b, err := os.ReadFile(filepath.Join(ws, "contents.xcworkspacedata"))
+
+		data, err := os.ReadFile(filepath.Join(workspacePath, "contents.xcworkspacedata"))
 		if err != nil {
 			return ""
 		}
-		for _, m := range regexp.MustCompile(`location\s*=\s*"([^"]+)"`).FindAllStringSubmatch(string(b), -1) {
-			kind, loc, ok := strings.Cut(m[1], ":")
+
+		for _, match := range regexp.MustCompile(`location\s*=\s*"([^"]+)"`).FindAllStringSubmatch(string(data), -1) {
+			kind, loc, ok := strings.Cut(match[1], ":")
 			if !ok || !strings.HasSuffix(loc, ".xcodeproj") {
 				continue
 			}
-			pp := loc
+
+			projPath := loc
 			switch kind {
 			case "absolute":
 			case "group", "container", "self":
-				pp = filepath.Join(filepath.Dir(ws), loc)
+				projPath = filepath.Join(filepath.Dir(workspacePath), loc)
 			default:
 				continue
 			}
-			if p := inProj(pp); p != "" {
-				return p
+
+			if found := inProj(projPath); found != "" {
+				return found
 			}
 		}
+
 		return ""
 	}
+
 	switch {
 	case project != "":
 		return inProj(project)
@@ -212,27 +245,32 @@ func Locate(wd, workspace, project, name string) string {
 		if p := inWorkspace(workspace); p != "" {
 			return p
 		}
-		return FindScheme(filepath.Dir(workspace), name, 8)
+
+		return FindScheme(filepath.Dir(workspace), name, schemeSearchDepth)
 	}
-	if m, _ := filepath.Glob(filepath.Join(wd, "*.xcworkspace")); len(m) == 1 {
-		if p := inWorkspace(m[0]); p != "" {
+
+	if matches, _ := filepath.Glob(filepath.Join(wd, "*.xcworkspace")); len(matches) == 1 {
+		if p := inWorkspace(matches[0]); p != "" {
 			return p
 		}
 	}
-	if m, _ := filepath.Glob(filepath.Join(wd, "*.xcodeproj")); len(m) == 1 {
-		if p := inProj(m[0]); p != "" {
-			return p
+
+	if matches, _ := filepath.Glob(filepath.Join(wd, "*.xcodeproj")); len(matches) == 1 {
+		if found := inProj(matches[0]); found != "" {
+			return found
 		}
 	}
-	return FindScheme(wd, name, 8)
+
+	return FindScheme(wd, name, schemeSearchDepth)
 }
 
-// readPlan: one TestConfig per configuration of an .xctestplan (its options over defaultOptions, key by key).
-func readPlan(pf string, only, skip []string) ([]TestConfig, error) {
-	b, err := os.ReadFile(pf)
+// readPlan returns one TestConfig per configuration of an .xctestplan (its options over defaultOptions, key by key).
+func readPlan(planPath string, only, skip []string) ([]TestConfig, error) {
+	data, err := os.ReadFile(planPath)
 	if err != nil {
 		return nil, err
 	}
+
 	var plan struct {
 		Configurations []struct {
 			Name    string                     `json:"name"`
@@ -240,77 +278,97 @@ func readPlan(pf string, only, skip []string) ([]TestConfig, error) {
 		} `json:"configurations"`
 		Defaults map[string]json.RawMessage `json:"defaultOptions"`
 	}
-	if err := json.Unmarshal(b, &plan); err != nil {
-		return nil, fmt.Errorf("%s: %v", pf, err)
+
+	if err := json.Unmarshal(data, &plan); err != nil {
+		return nil, fmt.Errorf("%s: %w", planPath, err)
 	}
+
 	if len(plan.Configurations) == 0 {
 		plan.Configurations = append(plan.Configurations, struct {
 			Name    string                     `json:"name"`
 			Options map[string]json.RawMessage `json:"options"`
 		}{})
 	}
+
 	var out []TestConfig
-	for _, c := range plan.Configurations {
-		if (len(only) > 0 && !slices.Contains(only, c.Name)) || slices.Contains(skip, c.Name) {
+	for _, planConfig := range plan.Configurations {
+		if (len(only) > 0 && !slices.Contains(only, planConfig.Name)) || slices.Contains(skip, planConfig.Name) {
 			continue
 		}
-		o := map[string]json.RawMessage{}
+
+		options := map[string]json.RawMessage{}
 		for k, v := range plan.Defaults {
-			o[k] = v
+			options[k] = v
 		}
-		for k, v := range c.Options {
-			o[k] = mergeObject(o[k], v) // a configuration's {"addressSanitizer":{…}} overrides key by key
+
+		for k, v := range planConfig.Options {
+			options[k] = mergeObject(options[k], v) // a configuration's {"addressSanitizer":{…}} overrides key by key
 		}
-		tc := TestConfig{Name: c.Name}
-		if enabled(o["addressSanitizer"]) || isTrue(o["addressSanitizerEnabled"]) {
-			tc.Sanitizers = append(tc.Sanitizers, "address")
+
+		config := TestConfig{Name: planConfig.Name}
+		if enabled(options["addressSanitizer"]) || isTrue(options["addressSanitizerEnabled"]) {
+			config.Sanitizers = append(config.Sanitizers, "address")
 		}
-		if enabled(o["threadSanitizer"]) || isTrue(o["threadSanitizerEnabled"]) {
-			tc.Sanitizers = append(tc.Sanitizers, "thread")
+
+		if enabled(options["threadSanitizer"]) || isTrue(options["threadSanitizerEnabled"]) {
+			config.Sanitizers = append(config.Sanitizers, "thread")
 		}
-		tc.NoMTC = isFalse(o["mainThreadCheckerEnabled"])
-		tc.GuardMalloc = isTrue(o["guardMallocEnabled"])
+
+		config.NoMTC = isFalse(options["mainThreadCheckerEnabled"])
+		config.GuardMalloc = isTrue(options["guardMallocEnabled"])
 		var envs []struct {
 			Key     string `json:"key"`
 			Value   string `json:"value"`
 			Enabled *bool  `json:"enabled"`
 		}
-		if raw, ok := o["environmentVariableEntries"]; ok {
+
+		if raw, ok := options["environmentVariableEntries"]; ok {
 			if err := json.Unmarshal(raw, &envs); err != nil {
-				return nil, fmt.Errorf("%s: environmentVariableEntries: %v", pf, err)
+				return nil, fmt.Errorf("%s: environmentVariableEntries: %w", planPath, err)
 			}
 		}
+
 		for _, e := range envs {
 			if e.Key == "DYLD_INSERT_LIBRARIES" && (e.Enabled == nil || *e.Enabled) {
-				tc.addInserts(e.Value)
+				config.addInserts(e.Value)
 			}
 		}
-		out = append(out, tc)
+
+		out = append(out, config)
 	}
+
 	return out, nil
 }
 
-// mergeObject: over's keys over base's when both are JSON objects; otherwise over.
+// mergeObject returns base with over's keys set over it when both are JSON objects, and over otherwise.
 func mergeObject(base, over json.RawMessage) json.RawMessage {
-	var b, o map[string]json.RawMessage
-	if base == nil || json.Unmarshal(base, &b) != nil || json.Unmarshal(over, &o) != nil {
+	var merged, overrides map[string]json.RawMessage
+	if base == nil || json.Unmarshal(base, &merged) != nil || json.Unmarshal(over, &overrides) != nil {
 		return over
 	}
-	for k, v := range o {
-		b[k] = v
+
+	for k, v := range overrides {
+		merged[k] = v
 	}
-	m, err := json.Marshal(b)
+
+	encoded, err := json.Marshal(merged)
 	if err != nil {
 		return over
 	}
-	return m
+
+	return encoded
 }
 
-func isTrue(raw json.RawMessage) bool { var b bool; return json.Unmarshal(raw, &b) == nil && b }
+func isTrue(raw json.RawMessage) bool {
+	var b bool
+	return json.Unmarshal(raw, &b) == nil && b
+}
+
 func isFalse(raw json.RawMessage) bool {
 	var b bool
 	return raw != nil && json.Unmarshal(raw, &b) == nil && !b
 }
+
 func enabled(raw json.RawMessage) bool {
 	var o struct {
 		Enabled bool `json:"enabled"`
@@ -320,19 +378,19 @@ func enabled(raw json.RawMessage) bool {
 
 // addInserts files the entries of an insert list: sanitizer runtimes, Guard Malloc, others.
 func (c *TestConfig) addInserts(list string) {
-	for _, l := range strings.Split(list, ":") {
-		l = strings.TrimSpace(l)
-		b := filepath.Base(l)
+	for _, entry := range strings.Split(list, ":") {
+		entry = strings.TrimSpace(entry)
+		name := filepath.Base(entry)
 		switch {
-		case l == "":
-		case strings.HasPrefix(b, "libclang_rt.asan_"):
+		case entry == "":
+		case strings.HasPrefix(name, "libclang_rt.asan_"):
 			c.addSanitizer("address")
-		case strings.HasPrefix(b, "libclang_rt.tsan_"):
+		case strings.HasPrefix(name, "libclang_rt.tsan_"):
 			c.addSanitizer("thread")
-		case b == "libgmalloc.dylib":
+		case name == "libgmalloc.dylib":
 			c.GuardMalloc = true
-		case !slices.Contains(c.Inserts, l):
-			c.Inserts = append(c.Inserts, l)
+		case !slices.Contains(c.Inserts, entry):
+			c.Inserts = append(c.Inserts, entry)
 		}
 	}
 }
@@ -344,177 +402,203 @@ func (c *TestConfig) addSanitizer(s string) {
 	}
 }
 
-// XCTestRun reads an .xctestrun (format 1 or 2; XML or binary plist): one TestConfig per test target of the test
-// configurations only/skip select (format 2), for the targets onlyTargets names (all if empty), from the runner's own
-// insert list (each target's TestingEnvironmentVariables / EnvironmentVariables DYLD_INSERT_LIBRARIES).
+// XCTestRun reads an .xctestrun file, in format 1 or 2, as an XML or binary plist.
+// It returns one TestConfig per test target, for the test configurations that only and skip select (format 2) and the
+// targets that onlyTargets names (all when it is empty).
+// Each TestConfig comes from the runner's own insert list: the target's DYLD_INSERT_LIBRARIES in
+// TestingEnvironmentVariables or EnvironmentVariables.
 func XCTestRun(path string, only, skip, onlyTargets []string) ([]TestConfig, error) {
 	root, err := ReadPlist(path)
 	if err != nil {
 		return nil, err
 	}
+
 	top, ok := root.(map[string]any)
 	if !ok {
 		return nil, fmt.Errorf("%s: not a dictionary", path)
 	}
-	type tgt struct {
+
+	type runTarget struct {
 		config, name string
-		d            map[string]any
+		settings     map[string]any
 	}
-	var tgts []tgt
-	if cs, ok := top["TestConfigurations"].([]any); ok { // format 2
-		for _, c := range cs {
-			cd, _ := c.(map[string]any)
-			cn, _ := cd["Name"].(string)
-			if (len(only) > 0 && !slices.Contains(only, cn)) || slices.Contains(skip, cn) {
+
+	var runTargets []runTarget
+	if configs, ok := top["TestConfigurations"].([]any); ok { // format 2
+		for _, entry := range configs {
+			configDict, _ := entry.(map[string]any)
+			configName, _ := configDict["Name"].(string)
+			if (len(only) > 0 && !slices.Contains(only, configName)) || slices.Contains(skip, configName) {
 				continue
 			}
-			ts, _ := cd["TestTargets"].([]any)
-			for _, t := range ts {
-				td, _ := t.(map[string]any)
-				n, _ := td["BlueprintName"].(string)
-				tgts = append(tgts, tgt{cn, n, td})
+
+			targets, _ := configDict["TestTargets"].([]any)
+			for _, target := range targets {
+				targetDict, _ := target.(map[string]any)
+				targetName, _ := targetDict["BlueprintName"].(string)
+				runTargets = append(runTargets, runTarget{configName, targetName, targetDict})
 			}
 		}
 	} else { // format 1: a dictionary per target
 		var names []string
-		for k := range top {
-			if !strings.HasPrefix(k, "__") {
-				names = append(names, k)
+		for key := range top {
+			if !strings.HasPrefix(key, "__") {
+				names = append(names, key)
 			}
 		}
+
 		sort.Strings(names)
-		for _, k := range names {
-			if td, ok := top[k].(map[string]any); ok {
-				tgts = append(tgts, tgt{"", k, td})
+		for _, key := range names {
+			if settings, ok := top[key].(map[string]any); ok {
+				runTargets = append(runTargets, runTarget{"", key, settings})
 			}
 		}
 	}
+
 	var out []TestConfig
-	for _, t := range tgts {
-		if len(onlyTargets) > 0 && !slices.Contains(onlyTargets, t.name) {
+	for _, target := range runTargets {
+		if len(onlyTargets) > 0 && !slices.Contains(onlyTargets, target.name) {
 			continue
 		}
+
 		// an .xctestrun doesn't say whether the Main Thread Checker is on: xcodebuild adds it
-		tc := TestConfig{Name: strings.TrimPrefix(t.config+"/"+t.name, "/")}
-		for _, k := range []string{"TestingEnvironmentVariables", "EnvironmentVariables"} {
-			env, _ := t.d[k].(map[string]any)
-			if l, _ := env["DYLD_INSERT_LIBRARIES"].(string); l != "" {
-				tc.addInserts(l)
+		testConfig := TestConfig{Name: strings.TrimPrefix(target.config+"/"+target.name, "/")}
+		for _, key := range []string{"TestingEnvironmentVariables", "EnvironmentVariables"} {
+			env, _ := target.settings[key].(map[string]any)
+			if inserts, _ := env["DYLD_INSERT_LIBRARIES"].(string); inserts != "" {
+				testConfig.addInserts(inserts)
 			}
 		}
+
 		// what Xcode itself inserts into a runner (not "other" libraries the user's scheme added)
 		var other []string
-		for _, l := range tc.Inserts {
-			switch filepath.Base(l) {
-			case "libXCTestBundleInject.dylib", "libMainThreadChecker.dylib", "libRPAC.dylib", "libXCTestSwiftSupport.dylib",
-				"libViewDebuggerSupport.dylib", "libLogRedirect.dylib", "libBacktraceRecording.dylib":
+		for _, insert := range testConfig.Inserts {
+			switch filepath.Base(insert) {
+			case "libXCTestBundleInject.dylib", "libMainThreadChecker.dylib", "libRPAC.dylib",
+				"libXCTestSwiftSupport.dylib", "libViewDebuggerSupport.dylib", "libLogRedirect.dylib",
+				"libBacktraceRecording.dylib":
 			default:
-				other = append(other, l)
+				other = append(other, insert)
 			}
 		}
-		tc.Inserts = other
-		out = append(out, tc)
+
+		testConfig.Inserts = other
+		out = append(out, testConfig)
 	}
+
 	return out, nil
 }
 
 // ReadPlist decodes an XML plist (a binary one through plutil, macOS) into map[string]any, []any, string, bool, int64,
 // float64, []byte.
 func ReadPlist(path string) (any, error) {
-	b, err := os.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	if bytes.HasPrefix(b, []byte("bplist")) {
-		if b, err = exec.Command("plutil", "-convert", "xml1", "-o", "-", path).Output(); err != nil {
-			return nil, fmt.Errorf("%s: plutil: %v", path, err)
+
+	if bytes.HasPrefix(data, []byte("bplist")) {
+		if data, err = exec.Command("plutil", "-convert", "xml1", "-o", "-", path).Output(); err != nil {
+			return nil, fmt.Errorf("%s: plutil: %w", path, err)
 		}
 	}
-	d := xml.NewDecoder(bytes.NewReader(b))
-	d.Strict = false
+
+	decoder := xml.NewDecoder(bytes.NewReader(data))
+	decoder.Strict = false
 	for {
-		tok, err := d.Token()
+		tok, err := decoder.Token()
 		if err != nil {
-			return nil, fmt.Errorf("%s: %v", path, err)
+			return nil, fmt.Errorf("%s: %w", path, err)
 		}
-		if se, ok := tok.(xml.StartElement); ok {
-			if se.Name.Local == "plist" {
+
+		if start, ok := tok.(xml.StartElement); ok {
+			if start.Name.Local == "plist" {
 				continue
 			}
-			return plistValue(d, se)
+
+			return plistValue(decoder, start)
 		}
 	}
 }
 
-func plistValue(d *xml.Decoder, se xml.StartElement) (any, error) {
-	switch se.Name.Local {
+func plistValue(decoder *xml.Decoder, start xml.StartElement) (any, error) {
+	switch start.Name.Local {
 	case "dict":
-		m := map[string]any{}
+		dict := map[string]any{}
 		key := ""
 		for {
-			tok, err := d.Token()
+			tok, err := decoder.Token()
 			if err != nil {
 				return nil, err
 			}
-			switch t := tok.(type) {
+
+			switch elem := tok.(type) {
 			case xml.EndElement:
-				return m, nil
+				return dict, nil
 			case xml.StartElement:
-				if t.Name.Local == "key" {
-					var k string
-					if err := d.DecodeElement(&k, &t); err != nil {
+				if elem.Name.Local == "key" {
+					var name string
+					if err := decoder.DecodeElement(&name, &elem); err != nil {
 						return nil, err
 					}
-					key = k
+
+					key = name
 					continue
 				}
-				v, err := plistValue(d, t)
+
+				value, err := plistValue(decoder, elem)
 				if err != nil {
 					return nil, err
 				}
-				m[key] = v
+
+				dict[key] = value
 			}
 		}
 	case "array":
-		var a []any
+		var array []any
 		for {
-			tok, err := d.Token()
+			tok, err := decoder.Token()
 			if err != nil {
 				return nil, err
 			}
-			switch t := tok.(type) {
+
+			switch elem := tok.(type) {
 			case xml.EndElement:
-				return a, nil
+				return array, nil
 			case xml.StartElement:
-				v, err := plistValue(d, t)
+				value, err := plistValue(decoder, elem)
 				if err != nil {
 					return nil, err
 				}
-				a = append(a, v)
+
+				array = append(array, value)
 			}
 		}
 	case "true", "false":
-		if err := d.Skip(); err != nil {
+		if err := decoder.Skip(); err != nil {
 			return nil, err
 		}
-		return se.Name.Local == "true", nil
+
+		return start.Name.Local == "true", nil
 	default: // string, integer, real, date, data: their text
-		var s string
-		if err := d.DecodeElement(&s, &se); err != nil {
+		var text string
+		if err := decoder.DecodeElement(&text, &start); err != nil {
 			return nil, err
 		}
-		var n int64
-		var f float64
-		switch se.Name.Local {
+
+		var integer int64
+		var float float64
+		switch start.Name.Local {
 		case "integer":
-			if _, err := fmt.Sscan(s, &n); err == nil {
-				return n, nil
+			if _, err := fmt.Sscan(text, &integer); err == nil {
+				return integer, nil
 			}
 		case "real":
-			if _, err := fmt.Sscan(s, &f); err == nil {
-				return f, nil
+			if _, err := fmt.Sscan(text, &float); err == nil {
+				return float, nil
 			}
 		}
-		return s, nil
+
+		return text, nil
 	}
 }

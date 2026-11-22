@@ -15,6 +15,10 @@ helper/build.sh --release           # unsigned dev.stuntcam.camera bundle + enti
 Apps then select it with `SIMCAM_SOURCE=webcam` or the control file's `source=webcam` (the default camera, named in
 `$SIMCAM_HOME/webcam/default`), or `source=webcam:<uniqueID>`; the synthetic helper's uniqueID is `synthetic`.
 
+The source is one Swift file per concern (options, discovery, the pid file, the ring writer, the synthetic source, the
+camera, the app's lifecycle, permission, the reader scan, capture control); the header of `main.swift` lists them, and
+each type's comment says which queue owns its state.
+
 What it does:
 
 - **Launch.** Only through LaunchServices: `open -n -g "<absolute path>/Stuntcam Camera.app" --args --home "$SIMCAM_HOME" …`.

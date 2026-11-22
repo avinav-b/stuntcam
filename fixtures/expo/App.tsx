@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 // Auto-running camera compatibility probe.
-// Test selection: launch arg `-CAMTEST vc|expo|vcfull|vclidar|…` (NSUserDefaults, read via RN Settings).
+// Test selection: launch arg `-CAMTEST vc|expo|vcfull|vclidar|vcqr|expoqr|…` (NSUserDefaults, read via RN Settings).
 // Every result line is prefixed `M1B|` and also mirrored to Documents/m1b.log
 // so the host can read it from the app container without Metro.
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { NativeModules, Settings, StyleSheet, Text, View } from 'react-native';
 import { File, FileMode, Paths } from 'expo-file-system';
 import {
@@ -18,8 +18,10 @@ import {
   type PhotoFile,
   type Recorder,
   VisionCamera,
+  isScannedCode,
   useCameraDevice,
   useCameraDevices,
+  useObjectOutput,
   usePhotoOutput,
   useVideoOutput,
 } from 'react-native-vision-camera';
@@ -1128,6 +1130,64 @@ function VcLidar() {
   );
 }
 
+// ---------------------------------------------------------------- vcqr / expoqr: the QR payloads a scanner reports
+// `-CAMTEST vcqr` (VisionCamera's object output) or `expoqr` (expo-camera's onBarcodeScanned), `-QRPOS back|front`
+// (default back), `-QRSECS N` (default 10). Logs `QRSEEN src=<vc|expo> t=<ms since start> at=<Unix ms>
+// pct=<encodeURIComponent>`
+// each time the payload differs from the last one, then `END qr`. scripts/qr-test.sh compares the payloads.
+const QR_TYPES = ['qr'] as const;
+function QrWatch({ lib }: { lib: 'vc' | 'expo' }) {
+  const pos = (Settings.get('QRPOS') as string | undefined) === 'front' ? 'front' : 'back';
+  const secs = Number(Settings.get('QRSECS') ?? 10);
+  const t0 = useRef(Date.now());
+  const last = useRef<string | null>(null);
+  const [on, setOn] = useState(false);
+  const seen = useCallback((v: string | undefined | null) => {
+    if (v == null || v === last.current) return;
+    last.current = v;
+    let pct: string;
+    try {
+      pct = encodeURIComponent(v);
+    } catch (e) {
+      pct = 'UNENCODABLE:' + JSON.stringify(v);
+    }
+    L(`QRSEEN src=${lib} t=${Date.now() - t0.current} at=${Date.now()} pct=${pct}`);
+  }, []);
+  useEffect(() => {
+    (async () => {
+      L(`BEGIN qr lib=${lib} pos=${pos} secs=${secs}`);
+      if (lib === 'vc') {
+        if (VisionCamera.cameraPermissionStatus !== 'authorized') await VisionCamera.requestCameraPermission();
+        L(`INFO qr.permission ${VisionCamera.cameraPermissionStatus}`);
+      } else {
+        const p = await ExpoCamera.requestCameraPermissionsAsync();
+        L(`INFO qr.permission ${p.status}`);
+      }
+      t0.current = Date.now();
+      setOn(true);
+      await sleep(secs * 1000);
+      setOn(false);
+      L(`END qr seen=${last.current !== null}`);
+    })();
+  }, []);
+  if (!on) return <Text style={styles.t}>qr: idle</Text>;
+  if (lib === 'vc') return <VcQr pos={pos} onValue={seen} />;
+  return (
+    <CameraView style={StyleSheet.absoluteFill} facing={pos} barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+      onBarcodeScanned={(e) => seen(e.data)} onMountError={(e) => L(`FAIL qr.onMountError ${e.message}`)} />
+  );
+}
+function VcQr({ pos, onValue }: { pos: 'back' | 'front'; onValue: (v: string | undefined) => void }) {
+  const device = useCameraDevice(pos);
+  const onObjectsScanned = useCallback((objects: any[]) => {
+    for (const o of objects) if (isScannedCode(o) && o.type === 'qr') onValue(o.value);
+  }, [onValue]);
+  const objectOutput = useObjectOutput({ types: QR_TYPES as any, onObjectsScanned });
+  if (!device) return <Text style={styles.t}>qr: no {pos} device</Text>;
+  return <VCamera style={StyleSheet.absoluteFill} device={device} isActive outputs={[objectOutput]}
+    onError={(e) => L(`FAIL qr.onError ${errStr(e)}`)} />;
+}
+
 export default function App() {
   const test = (Settings.get('CAMTEST') as string | undefined) ?? 'none';
   useEffect(() => {
@@ -1136,7 +1196,7 @@ export default function App() {
   return (
     <View style={styles.c}>
       <Text style={styles.t}>m1b test={test}</Text>
-      {test === 'vcorient' ? <VcOrient /> : test === 'expoorient' ? <ExpoOrient /> : test === 'vc' ? <VcTest /> : test === 'vcfull' ? <VcFull /> : test === 'vclidar' ? <VcLidar /> : test === 'expo' ? <ExpoTest /> : test === 'vccycle' ? <CycleTest lib="vc" /> : test === 'expocycle' ? <CycleTest lib="expo" /> : null}
+      {test === 'vcorient' ? <VcOrient /> : test === 'expoorient' ? <ExpoOrient /> : test === 'vc' ? <VcTest /> : test === 'vcfull' ? <VcFull /> : test === 'vclidar' ? <VcLidar /> : test === 'expo' ? <ExpoTest /> : test === 'vccycle' ? <CycleTest lib="vc" /> : test === 'expocycle' ? <CycleTest lib="expo" /> : test === 'vcqr' ? <QrWatch lib="vc" /> : test === 'expoqr' ? <QrWatch lib="expo" /> : null}
     </View>
   );
 }

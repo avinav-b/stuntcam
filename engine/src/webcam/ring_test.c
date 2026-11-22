@@ -151,7 +151,7 @@ static void test_reads(void) {
     uint8_t *dst = malloc(dlen);
     CHECKEQ(scw_read_latest(r.mem, &g, 0, dst, dbpr, dlen, &sr), SCW_NONE);   // nothing published yet
     CHECKEQ(scw_peek(r.mem, &g, &pk), SCW_OK);
-    CHECK(pk.latest == 0 && !pk.have_ts && !scw_is_live(&pk, 1));
+    CHECK(pk.latest == 0 && !pk.hasTimestamps && !scw_is_live(&pk, 1));
     uint64_t now = 10000000000ull;
     put(&r, 1, now);
     CHECKEQ(scw_read_latest(r.mem, &g, 0, dst, dbpr, dlen, &sr), SCW_OK);
@@ -162,7 +162,7 @@ static void test_reads(void) {
     // peek and liveness
     r.h->state = SCW_STATE_RUNNING;
     CHECKEQ(scw_peek(r.mem, &g, &pk), SCW_OK);
-    CHECK(pk.latest == 1 && pk.have_ts && pk.publishNs == now && pk.captureNs == now - 1000);
+    CHECK(pk.latest == 1 && pk.hasTimestamps && pk.publishNs == now && pk.captureNs == now - 1000);
     CHECK(scw_is_live(&pk, now + SCW_LIVE_NS - 1) && !scw_is_live(&pk, now + SCW_LIVE_NS));
     r.h->state = SCW_STATE_IDLE; scw_peek(r.mem, &g, &pk);
     CHECK(!scw_is_live(&pk, now));
@@ -189,7 +189,7 @@ static void test_reads(void) {
     // latest so large that 2*seq+2 would overflow
     r.h->latest = UINT64_MAX;
     CHECKEQ(scw_slot_begin(r.mem, &g, 0, &sr), SCW_E_TORN);
-    CHECKEQ(scw_peek(r.mem, &g, &pk), SCW_OK); CHECK(!pk.have_ts);
+    CHECKEQ(scw_peek(r.mem, &g, &pk), SCW_OK); CHECK(!pk.hasTimestamps);
     r.h->latest = 7;
 
     // version or epoch change mid-read
@@ -224,7 +224,9 @@ static void test_clear(void) {
     scw_writer_clear(&r.w);
     CHECK(r.h->latest == 0 && r.h->slot[0].gen == 0 && r.h->slot[1].gen == 0 && r.h->slot[0].publishNs == 0);
     int zero = 1;
-    for (uint64_t i = SCW_HDR; i < r.len; i++) if (r.mem[i]) { zero = 0; break; }
+    for (uint64_t i = SCW_HDR; i < r.len; i++) {
+        if (r.mem[i]) { zero = 0; break; }
+    }
     CHECK(zero);
     // after a clear the sequence continues: seq never restarts within an epoch
     CHECK(scw_writer_begin(&r.w, 2) == NULL && scw_writer_begin(&r.w, 3) != NULL);
@@ -242,7 +244,9 @@ static void test_writer_hostile(void) {
     evil.nslots = 0; evil.slotBytes = 1ull << 40; evil.bpr0 = UINT32_MAX; evil.height = UINT32_MAX;
     evil.totalBytes = UINT64_MAX; evil.epoch = 0xbad; evil.latest = UINT64_MAX;
     memcpy(r.h, &evil, sizeof evil);
-    for (int i = 0; i < 8; i++) r.h->slot[i].gen = UINT64_MAX;
+    for (int i = 0; i < 8; i++) {
+        r.h->slot[i].gen = UINT64_MAX;
+    }
     put(&r, 2, 20); put(&r, 3, 30); put(&r, 4, 40);            // slots 2, 0, 1 by the private nslots (3)
     CHECK(r.mem[SCW_HDR + 2 * 12288] == 2 && r.mem[SCW_HDR] == 3 && r.mem[SCW_HDR + 12288] == 4);
     CHECK(r.mem[r.len - 1] == 2);                              // the last byte of the object: slot 2's last pixel
@@ -292,7 +296,9 @@ static void test_writer_scribbled(double seconds) {
         if ((seq & 1023) == 0) {
             scw_writer_clear(&r.w);
             clock_gettime(CLOCK_MONOTONIC, &t1);
-            if ((t1.tv_sec - t0.tv_sec) + (t1.tv_nsec - t0.tv_nsec) / 1e9 >= seconds) break;
+            if ((t1.tv_sec - t0.tv_sec) + (t1.tv_nsec - t0.tv_nsec) / 1e9 >= seconds) {
+                break;
+            }
         }
     }
     c.stop = 1; pthread_join(t, NULL);
@@ -303,7 +309,7 @@ static void test_writer_scribbled(double seconds) {
 }
 
 static void test_names(void) {
-    char h[9], n[64];
+    char h[SCW_CAM_HASH_BYTES], n[64];
     scw_cam_hash("/Users/x/Library/Application Support/stuntcam", "0x1420000005ac8600", h);
     CHECK(!strcmp(h, "190c1c7f"));
     scw_cam_hash("", "", h); CHECK(!strcmp(h, "8601b7df"));
@@ -367,7 +373,9 @@ static void *writer(void *a) {
     while (!c->stop) {
         seq++;
         uint8_t *p = scw_writer_begin(&c->r->w, seq);
-        for (uint32_t y = 0; y < c->r->w.height; y++) memset(p + (size_t)y * c->r->w.bpr0, (int)(seq & 0xff), c->r->w.bpr0);
+        for (uint32_t y = 0; y < c->r->w.height; y++) {
+            memset(p + (size_t)y * c->r->w.bpr0, (int)(seq & 0xff), c->r->w.bpr0);
+        }
         scw_writer_end(&c->r->w, seq, seq, seq, 0);
     }
     c->written = seq;
@@ -388,13 +396,22 @@ static void test_stress(double seconds) {
         if (rc == SCW_OK) {
             ok++; last = sr.seq;
             uint8_t want = (uint8_t)(sr.seq & 0xff);
-            for (size_t i = 0; i < dlen; i++) if (dst[i] != want) { bad++; break; }
-            if (sr.captureNs != sr.seq || sr.publishNs != sr.seq) bad++;
-        } else if (rc == SCW_E_TORN) torn++;
-        else none++;
+            for (size_t i = 0; i < dlen; i++) {
+                if (dst[i] != want) { bad++; break; }
+            }
+            if (sr.captureNs != sr.seq || sr.publishNs != sr.seq) {
+                bad++;
+            }
+        } else if (rc == SCW_E_TORN) {
+            torn++;
+        } else {
+            none++;
+        }
         if (((ok + torn + none) & 1023) == 0) {
             clock_gettime(CLOCK_MONOTONIC, &t1);
-            if ((t1.tv_sec - t0.tv_sec) + (t1.tv_nsec - t0.tv_nsec) / 1e9 >= seconds) break;
+            if ((t1.tv_sec - t0.tv_sec) + (t1.tv_nsec - t0.tv_nsec) / 1e9 >= seconds) {
+                break;
+            }
         }
     }
     c.stop = 1; pthread_join(t, NULL);
@@ -416,7 +433,9 @@ static void shm_names(void) {
 static void shm_cleanup(void) { shm_unlink(N1); shm_unlink(N2); shm_unlink(N3); }
 static uint64_t RB;   // bytes of the test ring object
 static int publish(scw_shm_writer *w, uint64_t epoch) {
-    if (scw_writer_init(&w->ring, w->h, w->len, 64, 48, 256, 3, epoch, 30000, getpid(), "shm test") != SCW_OK) return -1;
+    if (scw_writer_init(&w->ring, w->header, w->len, 64, 48, 256, 3, epoch, 30000, getpid(), "shm test") != SCW_OK) {
+        return -1;
+    }
     scw_writer_publish(&w->ring);
     return 0;
 }
@@ -442,8 +461,8 @@ static void test_shm(void) {
         CHECKEQ(rc, SCW_OK);
         CHECKEQ(rep.mode, 0600);
         printf("shm create under umask %03o: mode %04o, fchmod(fd, 0600) -> %s, initial unlink -> %s\n", (unsigned)masks[i],
-               rep.mode, rep.fchmod_errno ? strerror(rep.fchmod_errno) : "ok",
-               rep.unlink_errno ? strerror(rep.unlink_errno) : "removed an object");
+               rep.mode, rep.fchmodErrno ? strerror(rep.fchmodErrno) : "ok",
+               rep.unlinkErrno ? strerror(rep.unlinkErrno) : "removed an object");
         scw_shm_retire(&w, SCW_STATE_STOPPED);
     }
     // what shm_open does with a group/other mode under umask 077 (the helper never asks for one)
@@ -461,7 +480,7 @@ static void test_shm(void) {
         int fd = shm_open(N1, O_CREAT | O_EXCL | O_RDWR, 0644);
         CHECK(fd >= 0); CHECK(ftruncate(fd, 16384) == 0); close(fd);
         CHECKEQ(scw_shm_create(&w, N1, RB, &rep), SCW_OK);
-        CHECK(rep.unlink_errno == 0 && rep.mode == 0600);
+        CHECK(rep.unlinkErrno == 0 && rep.mode == 0600);
         printf("pre-taken name (same uid, mode 0644): unlinked and recreated as %04o\n", rep.mode);
         scw_shm_retire(&w, SCW_STATE_STOPPED);
     }
@@ -471,10 +490,10 @@ static void test_shm(void) {
         CHECK(ftruncate(fd, (off_t)RB) == 0);
         scw_header *h = mmap(NULL, (size_t)RB, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
         scw_writer pw; scw_writer_init(&pw, h, RB, 64, 48, 256, 3, 77, 30000, getpid(), "planted"); scw_writer_publish(&pw);
-        const void *m; uint64_t n; scw_geom g; long owner;
-        CHECK(scw_shm_open_ro(N2, V1, 1, &m, &n, &g, &owner, why, sizeof why) < 0 && m == NULL);
-        CHECK(strstr(why, "mode 0644") != NULL);
-        printf("reader, own object with mode 0644: refused: %s\n", why);
+        scw_shm_open_result opened;
+        CHECK(scw_shm_open_ro(N2, V1, 1, &opened) < 0 && opened.map == NULL);
+        CHECK(strstr(opened.why, "mode 0644") != NULL);
+        printf("reader, own object with mode 0644: refused: %s\n", opened.why);
         munmap(h, (size_t)RB); close(fd); shm_unlink(N2);
     }
     // owner checks against another uid: a fake stat, and a real object owned by root if this OS has one
@@ -491,10 +510,10 @@ static void test_shm(void) {
         const char *sys = "apple.shm.notification_center";   // notifyd's object, owned by root, on macOS
         long o = scw_owner_of(sys);
         if (o >= 0 && o != (long)me) {
-            const void *m; uint64_t n; scw_geom g; long owner;
-            int rc = scw_shm_open_ro(sys, V1, 1, &m, &n, &g, &owner, why, sizeof why);
-            CHECK(rc < 0 && owner == o && strstr(why, "owned by uid"));
-            printf("reader, another uid's object (%s, uid %ld): refused: %s\n", sys, o, why);
+            scw_shm_open_result opened;
+            int rc = scw_shm_open_ro(sys, V1, 1, &opened);
+            CHECK(rc < 0 && opened.owner == o && strstr(opened.why, "owned by uid"));
+            printf("reader, another uid's object (%s, uid %ld): refused: %s\n", sys, o, opened.why);
             // the helper's O_EXCL create on a taken name fails, and the report names the owner (the helper's initial
             // shm_unlink is not exercised on this name: it is a live system object)
             int fd = shm_open(sys, O_CREAT | O_EXCL | O_RDWR, 0600);
@@ -517,15 +536,19 @@ static void test_shm(void) {
     {
         CHECKEQ(scw_shm_create(&w, N1, RB, &rep), SCW_OK);
         publish(&w, 1001); wput(&w, 1, 5); wput(&w, 2, 6);
-        const void *m; uint64_t n; scw_geom g; long owner;
-        CHECKEQ(scw_shm_open_ro(N1, V1, 1, &m, &n, &g, &owner, why, sizeof why), SCW_OK);
+        scw_shm_open_result opened;
+        CHECKEQ(scw_shm_open_ro(N1, V1, 1, &opened), SCW_OK);
+        const void *m = opened.map;
+        uint64_t n = opened.len;
         CHECK(n >= RB);                                        // st_size may be rounded up to the page size
         printf("object of %llu bytes reports st_size %llu\n", (unsigned long long)RB, (unsigned long long)n);
         CHECK(((const uint8_t *)m)[SCW_HDR + 12288] == 1);
         scw_shm_retire(&w, SCW_STATE_STOPPED);
         const scw_header *h = m;
         int zero = 1;
-        for (uint64_t i = SCW_HDR; i < RB; i++) if (((const uint8_t *)m)[i]) { zero = 0; break; }
+        for (uint64_t i = SCW_HDR; i < RB; i++) {
+            if (((const uint8_t *)m)[i]) { zero = 0; break; }
+        }
         CHECK(zero && h->latest == 0 && h->state == SCW_STATE_STOPPED);
         CHECK(shm_open(N1, O_RDONLY, 0) < 0 && errno == ENOENT);
         // the reader can't write through its mapping
@@ -537,10 +560,10 @@ static void test_shm(void) {
         CHECKEQ(scw_shm_create(&w, N1, RB, &rep), SCW_OK); publish(&w, 2001);
         CHECKEQ(scw_shm_create(&w2, N1, RB, &rep), SCW_OK); publish(&w2, 2002);   // unlinks the first, makes another
         scw_shm_retire(&w, SCW_STATE_STOPPED);
-        const void *m; uint64_t n; scw_geom g; long owner;
-        CHECKEQ(scw_shm_open_ro(N1, V1, 1, &m, &n, &g, &owner, why, sizeof why), SCW_OK);
-        CHECKEQ(g.epoch, 2002);
-        munmap((void *)m, (size_t)n);
+        scw_shm_open_result opened;
+        CHECKEQ(scw_shm_open_ro(N1, V1, 1, &opened), SCW_OK);
+        CHECKEQ(opened.geom.epoch, 2002);
+        munmap((void *)opened.map, (size_t)opened.len);
         scw_shm_retire(&w2, SCW_STATE_STOPPED);
     }
     // a second resize of a shm object fails on macOS, so a mapped ring can't be truncated under a reader
@@ -562,7 +585,7 @@ static void test_reader_lifecycle(void) {
     CHECK(strstr(r.why, "no ring") != NULL);
     // being created: no magic yet
     CHECKEQ(scw_shm_create(&w, N1, RB, &rep), SCW_OK);
-    scw_writer_init(&w.ring, w.h, w.len, 64, 48, 256, 3, 3001, 30000, getpid(), "lifecycle");
+    scw_writer_init(&w.ring, w.header, w.len, 64, 48, 256, 3, 3001, 30000, getpid(), "lifecycle");
     t += S / 2;
     CHECKEQ(scw_shm_reader_poll(&r, t, &pk), 0);                 // within 1 s of the last attempt: no re-open
     CHECK(r.opens == 0 && strstr(r.why, "no ring") != NULL);
@@ -587,8 +610,8 @@ static void test_reader_lifecycle(void) {
     t += S;
     wput(&w2, 2, t);
     CHECKEQ(scw_shm_reader_poll(&r, t, &pk), 1);
-    CHECK(r.opens == 2 && r.g.epoch == 3002);
-    munmap(w.h, (size_t)w.len); close(w.fd);                     // the "crashed" helper's leftovers
+    CHECK(r.opens == 2 && r.geom.epoch == 3002);
+    munmap(w.header, (size_t)w.len); close(w.fd);                // the "crashed" helper's leftovers
     // superseded, in the helper's order: the new object is created and published first (scw_shm_create unlinks the
     // old name; the old mapping stays valid), then the old one is retired as superseded. The reader re-opens at once,
     // in the same poll, and finds the new object.
@@ -597,7 +620,7 @@ static void test_reader_lifecycle(void) {
     wput(&w3, 1, t + 10);
     scw_shm_retire(&w2, SCW_STATE_SUPERSEDED);                  // the name holds 3003, so it is not unlinked
     CHECKEQ(scw_shm_reader_poll(&r, t + 20, &pk), 1);
-    CHECK(r.opens == 3 && r.g.epoch == 3003);
+    CHECK(r.opens == 3 && r.geom.epoch == 3003);
     // the wrong order (old marked superseded while the name still holds it): the reader drops it and never
     // re-adopts that epoch; the new object is picked up on the next 1 s attempt
     scw_writer_state(&w3.ring, SCW_STATE_SUPERSEDED);
@@ -611,17 +634,19 @@ static void test_reader_lifecycle(void) {
     t += S;
     wput(&w4, 2, t);
     CHECKEQ(scw_shm_reader_poll(&r, t, &pk), 1);
-    CHECK(r.opens == 4 && r.g.epoch == 3005);
+    CHECK(r.opens == 4 && r.geom.epoch == 3005);
     scw_shm_retire(&w3, SCW_STATE_SUPERSEDED);
     {   // retire unlinks by the private epoch, even when the shared header's epoch was rewritten
         scw_shm_writer w5;
         CHECKEQ(scw_shm_create(&w5, N2, RB, &rep), SCW_OK); publish(&w5, 4001);
-        w5.h->epoch = 4002;                                     // another same-user process rewrites it
-        w5.h->nslots = 0; w5.h->slotBytes = 1ull << 40;          // and the geometry
+        w5.header->epoch = 4002;                                // another same-user process rewrites it
+        w5.header->nslots = 0; w5.header->slotBytes = 1ull << 40;  // and the geometry
         scw_shm_retire(&w5, SCW_STATE_STOPPED);                  // clears by the private geometry; no crash
         int fd = shm_open(N2, O_RDONLY, 0);
         CHECK(fd < 0 && errno == ENOENT);                        // still recognised as ours, and unlinked
-        if (fd >= 0) close(fd);
+        if (fd >= 0) {
+            close(fd);
+        }
         shm_unlink(N2);
     }
     w3 = w4;
@@ -631,12 +656,12 @@ static void test_reader_lifecycle(void) {
     CHECKEQ(scw_shm_reader_poll(&r, t, &pk), 0);
     CHECK(r.map == NULL && (strstr(r.why, "stopped") || strstr(r.why, "no ring")));
     // a ring of a version this engine doesn't accept: the "update stuntcam" line
-    CHECKEQ(scw_shm_create(&w, N1, RB, &rep), SCW_OK); publish(&w, 3004); w.h->version = 2;
+    CHECKEQ(scw_shm_create(&w, N1, RB, &rep), SCW_OK); publish(&w, 3004); w.header->version = 2;
     t += S;
     CHECKEQ(scw_shm_reader_poll(&r, t, &pk), 0);
     CHECK(!strcmp(r.why, "webcam: update stuntcam (ring v2, engine accepts v1)") && r.status == SCW_E_VERSION);
     printf("reader offline reason for a v2 ring: %s\n", r.why);
-    w.h->version = 1;
+    w.header->version = 1;
     scw_shm_retire(&w, SCW_STATE_STOPPED);
     scw_shm_reader_close(&r);
     shm_cleanup();
@@ -651,7 +676,7 @@ static void test_reader_limit(void) {
     CHECKEQ(scw_shm_create(&w, N1, RB, &rep), SCW_OK); publish(&w, 5001); scw_writer_state(&w.ring, SCW_STATE_RUNNING);
     wput(&w, 1, t);
     scw_shm_reader_init(&r, N1, V1, 1);
-    r.max_w = 63; r.max_h = 48;                                   // the 64x48 ring is one pixel too wide
+    r.maxWidth = 63; r.maxHeight = 48;                            // the 64x48 ring is one pixel too wide
     CHECKEQ(scw_shm_reader_poll(&r, t, &pk), 0);
     CHECK(r.map == NULL && r.opens == 0 && r.status == SCW_E_LIMIT);
     CHECK(strstr(r.why, "ring 64x48 is larger than this engine accepts (63x48)") != NULL);
@@ -659,12 +684,12 @@ static void test_reader_limit(void) {
     t += S; wput(&w, 2, t);
     CHECKEQ(scw_shm_reader_poll(&r, t, &pk), 0);                 // still refused on the next attempt
     CHECK(r.map == NULL && r.status == SCW_E_LIMIT);
-    r.max_w = 48; r.max_h = 64;                                   // portrait limit, landscape ring: accepted
+    r.maxWidth = 48; r.maxHeight = 64;                            // portrait limit, landscape ring: accepted
     t += S; wput(&w, 3, t);
     CHECKEQ(scw_shm_reader_poll(&r, t, &pk), 1);
-    CHECK(r.opens == 1 && r.g.width == 64);
+    CHECK(r.opens == 1 && r.geom.width == 64);
     scw_shm_reader_close(&r);
-    r.max_w = 0; r.max_h = 0;                                     // no limit
+    r.maxWidth = 0; r.maxHeight = 0;                              // no limit
     scw_shm_reader_init(&r, N1, V1, 1);
     CHECKEQ(scw_shm_reader_poll(&r, t, &pk), 1);
     scw_shm_reader_close(&r);
@@ -673,13 +698,16 @@ static void test_reader_limit(void) {
     for (uint32_t wd = 4097; wd >= 4096; wd--) {
         uint64_t bytes = scw_object_bytes(1, wd * 4, 2, NULL);
         CHECKEQ(scw_shm_create(&w, N2, bytes, &rep), SCW_OK);
-        CHECKEQ(scw_writer_init(&w.ring, w.h, w.len, wd, 1, wd * 4, 2, 5002 + wd, 30000, getpid(), "wide"), SCW_OK);
+        CHECKEQ(scw_writer_init(&w.ring, w.header, w.len, wd, 1, wd * 4, 2, 5002 + wd, 30000, getpid(), "wide"), SCW_OK);
         scw_writer_publish(&w.ring); scw_writer_state(&w.ring, SCW_STATE_RUNNING);
         uint8_t *p = scw_writer_begin(&w.ring, 1); memset(p, 1, wd * 4); scw_writer_end(&w.ring, 1, t, t, 0);
-        scw_shm_reader_init(&r, N2, V1, 1); r.max_w = 4096; r.max_h = 2160;
+        scw_shm_reader_init(&r, N2, V1, 1); r.maxWidth = 4096; r.maxHeight = 2160;
         int live = scw_shm_reader_poll(&r, t, &pk);
-        if (wd == 4097) CHECK(live == 0 && r.status == SCW_E_LIMIT && strstr(r.why, "4097x1") && strstr(r.why, "(4096x2160)"));
-        else CHECK(live == 1 && r.g.width == 4096);
+        if (wd == 4097) {
+            CHECK(live == 0 && r.status == SCW_E_LIMIT && strstr(r.why, "4097x1") && strstr(r.why, "(4096x2160)"));
+        } else {
+            CHECK(live == 1 && r.geom.width == 4096);
+        }
         scw_shm_reader_close(&r);
         scw_shm_retire(&w, SCW_STATE_STOPPED);
     }
@@ -691,18 +719,25 @@ int main(int argc, char **argv) {
     int shm = 1;
     double stress = 2;
     for (int i = 1; i < argc; i++) {
-        if (!strcmp(argv[i], "--no-shm")) shm = 0;
-        else if (!strcmp(argv[i], "--stress") && i + 1 < argc) stress = atof(argv[++i]);
+        if (!strcmp(argv[i], "--no-shm")) {
+            shm = 0;
+        } else if (!strcmp(argv[i], "--stress") && i + 1 < argc) {
+            stress = atof(argv[++i]);
+        }
     }
     test_validate();
     test_writer_init();
     test_reads();
     test_clear();
     test_writer_hostile();
-    if (stress > 0) test_writer_scribbled(stress / 2);
+    if (stress > 0) {
+        test_writer_scribbled(stress / 2);
+    }
     test_names();
     test_pidfile();
-    if (stress > 0) test_stress(stress);
+    if (stress > 0) {
+        test_stress(stress);
+    }
     if (shm) { test_shm(); test_reader_lifecycle(); test_reader_limit(); }
     printf("%s: %d checks, %d failed\n", fails ? "FAIL" : "PASS", checks, fails);
     return fails ? 1 : 0;

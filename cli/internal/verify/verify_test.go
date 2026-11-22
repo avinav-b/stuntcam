@@ -37,6 +37,23 @@ func TestClassify(t *testing.T) {
 	}
 }
 
+// inconclusive(…) quotes the line from byte 7 on, past "RESULT ", whatever those 7 bytes are
+func TestClassifyInconclusiveCut(t *testing.T) {
+	long := "RESULT core=INCONCLUSIVE " + strings.Repeat("x", 200)
+	for _, tc := range []struct{ in, want string }{
+		{"", "inconclusive()"},
+		{"RESULT", "inconclusive()"},
+		{"RESULT ", "inconclusive()"},
+		{"RESULTxcore=INCONCLUSIVE", "inconclusive(core=INCONCLUSIVE)"},
+		{"RESULT core=INCONCLUSIVE watchdog", "inconclusive(core=INCONCLUSIVE watchdog)"},
+		{long, "inconclusive(" + long[7:7+193] + ")"},
+	} {
+		if st, v := Classify(tc.in); st != Inconclusive || v != tc.want {
+			t.Errorf("%q -> %s %q, want %q", tc.in, st, v, tc.want)
+		}
+	}
+}
+
 // the canary's retried:[…] field sits before core:[ and doesn't change the verdict or the fail text
 func TestClassifyRetried(t *testing.T) {
 	r := "RESULT core=PASS ext=PASS t=16.7s retried:[photo-4x3: longest frame gap during the photo 215 ms (<= 100 ms, 4 frames) -> retry ok]"
@@ -122,9 +139,30 @@ func TestLock(t *testing.T) {
 }
 
 func TestProPhonesNewestFirst(t *testing.T) {
-	got := proPhonesNewestFirst([]simctl.DeviceType{{Name: "iPhone 15 Pro"}, {Name: "iPhone 17 Pro Max"}, {Name: "iPhone 18 Pro"}, {Name: "iPhone 17 Pro"}, {Name: "iPad Pro"}})
-	if len(got) != 3 || got[0].Name != "iPhone 18 Pro" || got[2].Name != "iPhone 15 Pro" {
-		t.Fatalf("%v", got)
+	for _, tc := range []struct {
+		name string
+		in   []string
+		want []string
+	}{
+		{"none", []string{"iPad Pro", "iPhone 17 Pro Max"}, nil},
+		{"newest first", []string{"iPhone 15 Pro", "iPhone 17 Pro Max", "iPhone 18 Pro", "iPhone 17 Pro", "iPad Pro"},
+			[]string{"iPhone 18 Pro", "iPhone 17 Pro", "iPhone 15 Pro"}},
+		{"numbers, not text", []string{"iPhone 9 Pro", "iPhone 10 Pro"}, []string{"iPhone 10 Pro", "iPhone 9 Pro"}},
+		{"ties keep simctl's order", []string{"iPhone 16 Pro", "iPhone 016 Pro", "iPhone 17 Pro"},
+			[]string{"iPhone 17 Pro", "iPhone 16 Pro", "iPhone 016 Pro"}},
+	} {
+		var in []simctl.DeviceType
+		for _, name := range tc.in {
+			in = append(in, simctl.DeviceType{Name: name})
+		}
+
+		var got []string
+		for _, deviceType := range proPhonesNewestFirst(in) {
+			got = append(got, deviceType.Name)
+		}
+		if strings.Join(got, ",") != strings.Join(tc.want, ",") {
+			t.Errorf("%s: %q, want %q", tc.name, got, tc.want)
+		}
 	}
 }
 

@@ -30,7 +30,10 @@ runs (`service install` refuses a protected location). `doctor` warns about prot
 ## The first `stuntcam up` takes a minute
 
 On a runtime's first use, `up` creates a hidden throwaway simulator and runs the self-test on it (about 30–90 s on a busy
-Mac). The verdict is cached, so the next `up` on that runtime skips it.
+Mac). The verdict is cached, so the next `up` on that runtime skips it. If the release's own self-test passed on your
+runtime build, the package ships that verdict and `up` skips the self-test from the start (`stuntcam verify` says
+"shipped with this package"). To arm without it, `stuntcam up --skip-verify`: if stuntcam doesn't work on that runtime,
+your app then gets no camera (or a broken one) instead of a refused `up`.
 
 ## The self-test says inconclusive
 

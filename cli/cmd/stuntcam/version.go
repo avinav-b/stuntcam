@@ -18,32 +18,38 @@ var (
 )
 
 func cmdVersion(args []string) error {
-	fs := flag.NewFlagSet("version", flag.ContinueOnError)
-	check := fs.Bool("check", false, "verify every installed file against the package manifest and unpack the payload "+
-		"(dylibs, canary) into the host directory")
-	if err := parse(fs, args, 0); err != nil {
+	flags := flag.NewFlagSet("version", flag.ContinueOnError)
+	check := flags.Bool("check", false, "verify every installed file against the package manifest and unpack the "+
+		"payload (dylibs, canary) into the host directory")
+	if err := parse(flags, args, 0); err != nil {
 		return err
 	}
+
 	fmt.Println(versionLine())
 	if !*check {
 		return nil
 	}
+
 	// the binary's own package, whatever the working directory (a checkout), --build or STUNTCAM_BUILD say
 	set, err := artifacts.InstalledHere()
 	if err != nil {
 		return err
 	}
+
 	fmt.Printf("package %s: every file matches %s\n", set.Version, filepath.Join(set.From, artifacts.ManifestName))
-	if ok, h := artifacts.Anchored(); ok {
-		fmt.Printf("manifest.txt and payload.tar are the ones this binary was packaged with (manifest sha256 %.12s)\n", h)
+	if ok, manifestSum := artifacts.Anchored(); ok {
+		fmt.Printf("manifest.txt and payload.tar are the ones this binary was packaged with "+
+			"(manifest sha256 %.12s)\n", manifestSum)
 	} else {
 		fmt.Println("this binary carries no package hashes (a dev build): manifest.txt is checked for consistency only")
 	}
-	for _, p := range []string{set.Engine, set.Loader, set.Stub, set.Hook, set.Canary, set.Helper} {
-		if p != "" {
-			fmt.Println("unpacked " + p)
+
+	for _, path := range []string{set.Engine, set.Loader, set.Stub, set.Hook, set.Canary, set.Helper} {
+		if path != "" {
+			fmt.Println("unpacked " + path)
 		}
 	}
+
 	return nil
 }
 

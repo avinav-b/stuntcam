@@ -8,17 +8,33 @@ import (
 )
 
 func TestParseCurrent(t *testing.T) {
-	ok := []string{"1 /a/b/libsimcamloader.dylib\n", "1 /x"}
-	for _, s := range ok {
-		if p, l, err := ParseCurrent(s); err != nil || p != 1 || l[0] != '/' {
-			t.Errorf("%q: %d %q %v", s, p, l, err)
-		}
+	tests := []struct {
+		name, line string
+		ok         bool
+	}{
+		{"loader with newline", "1 /a/b/libsimcamloader.dylib\n", true},
+		{"short path", "1 /x", true},
+		// the stub refuses the same lines
+		{"empty", "", false},
+		{"no proto", "abc def", false},
+		{"proto 0", "0 /x", false},
+		{"relative path", "1 relative/x", false},
+		{"no path", "1", false},
+		{"negative proto", "-1 /x", false},
 	}
-	bad := []string{"", "abc def", "0 /x", "1 relative/x", "1", "-1 /x"} // the stub refuses the same lines
-	for _, s := range bad {
-		if _, _, err := ParseCurrent(s); err == nil {
-			t.Errorf("%q accepted", s)
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p, l, err := ParseCurrent(tt.line)
+			if !tt.ok {
+				if err == nil {
+					t.Errorf("%q accepted", tt.line)
+				}
+				return
+			}
+			if err != nil || p != 1 || l[0] != '/' {
+				t.Errorf("%q: %d %q %v", tt.line, p, l, err)
+			}
+		})
 	}
 }
 
@@ -41,16 +57,21 @@ func TestWriteReadCurrent(t *testing.T) {
 
 func TestProtected(t *testing.T) {
 	d, _ := os.UserHomeDir()
-	cases := map[string]bool{
-		filepath.Join(d, "Documents", "Github", "app"):                 true,
-		filepath.Join(d, "Desktop"):                                    true,
-		filepath.Join(d, "DocumentsX"):                                 false,
-		filepath.Join(d, "Library", "Application Support", "stuntcam"): false,
+	tests := []struct {
+		name, path string
+		want       bool
+	}{
+		{"under Documents", filepath.Join(d, "Documents", "Github", "app"), true},
+		{"Desktop", filepath.Join(d, "Desktop"), true},
+		{"a name starting with Documents", filepath.Join(d, "DocumentsX"), false},
+		{"Application Support", filepath.Join(d, "Library", "Application Support", "stuntcam"), false},
 	}
-	for p, want := range cases {
-		if got := Protected(p); got != want {
-			t.Errorf("%s: got %v", p, got)
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := Protected(tt.path); got != tt.want {
+				t.Errorf("%s: got %v", tt.path, got)
+			}
+		})
 	}
 }
 

@@ -19,7 +19,7 @@ func writeVerdict(t *testing.T, dir string, r Result) {
 	}
 }
 
-// the package ships the release gate's canary passes (design §2 C-MF1); only a plain pass counts.
+// the package ships the release gate's canary passes; only a plain pass counts.
 func TestShippedVerdicts(t *testing.T) {
 	d := t.TempDir()
 	now := time.Now().Unix()

@@ -2,9 +2,11 @@
 package simctl
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestParseDevicesAndRuntimes(t *testing.T) {
@@ -67,5 +69,37 @@ func TestAppContainer(t *testing.T) {
 	}
 	if NotInstalled(nil) || NotBooted(nil) {
 		t.Fatal("nil error")
+	}
+}
+
+// A call past its Timeout wraps ErrTimedOut and keeps its text; an error simctl prints about a timeout counts too.
+func TestTimedOut(t *testing.T) {
+	dir := t.TempDir()
+	script := "#!/bin/sh\ncase \"$*\" in\n" +
+		"'simctl get_app_container W dev.x data') exec sleep 5;;\n" +
+		"'simctl get_app_container E dev.x data') echo 'Operation timed out' >&2; exit 60;;\n" +
+		"*) exit 3;;\nesac\n"
+	if err := os.WriteFile(filepath.Join(dir, "xcrun"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	bounded := Ctl{Timeout: 200 * time.Millisecond}
+	_, err := bounded.AppContainer("W", "dev.x", "data")
+	if !errors.Is(err, ErrTimedOut) || !TimedOut(err) ||
+		err.Error() != "simctl get_app_container W dev.x data: timed out after 200ms" {
+		t.Fatalf("past the bound: %v", err)
+	}
+
+	// The fake simctl answers at once in the other cases; a generous bound keeps a loaded machine from timing it out.
+	unhurried := Ctl{Timeout: 30 * time.Second}
+	_, err = unhurried.AppContainer("E", "dev.x", "data")
+	if errors.Is(err, ErrTimedOut) || !TimedOut(err) {
+		t.Fatalf("simctl's own timeout: %v", err)
+	}
+
+	_, err = unhurried.AppContainer("E", "dev.other", "data")
+	if err == nil || TimedOut(err) || TimedOut(nil) {
+		t.Fatalf("other error: %v", err)
 	}
 }

@@ -28,8 +28,8 @@ usage: stuntcam <command> [options]
             [--json] [--udid U] [--pid N] BUNDLE
   env       print SIMCTL_CHILD_* exports for per-launch arming (Detox, scripts)
             [--udid U]
-  source    switch the picture live, in running apps and the next ones (webcam: the Mac camera)
-            [--udid U] [--front NAME] [--back NAME] scene|image:PATH|video:PATH|webcam[:NAME]
+  source    switch the picture live, in running apps and the next ones (qr: a QR code of TEXT; webcam: the Mac camera)
+            [--udid U] [--front NAME] [--back NAME] scene|image:PATH|video:PATH|qr:TEXT|webcam[:NAME]
   orient    set the virtual device orientation, live
             [--udid U] portrait|upsideDown|landscapeLeft|landscapeRight|auto
   doctor    check Xcode, runtimes, the host directory, the build and each simulator
@@ -70,8 +70,8 @@ usage: stuntcam <command> [options]
             [--json] [--udid U] [--pid N] BUNDLE
   env       print SIMCTL_CHILD_* exports for per-launch arming (Detox, scripts)
             [--udid U]
-  source    switch the picture live, in running apps and the next ones (webcam: the Mac camera)
-            [--udid U] [--front NAME] [--back NAME] scene|image:PATH|video:PATH|webcam[:NAME]
+  source    switch the picture live, in running apps and the next ones (qr: a QR code of TEXT; webcam: the Mac camera)
+            [--udid U] [--front NAME] [--back NAME] scene|image:PATH|video:PATH|qr:TEXT|webcam[:NAME]
   orient    set the virtual device orientation, live
             [--udid U] portrait|upsideDown|landscapeLeft|landscapeRight|auto
   doctor    check Xcode, runtimes, the host directory, the build and each simulator
@@ -112,8 +112,8 @@ usage: stuntcam <command> [options]
             [--json] [--udid U] [--pid N] BUNDLE
   env       print SIMCTL_CHILD_* exports for per-launch arming (Detox, scripts)
             [--udid U]
-  source    switch the picture live, in running apps and the next ones (webcam: the Mac camera)
-            [--udid U] [--front NAME] [--back NAME] scene|image:PATH|video:PATH|webcam[:NAME]
+  source    switch the picture live, in running apps and the next ones (qr: a QR code of TEXT; webcam: the Mac camera)
+            [--udid U] [--front NAME] [--back NAME] scene|image:PATH|video:PATH|qr:TEXT|webcam[:NAME]
   orient    set the virtual device orientation, live
             [--udid U] portrait|upsideDown|landscapeLeft|landscapeRight|auto
   doctor    check Xcode, runtimes, the host directory, the build and each simulator
@@ -154,8 +154,8 @@ usage: stuntcam <command> [options]
             [--json] [--udid U] [--pid N] BUNDLE
   env       print SIMCTL_CHILD_* exports for per-launch arming (Detox, scripts)
             [--udid U]
-  source    switch the picture live, in running apps and the next ones (webcam: the Mac camera)
-            [--udid U] [--front NAME] [--back NAME] scene|image:PATH|video:PATH|webcam[:NAME]
+  source    switch the picture live, in running apps and the next ones (qr: a QR code of TEXT; webcam: the Mac camera)
+            [--udid U] [--front NAME] [--back NAME] scene|image:PATH|video:PATH|qr:TEXT|webcam[:NAME]
   orient    set the virtual device orientation, live
             [--udid U] portrait|upsideDown|landscapeLeft|landscapeRight|auto
   doctor    check Xcode, runtimes, the host directory, the build and each simulator
@@ -197,8 +197,8 @@ usage: stuntcam <command> [options]
             [--json] [--udid U] [--pid N] BUNDLE
   env       print SIMCTL_CHILD_* exports for per-launch arming (Detox, scripts)
             [--udid U]
-  source    switch the picture live, in running apps and the next ones (webcam: the Mac camera)
-            [--udid U] [--front NAME] [--back NAME] scene|image:PATH|video:PATH|webcam[:NAME]
+  source    switch the picture live, in running apps and the next ones (qr: a QR code of TEXT; webcam: the Mac camera)
+            [--udid U] [--front NAME] [--back NAME] scene|image:PATH|video:PATH|qr:TEXT|webcam[:NAME]
   orient    set the virtual device orientation, live
             [--udid U] portrait|upsideDown|landscapeLeft|landscapeRight|auto
   doctor    check Xcode, runtimes, the host directory, the build and each simulator
@@ -237,7 +237,7 @@ Usage of up:
   -skip-verify
     	arm without a canary verdict
   -source string
-    	scene | image:PATH | video:PATH | webcam[:NAME] (default scene)
+    	scene | image:PATH | video:PATH | qr:TEXT | webcam[:NAME] (default scene)
   -udid string
     	simulator UDID
 --- simctl
@@ -582,7 +582,7 @@ Usage of up:
   -skip-verify
     	arm without a canary verdict
   -source string
-    	scene | image:PATH | video:PATH | webcam[:NAME] (default scene)
+    	scene | image:PATH | video:PATH | qr:TEXT | webcam[:NAME] (default scene)
   -udid string
     	simulator UDID
 stuntcam: flag provided but not defined: -bogus
@@ -665,7 +665,7 @@ stuntcam: invalid value "x" for flag -pid: parse error
 $ stuntcam source
 --- stdout
 --- stderr
-stuntcam: usage: stuntcam source [--udid U] [--front NAME] [--back NAME] scene|image:PATH|video:PATH|webcam[:NAME]
+stuntcam: usage: stuntcam source [--udid U] [--front NAME] [--back NAME] scene|image:PATH|video:PATH|qr:TEXT|webcam[:NAME]
 --- simctl
 --- files
 --- exit 64
@@ -674,7 +674,7 @@ stuntcam: usage: stuntcam source [--udid U] [--front NAME] [--back NAME] scene|i
 $ stuntcam source bogus
 --- stdout
 --- stderr
-stuntcam: usage: stuntcam source [--udid U] [--front NAME] [--back NAME] scene|image:PATH|video:PATH|webcam[:NAME]
+stuntcam: usage: stuntcam source [--udid U] [--front NAME] [--back NAME] scene|image:PATH|video:PATH|qr:TEXT|webcam[:NAME]
 --- simctl
 --- files
 --- exit 64
@@ -1258,6 +1258,98 @@ sims/exec-<run>/config.json
   | {"proto":1,"xcode_version":"27.0","xcode_build":"27B5","developer_dir":"/Applications/Xcode.app/Contents/Developer","rules_dir":"","source":"up","at":<n>}
 sims/exec-<run>/current
   | 1 $T/simcam/builds/dddddddddddd/libsimcamloader.dylib
+--- exit 0
+
+=== status: qr source
+$ stuntcam status
+--- stdout
+iPhone A (U1, iOS 27.0): Booted, launchd, build aaaaaaaaaaaa, armed <ago> ago
+  source: qr:"café\nline 2 %"
+iPhone B (U2, iOS 27.0): Shutdown, unarmed, build aaaaaaaaaaaa
+iPhone C (B1, iOS 27.0): Booted, boot, build aaaaaaaaaaaa, armed <ago> ago
+  source: image:/h/data/0123456789ab/pic.png
+--- stderr
+--- simctl
+list devices -j
+spawn U1 launchctl getenv DYLD_INSERT_LIBRARIES
+--- files
+sims/B1/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"boot","proto":1,"vars":null}
+sims/B1/control
+  | source=image:/h/data/0123456789ab/pic.png
+sims/B1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+sims/U1/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"launchd","proto":1,"vars":["DYLD_INSERT_LIBRARIES","SIMCAM_CONTROL"]}
+sims/U1/control
+  | orientation=auto
+  | source=qr:caf%C3%A9%0Aline%202%20%25
+sims/U1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+sims/U2/control
+  | source=qr:old
+sims/U2/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+--- exit 0
+
+=== status --json: qr source
+$ stuntcam status --json
+--- stdout
+[
+ {
+  "UDID": "U1",
+  "Name": "iPhone A",
+  "Runtime": "iOS 27.0",
+  "State": "Booted",
+  "Mode": "launchd",
+  "Build": "aaaaaaaaaaaa",
+  "BootEnv": "unreadable: no launchd_sim for U1",
+  "ArmedAt": <at>,
+  "Source": "qr:café\nline 2 %"
+ },
+ {
+  "UDID": "U2",
+  "Name": "iPhone B",
+  "Runtime": "iOS 27.0",
+  "State": "Shutdown",
+  "Mode": "unarmed",
+  "Build": "aaaaaaaaaaaa"
+ },
+ {
+  "UDID": "B1",
+  "Name": "iPhone C",
+  "Runtime": "iOS 27.0",
+  "State": "Booted",
+  "Mode": "boot",
+  "Build": "aaaaaaaaaaaa",
+  "BootEnv": "stub",
+  "SimDir": "$T/simcam/sims/B1",
+  "ArmedAt": <at>,
+  "Source": "image:/h/data/0123456789ab/pic.png"
+ }
+]
+--- stderr
+--- simctl
+list devices -j
+spawn U1 launchctl getenv DYLD_INSERT_LIBRARIES
+--- files
+sims/B1/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"boot","proto":1,"vars":null}
+sims/B1/control
+  | source=image:/h/data/0123456789ab/pic.png
+sims/B1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+sims/U1/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"launchd","proto":1,"vars":["DYLD_INSERT_LIBRARIES","SIMCAM_CONTROL"]}
+sims/U1/control
+  | orientation=auto
+  | source=qr:caf%C3%A9%0Aline%202%20%25
+sims/U1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+sims/U2/control
+  | source=qr:old
+sims/U2/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
 --- exit 0
 
 === status: latched apps in order
@@ -2983,7 +3075,113 @@ restore-rules/fb3d81f73460/27A266a.json
 $ stuntcam up --source picture:x
 --- stdout
 --- stderr
-stuntcam: source must be scene, image:PATH or video:PATH (got "picture:x")
+stuntcam: source must be scene, image:PATH, video:PATH or qr:TEXT (got "picture:x")
+--- simctl
+--- files
+--- exit 64
+
+=== up: booted sim, launchd mode, --source qr:
+$ stuntcam up --skip-verify --source qr:WIFI:S:my net;T:WPA;P:p@ss%w;rd;;
+--- stdout
+simulator: iPhone A (U1, iOS 27.0), the only booted iOS simulator
+Xcode 27.0 (27A266a, /Applications/Xcode.app/Contents/Developer): restore rules verified
+armed (launchd mode, build aaaaaaaaaaaa): apps launched from now on get the camera, except Xcode Run and Xcode tests (they set their own libraries):
+  for those, `stuntcam up --reboot`.
+--- stderr
+--- simctl
+list devices -j
+spawn U1 launchctl getenv DYLD_INSERT_LIBRARIES
+spawn U1 launchctl getenv DYLD_INSERT_LIBRARIES
+spawn U1 launchctl getenv M2_FAKE
+spawn U1 launchctl getenv M2_NOLOGDICT
+spawn U1 launchctl getenv M2_PLIST
+spawn U1 launchctl getenv M2_SESSION_HOOK
+spawn U1 launchctl getenv M5_IMAGE
+spawn U1 launchctl getenv SIMCAM_CHAIN
+spawn U1 launchctl getenv SIMCAM_CONTROL
+spawn U1 launchctl getenv SIMCAM_CONTROL
+spawn U1 launchctl getenv SIMCAM_FIG_SESSION
+spawn U1 launchctl getenv SIMCAM_FIG_SOURCES
+spawn U1 launchctl getenv SIMCAM_FIXTURE_IMAGE
+spawn U1 launchctl getenv SIMCAM_OFF_KEY_LOG
+spawn U1 launchctl getenv SIMCAM_PROFILE
+spawn U1 launchctl getenv SIMCAM_SIM_DIR
+spawn U1 launchctl getenv SIMCAM_SOURCE
+spawn U1 launchctl getenv SIMCAM_STATE_DIR
+spawn U1 launchctl setenv DYLD_INSERT_LIBRARIES $T/simcam/builds/bbbbbbbbbbbb/libsimcamstub.dylib
+spawn U1 launchctl setenv M2_FAKE 1
+spawn U1 launchctl setenv M2_NOLOGDICT 1
+spawn U1 launchctl setenv M2_PLIST $T/simcam/data/5d45a009b038/profile.plist
+spawn U1 launchctl setenv M2_SESSION_HOOK 1
+spawn U1 launchctl setenv M5_IMAGE $T/simcam/data/9040a7d6cdf7/qr.png
+spawn U1 launchctl setenv SIMCAM_CHAIN $T/simcam/sims/U1/chain.txt
+spawn U1 launchctl setenv SIMCAM_CONTROL $T/simcam/sims/U1/control
+spawn U1 launchctl setenv SIMCAM_FIG_SESSION 1
+spawn U1 launchctl setenv SIMCAM_FIG_SOURCES 1
+spawn U1 launchctl setenv SIMCAM_FIXTURE_IMAGE $T/simcam/data/9040a7d6cdf7/qr.png
+spawn U1 launchctl setenv SIMCAM_OFF_KEY_LOG 1
+spawn U1 launchctl setenv SIMCAM_PROFILE $T/simcam/data/5d45a009b038/profile.plist
+spawn U1 launchctl setenv SIMCAM_SIM_DIR $T/simcam/sims/U1
+spawn U1 launchctl setenv SIMCAM_SOURCE qr:WIFI:S:my%20net;T:WPA;P:p@ss%25w;rd;;
+spawn U1 launchctl setenv SIMCAM_STATE_DIR $T/simcam/sims/U1/state
+--- files
+builds/aaaaaaaaaaaa/libsimcam.dylib
+builds/aaaaaaaaaaaa/libsimcamloader.dylib
+builds/bbbbbbbbbbbb/libsimcamstub.dylib
+builds/cccccccccccc/libsimcamrunnerhook.dylib
+data/5d45a009b038/profile.plist
+data/9040a7d6cdf7/qr.png
+restore-rules/fb3d81f73460/.complete
+restore-rules/fb3d81f73460/27A266a.json
+sims/U1/arm.json
+  | {
+  |  "proto": 1,
+  |  "mode": "launchd",
+  |  "build": "aaaaaaaaaaaa",
+  |  "at": <n>,
+  |  "vars": [
+  |   "DYLD_INSERT_LIBRARIES",
+  |   "SIMCAM_SIM_DIR",
+  |   "SIMCAM_STATE_DIR",
+  |   "SIMCAM_CHAIN",
+  |   "SIMCAM_CONTROL",
+  |   "SIMCAM_FIG_SOURCES",
+  |   "M2_FAKE",
+  |   "SIMCAM_FIG_SESSION",
+  |   "M2_SESSION_HOOK",
+  |   "SIMCAM_OFF_KEY_LOG",
+  |   "M2_NOLOGDICT",
+  |   "SIMCAM_PROFILE",
+  |   "M2_PLIST",
+  |   "SIMCAM_FIXTURE_IMAGE",
+  |   "M5_IMAGE",
+  |   "SIMCAM_SOURCE"
+  |  ]
+  | }
+sims/U1/chain.txt
+  | 
+sims/U1/config.json
+  | {
+  |  "proto": 1,
+  |  "xcode_version": "27.0",
+  |  "xcode_build": "27A266a",
+  |  "developer_dir": "/Applications/Xcode.app/Contents/Developer",
+  |  "rules_dir": "$T/simcam/restore-rules/fb3d81f73460",
+  |  "source": "up",
+  |  "at": <n>
+  | }
+sims/U1/control
+  | source=qr:WIFI:S:my%20net;T:WPA;P:p@ss%25w;rd;;
+sims/U1/control.lock
+sims/U1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+--- exit 0
+
+=== up: --source qr: without text
+$ stuntcam up --source qr:
+--- stdout
+--- stderr
+stuntcam: qr: needs text, e.g. qr:'https://example.com'
 --- simctl
 --- files
 --- exit 64
@@ -3378,6 +3576,85 @@ sims/U1/arm.json
 sims/U1/current
   | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
 --- exit 64
+
+=== source qr
+$ stuntcam source qr:https://example.com/pay?id=42
+--- stdout
+iPhone A: source qr:"https://example.com/pay?id=42" (running apps switch within a second; apps launched later start with it)
+--- stderr
+--- simctl
+list devices -j
+spawn U1 launchctl getenv SIMCAM_CONTROL
+--- files
+sims/U1/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"launchd","proto":1,"vars":["DYLD_INSERT_LIBRARIES","SIMCAM_CONTROL"]}
+sims/U1/control
+  | source=qr:https://example.com/pay?id=42
+sims/U1/control.lock
+sims/U1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+--- exit 0
+
+=== source qr: any bytes
+$ stuntcam source qr: Grüße
+日本 50% 
+--- stdout
+iPhone A: source qr:" Grüße\n日本 50% " (running apps switch within a second; apps launched later start with it)
+--- stderr
+--- simctl
+list devices -j
+spawn U1 launchctl getenv SIMCAM_CONTROL
+--- files
+sims/U1/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"launchd","proto":1,"vars":["DYLD_INSERT_LIBRARIES","SIMCAM_CONTROL"]}
+sims/U1/control
+  | source=qr:%20Gr%C3%BC%C3%9Fe%0A%E6%97%A5%E6%9C%AC%2050%25%20
+sims/U1/control.lock
+sims/U1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+--- exit 0
+
+=== source qr: no text
+$ stuntcam source qr:
+--- stdout
+--- stderr
+stuntcam: qr: needs text, e.g. qr:'https://example.com'
+--- simctl
+--- files
+sims/U1/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"launchd","proto":1,"vars":["DYLD_INSERT_LIBRARIES","SIMCAM_CONTROL"]}
+sims/U1/current
+  | 1 $T/simcam/builds/aaaaaaaaaaaa/libsimcamloader.dylib
+--- exit 64
+
+=== source qr: another build
+$ stuntcam source qr:x
+--- stdout
+iPhone A: source qr:"x" (running apps switch within a second; apps launched later start with it)
+--- stderr
+note: iPhone A runs build eeeeeeeeeeee, not this stuntcam's aaaaaaaaaaaa; a build from before stuntcam 1.2.0 shows the scene for qr: (`stuntcam up` again to switch builds)
+--- simctl
+list devices -j
+spawn U1 launchctl getenv SIMCAM_CONTROL
+--- files
+sims/U1/arm.json
+  | {"at":<n>,"build":"aaaaaaaaaaaa","mode":"launchd","proto":1,"vars":["DYLD_INSERT_LIBRARIES","SIMCAM_CONTROL"]}
+sims/U1/control
+  | source=qr:x
+sims/U1/control.lock
+sims/U1/current
+  | 1 $T/simcam/builds/eeeeeeeeeeee/libsimcamloader.dylib
+--- exit 0
+
+=== source qr: not armed
+$ stuntcam source qr:x
+--- stdout
+--- stderr
+stuntcam: iPhone A isn't armed: `stuntcam up` first
+--- simctl
+list devices -j
+--- files
+--- exit 1
 
 === source: webcam without a helper
 $ stuntcam source webcam

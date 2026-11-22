@@ -1,37 +1,67 @@
 // SPDX-License-Identifier: Apache-2.0
 // Part of simcam.m (single translation unit; included in order): barcode detection for the metadata sinks: the plain
 // scene's fixture (CIDetector, once) and scene v2 / the other sources (Vision, re-run when the picture changes).
-static NSArray *gBarcodeDicts;   // the metadata objects the pump sends (both detectors)
+//
+// Provides: BarcodeDetectFixture, BarcodeDetectScene (providers/pump.inc)
+// Owns:     gBarcodes, the detectors' state, defined in providers/barcodes.h (pump queue; providers/pump.inc reads
+//           the metadata objects)
+// Uses:     fig/session_state.inc, providers/scene.inc, client/vision.inc
+#include "barcodes.h"
+#include "../fig/session.h"
+#include "pump.h"
+#include "scene.h"
+#include "../client/vision.h"
 
 // ---- the metadata objects, as AVF's metadata sink reads them ----
 // The decode data of a QR code: Quagga MRCDescriptor attributes (AVF: stringValue =
 // MRCDescriptorDecodePayload(MRCDescriptorCreateWithAttributes(it))). With no descriptor, the symbology alone.
-static NSMutableDictionary *BarcodeQRDecodeData(CIQRCodeDescriptor *qd) {
-    // MRCDescriptorAttributeSymbology = MRCSymbologyQR
-    NSMutableDictionary *mrc = [@{@"BarcodeType": @"QR"} mutableCopy];
-    if (qd) {
-        mrc[@"BarcodeRawData"] = qd.errorCorrectedPayload;
-        mrc[@"SymbolVersion"] = @(qd.symbolVersion);
-        mrc[@"QRMASK"] = @(qd.maskPattern);
-        // MRC wants its own ECL enum (CI's ASCII 'L'/'M'/'Q'/'H' makes MRCDescriptorDecodePayload fail -3001)
-        long ecl = qd.errorCorrectionLevel;
-        mrc[@"ErrorCorrectionLevel"] = @(ecl == 'L' ? 0 : ecl == 'M' ? 1 : ecl == 'Q' ? 2 : 3);
+// MRC's error correction level for CI's ASCII one: L 0, M 1, Q 2, anything else (H) 3. An int, so the attribute boxes
+// as a 32-bit number, as it always has.
+static int BarcodeMRCErrorCorrection(long ciLevel) {
+    if (ciLevel == 'L') {
+        return 0;
     }
-    return mrc;
+    if (ciLevel == 'M') {
+        return 1;
+    }
+    if (ciLevel == 'Q') {
+        return 2;
+    }
+    return 3;
 }
+
+static NSMutableDictionary *BarcodeQRDecodeData(CIQRCodeDescriptor *descriptor) {
+    // MRCDescriptorAttributeSymbology = MRCSymbologyQR
+    NSMutableDictionary *attributes = [@{@"BarcodeType": @"QR"} mutableCopy];
+    if (descriptor) {
+        attributes[@"BarcodeRawData"] = descriptor.errorCorrectedPayload;
+        attributes[@"SymbolVersion"] = @(descriptor.symbolVersion);
+        attributes[@"QRMASK"] = @(descriptor.maskPattern);
+        // MRC wants its own ECL enum (CI's ASCII 'L'/'M'/'Q'/'H' makes MRCDescriptorDecodePayload fail -3001)
+        attributes[@"ErrorCorrectionLevel"] = @(BarcodeMRCErrorCorrection(descriptor.errorCorrectionLevel));
+    }
+    return attributes;
+}
+
 // A QR code's top-level attributes: its decode data, with CI's own ECL (top level -> CIQRCodeDescriptor)
-static NSMutableDictionary *BarcodeQRTop(NSDictionary *decodeData, CIQRCodeDescriptor *qd) {
+static NSMutableDictionary *BarcodeQRTop(NSDictionary *decodeData, CIQRCodeDescriptor *descriptor) {
     NSMutableDictionary *top = [decodeData mutableCopy];
-    if (qd) top[@"ErrorCorrectionLevel"] = @((long)qd.errorCorrectionLevel);
+    if (descriptor) {
+        top[@"ErrorCorrectionLevel"] = @((long)descriptor.errorCorrectionLevel);
+    }
     return top;
 }
+
 // The four corners, given normalized with the origin bottom-left, as AVF wants them (origin top-left)
-static NSArray *BarcodeCorners(CGPoint tl, CGPoint bl, CGPoint br, CGPoint tr) {
-    return @[ (__bridge_transfer id)CGPointCreateDictionaryRepresentation(CGPointMake(tl.x, 1 - tl.y)),
-              (__bridge_transfer id)CGPointCreateDictionaryRepresentation(CGPointMake(bl.x, 1 - bl.y)),
-              (__bridge_transfer id)CGPointCreateDictionaryRepresentation(CGPointMake(br.x, 1 - br.y)),
-              (__bridge_transfer id)CGPointCreateDictionaryRepresentation(CGPointMake(tr.x, 1 - tr.y)) ];
+static NSArray *BarcodeCorners(CGPoint topLeft, CGPoint bottomLeft, CGPoint bottomRight, CGPoint topRight) {
+    return @[
+        (__bridge_transfer id)CGPointCreateDictionaryRepresentation(CGPointMake(topLeft.x, 1 - topLeft.y)),
+        (__bridge_transfer id)CGPointCreateDictionaryRepresentation(CGPointMake(bottomLeft.x, 1 - bottomLeft.y)),
+        (__bridge_transfer id)CGPointCreateDictionaryRepresentation(CGPointMake(bottomRight.x, 1 - bottomRight.y)),
+        (__bridge_transfer id)CGPointCreateDictionaryRepresentation(CGPointMake(topRight.x, 1 - topRight.y)),
+    ];
 }
+
 // One metadata object: the top-level attributes plus the decode data, the rect (normalized, origin top-left) and
 // the corners
 static NSMutableDictionary *BarcodeObject(NSMutableDictionary *top, NSDictionary *decodeData, CGRect rect,
@@ -43,141 +73,259 @@ static NSMutableDictionary *BarcodeObject(NSMutableDictionary *top, NSDictionary
 }
 
 // ---- barcodes (static fixture: detect once with CIDetector) --------------------
-static void BarcodeDetectFixture(CVPixelBufferRef pb) {
-    if (gBarcodeDicts) return;
-    CIDetector *det = [CIDetector detectorOfType:CIDetectorTypeQRCode context:nil
-                                         options:@{CIDetectorAccuracy: CIDetectorAccuracyHigh}];
-    NSArray *features = [det featuresInImage:[CIImage imageWithCVPixelBuffer:pb]];
-    NSMutableArray *out = [NSMutableArray array];
-    for (CIQRCodeFeature *f in features) {
-        // AVF metadata rects are normalized, in the landscape sensor buffer (0..1, origin top-left)
-        CGRect b = f.bounds;
-        double W = kSrcW, H = kSrcH;
-        CGRect norm = CGRectMake(b.origin.x / W, 1 - (b.origin.y + b.size.height) / H,
-                                 b.size.width / W, b.size.height / H);
-        NSArray *corners = BarcodeCorners(CGPointMake(f.topLeft.x / W, f.topLeft.y / H),
-                                          CGPointMake(f.bottomLeft.x / W, f.bottomLeft.y / H),
-                                          CGPointMake(f.bottomRight.x / W, f.bottomRight.y / H),
-                                          CGPointMake(f.topRight.x / W, f.topRight.y / H));
-        CIQRCodeDescriptor *qd = (CIQRCodeDescriptor *)f.symbolDescriptor;
-        NSMutableDictionary *mrc = BarcodeQRDecodeData(qd);
-        [out addObject:BarcodeObject(BarcodeQRTop(mrc, qd), mrc, norm, corners)];
+static void BarcodeDetectFixture(CVPixelBufferRef buffer) {
+    if (gBarcodes.dicts) {
+        return;
     }
-    gBarcodeDicts = out;
+    CIDetector *detector = [CIDetector detectorOfType:CIDetectorTypeQRCode context:nil
+                                         options:@{CIDetectorAccuracy: CIDetectorAccuracyHigh}];
+    NSArray *features = [detector featuresInImage:[CIImage imageWithCVPixelBuffer:buffer]];
+    NSMutableArray *out = [NSMutableArray array];
+
+    for (CIQRCodeFeature *feature in features) {
+        // AVF metadata rects are normalized, in the landscape sensor buffer (0..1, origin top-left)
+        CGRect bounds = feature.bounds;
+        double width = kSrcW;
+        double height = kSrcH;
+        CGRect normalized = CGRectMake(bounds.origin.x / width, 1 - (bounds.origin.y + bounds.size.height) / height,
+                                       bounds.size.width / width, bounds.size.height / height);
+        NSArray *corners = BarcodeCorners(CGPointMake(feature.topLeft.x / width, feature.topLeft.y / height),
+                                          CGPointMake(feature.bottomLeft.x / width, feature.bottomLeft.y / height),
+                                          CGPointMake(feature.bottomRight.x / width, feature.bottomRight.y / height),
+                                          CGPointMake(feature.topRight.x / width, feature.topRight.y / height));
+        CIQRCodeDescriptor *descriptor = (CIQRCodeDescriptor *)feature.symbolDescriptor;
+        NSMutableDictionary *decodeData = BarcodeQRDecodeData(descriptor);
+        [out addObject:BarcodeObject(BarcodeQRTop(decodeData, descriptor), decodeData, normalized, corners)];
+    }
+
+    gBarcodes.dicts = out;
     LOG(@"barcode detect: %lu codes %@", (unsigned long)out.count, out.count ? out[0][@"BarcodeDecodeData"] : @"");
 }
 
 // ---- barcodes from the rendered buffer (Vision), re-run when the picture changes: QR + EAN-13 (+ the other 1D/2D
 // types Vision finds) ----
-static NSString *(*pMRCDecode)(CFTypeRef);
-static CFTypeRef (*pMRCCreate)(CFDictionaryRef);
+static NSString *(*pMRCDescriptorDecodePayload)(CFTypeRef);
+static CFTypeRef (*pMRCDescriptorCreateWithAttributes)(CFDictionaryRef);
+
 static NSString *BarcodeMRCString(NSDictionary *attrs) {
-    if (!pMRCCreate) {
-        pMRCCreate = dlsym(RTLD_DEFAULT, "MRCDescriptorCreateWithAttributes");
-        pMRCDecode = dlsym(RTLD_DEFAULT, "MRCDescriptorDecodePayload");
+    if (!pMRCDescriptorCreateWithAttributes) {
+        pMRCDescriptorCreateWithAttributes = dlsym(RTLD_DEFAULT, "MRCDescriptorCreateWithAttributes");
+        pMRCDescriptorDecodePayload = dlsym(RTLD_DEFAULT, "MRCDescriptorDecodePayload");
     }
-    if (!pMRCCreate || !pMRCDecode) return nil;
-    CFTypeRef d = pMRCCreate((__bridge CFDictionaryRef)attrs);
-    if (!d) return nil;
-    NSString *s = pMRCDecode(d);
-    CFRelease(d);
-    return s;
+    if (!pMRCDescriptorCreateWithAttributes || !pMRCDescriptorDecodePayload) {
+        return nil;
+    }
+    CFTypeRef descriptor = pMRCDescriptorCreateWithAttributes((__bridge CFDictionaryRef)attrs);
+    if (!descriptor) {
+        return nil;
+    }
+    NSString *payload = pMRCDescriptorDecodePayload(descriptor);
+    CFRelease(descriptor);
+    return payload;
 }
+
 static NSString *BarcodeSymbol(const char *name) {   // the NSString constant exported as `name`; nil if there is none
-    CFStringRef *p = dlsym(RTLD_DEFAULT, name);
-    return p ? (__bridge NSString *)*p : nil;
+    CFStringRef *symbol = dlsym(RTLD_DEFAULT, name);
+    return symbol ? (__bridge NSString *)*symbol : nil;
 }
+
 static NSDictionary *BarcodeOneDAttrs(NSString *mrcSym, NSString *payload) {
     // Quagga's MRC wants 1D payload digits as byte values 0..9 (ASCII bytes decode as digit-2 mod 10, measured on
     // 26.3). Verified once per symbology by decoding it back; never pass an NSString as BarcodeRawData (hung the pump
     // in the probe).
-    NSMutableData *dv = [NSMutableData data];
+    NSMutableData *digitValues = [NSMutableData data];
     for (NSUInteger i = 0; i < payload.length; i++) {
-        unichar c = [payload characterAtIndex:i];
-        uint8_t b = (c >= '0' && c <= '9') ? (uint8_t)(c - '0') : (uint8_t)c;
-        [dv appendBytes:&b length:1];
+        unichar character = [payload characterAtIndex:i];
+        uint8_t byte = (character >= '0' && character <= '9') ? (uint8_t)(character - '0') : (uint8_t)character;
+        [digitValues appendBytes:&byte length:1];
     }
-    NSDictionary *d = @{@"BarcodeType": mrcSym, @"BarcodeRawData": dv};
+    NSDictionary *attributes = @{@"BarcodeType": mrcSym, @"BarcodeRawData": digitValues};
     static NSMutableSet *checked;
-    if (!checked) checked = [NSMutableSet set];
+    if (!checked) {
+        checked = [NSMutableSet set];
+    }
     if (![checked containsObject:mrcSym]) {
         [checked addObject:mrcSym];
-        LOG(@"MRC check %@ digits-as-values -> %@ (want %@)", mrcSym, BarcodeMRCString(d), payload);
+        LOG(@"MRC check %@ digits-as-values -> %@ (want %@)", mrcSym, BarcodeMRCString(attributes), payload);
     }
-    return d;
+    return attributes;
 }
-static long gScanGenDone = -1;
+
+// the MRC symbology of a Vision 1D symbology the metadata objects carry (EAN-13, EAN-8, Code 128); nil for the others
+static NSString *BarcodeMRCSymbology(NSString *visionSymbology, NSString *symEAN13, NSString *symEAN8,
+                                     NSString *symCode128) {
+    if ([visionSymbology isEqualToString:symEAN13]) {
+        return BarcodeSymbol("MRCSymbologyEAN13");
+    }
+    if ([visionSymbology isEqualToString:symEAN8]) {
+        return BarcodeSymbol("MRCSymbologyEAN8");
+    }
+    if ([visionSymbology isEqualToString:symCode128]) {
+        return BarcodeSymbol("MRCSymbologyCode128");
+    }
+    return nil;
+}
+
 // as BarcodeSymbol, @"" if there is none
-static NSString *BarcodeVisionSymbol(const char *n) { return BarcodeSymbol(n) ?: @""; }
-static CGPoint BarcodePoint(id o, NSString *k) {
-    NSValue *v = SafeKVC(o, k);
-    CGPoint p = CGPointZero;
-    if (v) [v getValue:&p size:sizeof p];
-    return p;
-}
-static void VisionInstall(void);   // client/vision.inc
-static void BarcodeDetectScene(CVPixelBufferRef pb) {
-    long gen = atomic_load(&gScanGen);
-    if (gen == gScanGenDone && gBarcodeDicts) return;
-    gScanGenDone = gen;
-    static Class RQ, HD;
-    static dispatch_once_t o1;
-    dispatch_once(&o1, ^{
-        dlopen("/System/Library/Frameworks/Vision.framework/Vision", RTLD_NOW);
-        RQ = objc_getClass("VNDetectBarcodesRequest");
-        HD = objc_getClass("VNImageRequestHandler");
-        // On 17.5 the add_image callback in client/vision.inc fires before Vision's classes are registered, so when we
-        // are the first to load Vision the revision pin would never be installed and detection would find 0 codes.
-        // Install it here too (unless SIMCAM_OFF_VISION_REVISION_PIN turns the pin off).
-        if (RQ && !getenv(ENV_OFF_VISION_REVISION_PIN)) VisionInstall();
-    });
-    if (!RQ || !HD) {
-        LOG(@"barcode detect: Vision unavailable");
-        gBarcodeDicts = @[];
-        return;
+static NSString *BarcodeVisionSymbol(const char *name) { return BarcodeSymbol(name) ?: @""; }
+
+static CGPoint BarcodePoint(id object, NSString *key) {
+    NSValue *value = SafeKVC(object, key);
+    CGPoint point = CGPointZero;
+    if (value) {
+        [value getValue:&point size:sizeof point];
     }
-    id request = [[RQ alloc] init];
-    NSError *e = nil;
+    return point;
+}
+
+// The codes Vision finds in pb, as metadata objects (any queue)
+static NSArray *BarcodeVisionScan(CVPixelBufferRef buffer, NSMutableArray *names, NSError **error) {
+    Class requestClass = gBarcodes.visionRequest;
+    Class handlerClass = gBarcodes.visionHandler;
+    id request = [[requestClass alloc] init];
     id handler = ((id (*)(id, SEL, CVPixelBufferRef, id))objc_msgSend)(
-        [HD alloc], sel_registerName("initWithCVPixelBuffer:options:"), pb, @{});
-    ((BOOL (*)(id, SEL, id, NSError **))objc_msgSend)(handler, sel_registerName("performRequests:error:"), @[request],
-                                                      &e);
+        [handlerClass alloc], sel_registerName("initWithCVPixelBuffer:options:"), buffer, @{});
+    SEL perform = sel_registerName("performRequests:error:");
+    ((BOOL (*)(id, SEL, id, NSError **))objc_msgSend)(handler, perform, @[request], error);
     NSArray *results = SafeKVC(request, @"results");
-    NSString *symQR = BarcodeVisionSymbol("VNBarcodeSymbologyQR"),
-             *symEAN13 = BarcodeVisionSymbol("VNBarcodeSymbologyEAN13"),
-             *symEAN8 = BarcodeVisionSymbol("VNBarcodeSymbologyEAN8"),
-             *symCode128 = BarcodeVisionSymbol("VNBarcodeSymbologyCode128");
-    NSMutableArray *out = [NSMutableArray array], *names = [NSMutableArray array];
-    for (id o in results) {
-        NSString *sym = SafeKVC(o, @"symbology"), *payload = SafeKVC(o, @"payloadStringValue");
-        id desc = SafeKVC(o, @"barcodeDescriptor");
-        [names addObject:[NSString stringWithFormat:@"%@=%@", sym, payload]];
-        CGRect b = CGRectZero;
-        [(NSValue *)SafeKVC(o, @"boundingBox") getValue:&b size:sizeof b];   // normalized, origin bottom-left
-        CGRect norm = CGRectMake(b.origin.x, 1 - b.origin.y - b.size.height, b.size.width, b.size.height);
-        CGPoint tl = BarcodePoint(o, @"topLeft"), bl = BarcodePoint(o, @"bottomLeft"),
-                br = BarcodePoint(o, @"bottomRight"), tr = BarcodePoint(o, @"topRight");
-        NSArray *corners = BarcodeCorners(tl, bl, br, tr);
-        NSMutableDictionary *mrc = nil, *top = nil;
-        if ([sym isEqualToString:symQR] && [desc isKindOfClass:[CIQRCodeDescriptor class]]) {
-            CIQRCodeDescriptor *qd = (CIQRCodeDescriptor *)desc;
-            mrc = BarcodeQRDecodeData(qd);
-            top = BarcodeQRTop(mrc, qd);
+    NSString *symQR = BarcodeVisionSymbol("VNBarcodeSymbologyQR");
+    NSString *symEAN13 = BarcodeVisionSymbol("VNBarcodeSymbologyEAN13");
+    NSString *symEAN8 = BarcodeVisionSymbol("VNBarcodeSymbologyEAN8");
+    NSString *symCode128 = BarcodeVisionSymbol("VNBarcodeSymbologyCode128");
+    NSMutableArray *out = [NSMutableArray array];
+
+    for (id observation in results) {
+        NSString *symbology = SafeKVC(observation, @"symbology");
+        NSString *payload = SafeKVC(observation, @"payloadStringValue");
+        id descriptor = SafeKVC(observation, @"barcodeDescriptor");
+        [names addObject:[NSString stringWithFormat:@"%@=%@", symbology, payload]];
+        CGRect box = CGRectZero;
+        // normalized, origin bottom-left
+        [(NSValue *)SafeKVC(observation, @"boundingBox") getValue:&box size:sizeof box];
+        CGRect normalized =
+            CGRectMake(box.origin.x, 1 - box.origin.y - box.size.height, box.size.width, box.size.height);
+        CGPoint topLeft = BarcodePoint(observation, @"topLeft");
+        CGPoint bottomLeft = BarcodePoint(observation, @"bottomLeft");
+        CGPoint bottomRight = BarcodePoint(observation, @"bottomRight");
+        CGPoint topRight = BarcodePoint(observation, @"topRight");
+        NSArray *corners = BarcodeCorners(topLeft, bottomLeft, bottomRight, topRight);
+        NSMutableDictionary *decodeData = nil;
+        NSMutableDictionary *top = nil;
+        if ([symbology isEqualToString:symQR] && [descriptor isKindOfClass:[CIQRCodeDescriptor class]]) {
+            CIQRCodeDescriptor *qrDescriptor = (CIQRCodeDescriptor *)descriptor;
+            decodeData = BarcodeQRDecodeData(qrDescriptor);
+            top = BarcodeQRTop(decodeData, qrDescriptor);
         } else if (payload) {
-            NSString *mrcSym = [sym isEqualToString:symEAN13]    ? BarcodeSymbol("MRCSymbologyEAN13")
-                               : [sym isEqualToString:symEAN8]   ? BarcodeSymbol("MRCSymbologyEAN8")
-                               : [sym isEqualToString:symCode128] ? BarcodeSymbol("MRCSymbologyCode128")
-                                                                  : nil;
-            if (!mrcSym) continue;
-            mrc = [BarcodeOneDAttrs(mrcSym, payload) mutableCopy];
-            top = [mrc mutableCopy];
+            NSString *mrcSym = BarcodeMRCSymbology(symbology, symEAN13, symEAN8, symCode128);
+            if (!mrcSym) {
+                continue;
+            }
+            decodeData = [BarcodeOneDAttrs(mrcSym, payload) mutableCopy];
+            top = [decodeData mutableCopy];
         } else {
             continue;
         }
-        [out addObject:BarcodeObject(top, mrc, norm, corners)];
+        [out addObject:BarcodeObject(top, decodeData, normalized, corners)];
     }
-    gBarcodeDicts = out;
-    static int emptyRuns;
-    if (!out.count && ++emptyRuns <= 5) gScanGenDone = -1;   // the scene always has codes; retry before caching none
-    LOG(@"barcode detect (gen %ld): %lu codes %@ err=%@", gen, (unsigned long)out.count, names, e);
+
+    return out;
+}
+
+// the most times an empty scan is retried (BarcodeRetryEmptyScan)
+#define kBarcodeEmptyRetries 5
+
+// YES if the codes were found in another source or orientation than the current one: their payloads or positions are
+// wrong now
+static BOOL BarcodeStale(long srcGen, long orient) {
+    return srcGen != gScene.applied.gen || orient != gScene.scan.lastOrientation;
+}
+
+// After a scan of picture gen that found codeCount codes: YES to scan it again. The scene always has codes, and so
+// does a qr source, so an empty scan is retried: up to kBarcodeEmptyRetries times for each qr picture, and that many
+// times in all for the scene and the other sources.
+static BOOL BarcodeRetryEmptyScan(long gen, NSUInteger codeCount) {
+    BOOL isQR = gScene.applied.kind == kSourceQR;
+    if (isQR && gen != gBarcodes.emptyRetries.qrGen) {   // a new qr picture gets its own retries
+        gBarcodes.emptyRetries.qrGen = gen;
+        gBarcodes.emptyRetries.qrUsed = 0;
+    }
+    if (codeCount > 0) {
+        return NO;
+    }
+    int used = isQR ? ++gBarcodes.emptyRetries.qrUsed : ++gBarcodes.emptyRetries.sharedUsed;
+    return used <= kBarcodeEmptyRetries;
+}
+
+// Once, on the first scan: loads Vision, looks up its two classes and makes the scan queue.
+static void BarcodeVisionLoad(void) {
+    dlopen("/System/Library/Frameworks/Vision.framework/Vision", RTLD_NOW);
+    gBarcodes.visionRequest = objc_getClass("VNDetectBarcodesRequest");
+    gBarcodes.visionHandler = objc_getClass("VNImageRequestHandler");
+    // On 17.5 the add_image callback in client/vision.inc fires before Vision's classes are registered, so when we are
+    // the first to load Vision the revision pin would never be installed and detection would find 0 codes. Install it
+    // here too (unless SIMCAM_OFF_VISION_REVISION_PIN turns the pin off).
+    if (gBarcodes.visionRequest && VisionRevisionPinOn()) {
+        VisionInstall();
+    }
+    // drain Vision's autoreleased objects after each scan
+    dispatch_queue_attr_t serial = dispatch_queue_attr_make_with_autorelease_frequency(
+        DISPATCH_QUEUE_SERIAL, DISPATCH_AUTORELEASE_FREQUENCY_WORK_ITEM);
+    gBarcodes.scanQueue = dispatch_queue_create("simcam.barcodes", serial);
+}
+
+// Pump queue. Vision takes 60-140 ms on a 1080p frame in the simulator. Run inline, it stalled the preview twice a
+// second on a video source, so it runs on its own queue and the pump keeps sending the codes it has until it's done.
+// The first metadata samples go out with no codes, until the first scan is back.
+static void BarcodeDetectScene(CVPixelBufferRef buffer) {
+    long gen = atomic_load(&gScene.scan.gen);
+    if (gBarcodes.dicts && BarcodeStale(gBarcodes.foundGen, gBarcodes.foundOrientation)) {
+        gBarcodes.dicts = @[];
+    }
+    if (gBarcodes.scanBusy || (gen == gBarcodes.scanGenDone && gBarcodes.dicts)) {
+        return;
+    }
+
+    // The qr source's code is still being made (white frames): no codes yet, and no retry spent; its arrival bumps
+    // gScene.scan.gen.
+    if (gScene.applied.kind == kSourceQR && !gScene.applied.qrImage) {
+        gBarcodes.dicts = @[];
+        return;
+    }
+
+    gBarcodes.scanGenDone = gen;
+    dispatch_once(&gBarcodes.visionOnce, ^{
+        BarcodeVisionLoad();
+    });
+
+    if (!gBarcodes.visionRequest || !gBarcodes.visionHandler) {
+        LOG(@"barcode detect: Vision unavailable");
+        gBarcodes.dicts = @[];
+        return;
+    }
+
+    gBarcodes.scanBusy = YES;
+    long srcGen = gScene.applied.gen;
+    long orientation = gScene.scan.lastOrientation;
+    dispatch_queue_t pumpQ = gSessionLayer.pumpQueue;
+    CVPixelBufferRetain(buffer);
+    dispatch_async(gBarcodes.scanQueue, ^{
+        NSMutableArray *names = [NSMutableArray array];
+        NSError *error = nil;
+        NSArray *out = BarcodeVisionScan(buffer, names, &error);
+        CVPixelBufferRelease(buffer);
+        dispatch_async(pumpQ, ^{
+            gBarcodes.scanBusy = NO;
+            if (BarcodeStale(srcGen, orientation)) {   // the source or orientation changed while Vision ran: rescan
+                gBarcodes.scanGenDone = -1;
+                return;
+            }
+            gBarcodes.dicts = out;
+            gBarcodes.foundGen = srcGen;
+            gBarcodes.foundOrientation = orientation;
+            if (BarcodeRetryEmptyScan(gen, out.count)) {
+                gBarcodes.scanGenDone = -1;
+            }
+            LOG(@"barcode detect (gen %ld): %lu codes %@ err=%@", gen, (unsigned long)out.count, names, error);
+        });
+    });
 }

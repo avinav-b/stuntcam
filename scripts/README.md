@@ -10,6 +10,23 @@ Most of them need:
 
 Results go to `$SIMCAM_RESULTS` (`$SIMCAM_HOME/results`; `<clone>/results` links there).
 
+## Names from the project's history
+
+Some names in these scripts come from the milestone that added them (m5, m10, m12, ...). They are data that apps, logs
+and saved results already use, so they keep these names (docs/renames.md, "Not renamed"):
+- `dev.simcam.spike.m10canary` / `m10canary.app`: the canary (`canary/`).
+- `dev.simcam.spike.m10plain` / `m5app.app` (process `m5app`): the plain app (`fixtures/plain`). Its inputs are
+  `M5APP_*`, its log lines start `M5APP| `, and its golden mode's inputs and log tokens are `GF_*` and `GFH`,
+  `GFSTAT`, ... (golden frames).
+- `dev.simcam.spike.m12plain` / `p12.app` (process `p12`, "plain12"): plain-orient (`fixtures/plain-orient`), run by
+  `p12.sh`. Its inputs are `P12_*` and its log lines start `P12| `.
+- `dev.spike.m1bcam` / `m1bcam.app`: the React Native app (`fixtures/expo`, VisionCamera and expo-camera). Its log is
+  `m1b.log` and its lines start `M1B`. `dev.spike.m7cam`: the Flutter app (`fixtures/flutter`), with `M7_*` inputs,
+  `m7.log` and `M7| ` lines.
+- `cfg-m10.plist`: the camera profile the package ships.
+- `mutation-L<nn>` (activation.sh cases) and the ledger column of `mutation.sh`: `L<nn>` is the id of a fixed bug in
+  docs/ledger.md. The case turns that fix's `SIMCAM_OFF_*` switch on and passes if the test catches the bug.
+
 ## Sourced by the others
 
 - `env.sh` — `$SIMCAM_HOME` and its layout, staging of profiles, media and restore rules (simulator apps can't read a
@@ -28,6 +45,10 @@ Results go to `$SIMCAM_RESULTS` (`$SIMCAM_HOME/results`; `<clone>/results` links
   `SIMCAM_UDID_*` sims. Needs Xcode, CocoaPods and npm (expo), `FLUTTER_SDK` (flutter).
 - `package.sh` — builds the npm/Homebrew package and the GitHub action into `build/package/`; publishes nothing. Used by
   `.github/workflows/release.yml`.
+- `ci-verdicts.sh` — after `package.sh`: runs the packaged canary once per general iOS runtime installed here and
+  packages again with the plain passes as shipped verdicts (a confirmed fail fails it). Needs a scratch `SIMCAM_HOME`.
+  Used by `.github/workflows/release.yml`. `ci-verdicts-test.sh` tests its branches against stubs (bash, zsh, node; no
+  simulator).
 - `metro.sh` — starts or stops Metro for `fixtures/expo` (`$EXPO_PORT`, default 8099), for the `vc*`/`expo*` apps.
 
 ## Arm a simulator
@@ -66,6 +87,10 @@ Results go to `$SIMCAM_RESULTS` (`$SIMCAM_HOME/results`; `<clone>/results` links
 - `golden.sh` — captures and compares the hashes of every frame the scene, image and video sources deliver
   (docs/ARCHITECTURE.md).
 - `webcam-test.sh` — the webcam source end to end, with the camera helper (`helper/dev.sh`), on the 263 and 27 sims.
+- `qr-test.sh` — the `qr:` source end to end on a sim armed with `stuntcam up`: each text case through
+  `stuntcam source qr:`, every scanner of the plain, VisionCamera, expo and Flutter apps (`qr-check.py` compares the
+  exact text); the plain app in both camera positions and every orientation, the others back/portrait plus one
+  front/landscape run; and a live switch's latency.
 - `torture.sh` — many launches of the RN cycle modes through `cycle.sh`, optionally ending with `memcycle.sh`.
 - `matrix.sh` — every app once on one runtime through `run.sh`.
 - `loop.sh` — n launches cycling through the given apps (a soak); `final.sh` runs the vcfull loop and the 50-launch soak.

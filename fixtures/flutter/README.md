@@ -10,4 +10,4 @@ $F build ios --simulator --debug      # → build/ios/iphonesimulator/Runner.app
 ```
 
 `scripts/run.sh flutter[-<test>] <rt> boot <tag>` (from the repo root) runs one test (default `all`) and follows the
-app's log.
+app's log. `flutter-qr` reports the QR payloads mobile_scanner sees, for `scripts/qr-test.sh`.

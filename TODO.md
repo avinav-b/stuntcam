@@ -44,9 +44,14 @@ Follow-ups from importing the prototype (spikes m1b–m12) into this repo.
       entry skips the shipped verdict; shipped verdicts record the packager's Xcode; action.yml fixes (SIGPIPE, per-run cache
       key, udid default, quoted args, version from VERSION); `build.sh` uses `pwd -P`; `grep -F` leak check; module path
       `github.com/avinav-b/stuntcam/cli`; formula and action generated into `build/package/`.
+- [ ] `verify` on iOS 27.1 (24A94425) is `inconclusive(device: iOS 27.1 supports no iPhone Pro device type)` on the
+      `xcode-27` runner with Xcode 27.0 selected (release dry run, 2026-11-21), so 27.1 ships no verdict and an `up` there
+      warns and arms unverified every time. `proPhonesNewestFirst` only takes `iPhone N Pro`; e64 used `iPhone Duo`.
 - [ ] **Still before publishing:** run `brew install --build-from-source` + `brew test` of the generated formula once in a
-      throwaway prefix or CI (e52 only simulated the relinking with `install_name_tool`/`codesign` on copies); ship verdicts
-      only from the release-gate run on the release commit (`package.sh --verdicts <gate dir>`); the action's first run on
+      throwaway prefix or CI (e52 only simulated the relinking with `install_name_tool`/`codesign` on copies); shipped verdicts
+      now come from the release build's own canary runs on the runner's 27.x runtimes (`scripts/ci-verdicts.sh`;
+      release dry run 2026-11-21: 27.0 and 27.2 plain passes, 133 s each, read back
+      as shipped; 27.1 inconclusive, see above); the action's first run on
       a hosted `macos-26` runner (the fresh-runner `stuntcam-ci` path and actions/cache restore/save were never run);
       accounts, public repo, URLs, notarization (measured internally, W4 e51 "What remains").
 - [x] Trace follow-ups (review), done in w4 e54: the dir is picked when the camera arms (L69); only the first

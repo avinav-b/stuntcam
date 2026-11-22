@@ -4,7 +4,7 @@ One entry per bug found so far (spikes m2–m12, W1, W2). Each entry names what 
 needs every entry guarded (no **G**) and, where the guard is a canary check, a mutation variant that the canary flags
 (the mutation suite, `scripts/mutation.sh`).
 
-Guard kinds: **C** canary check (runs on every verdict, `canary/main.swift` stage: check) · **F** fixture/matrix check
+Guard kinds: **C** canary check (runs on every verdict, `canary/` stage: check) · **F** fixture/matrix check
 (`scripts/matrix.sh`, `orient-*.sh`, `features.sh`) · **X** Xcode/test harness (spike m11's `xt.sh`, Xcode GUI runs) · **T** sanitizer or
 torture run (`scripts/torture.sh`) · **P** preflight gate (`engine/src/core/preflight.inc`) · **G** gap: no guard yet.
 

@@ -2,352 +2,541 @@
 // Part of simcam.m (single translation unit; included in order, after core/crash_handler.inc): the sentinel's
 // load-time state and its markers (latched-<build>, latched-motion-<build>, preflight-fail-<build>): paths, the
 // load-time stat()s, writes and prunes.
-// ---- load-time state, markers, the record queue's writer ----
-// Markers (mtime = until; one past its until is ignored and deleted by the next prepare):
-//   <state>/<bundle>/latched-<build>         the latched camera features; read at load: the camera starts STOCK, no
-//                                            prepare, and CoreMotion is stock
-//   <state>/<bundle>/latched-motion-<build>  `motion`: read at load by motion only; the camera is unaffected
-//   <state>/preflight-fail-<build>           a real preflight failure, until +24 h: read at load by motion only (the
-//                                            camera always runs its own preflight); a passing preflight unlinks it
-// Every location is covered twice: SIMCAM_STATE_DIR and the container-tmp fallback (17.5, where the state dir can't be
-// written).
-static int gSCSentinel = 1;                    // SIMCAM_SENTINEL: 0 off, 1 on, 2 clear
-static char gSCBundle[256] = "unknown";
-static char gSCDir[2][1024], gSCMarker[2][1100], gSCPfPath[2][1100], gSCMarkerAtLoad[1100];
-static char gSCMotionMarker[2][1100];          // <dir>/latched-motion-<build>, both locations
-static char gSCMotionStockAt[1100];            // the marker that made CoreMotion stock at load ("" = the stand-in)
-static time_t gSCMotionStockUntil;             // its until (st_mtime) at that load-time stat
-static ino_t gSCMotionStockIno;                // and its inode: the stock line reads the features only from this one
-// what it says if it is gone by the stock line: "camera" | "motion" | "preflight failed"
-static const char *gSCMotionStockKind;
-static BOOL gSCClearedAtLoad;
-static _Atomic(const char *) gSCPathPub;       // published by PREPARE 1 (release) for the record queue
-static _Atomic int gSCActPub;
-static _Atomic int gActRecordedAct;            // the activation number the record queue's timeout line used (0 = none)
-static char gSCLatchMsg[600];                  // PREPARE 1's latch line, printed through the record queue
-static int SCMkdirP(const char *path) {
-    char b[1024];
-    snprintf(b, sizeof b, "%s", path);
-    for (char *p = b + 1; *p; p++) {
-        if (*p == '/') {
-            *p = 0;
-            mkdir(b, 0755);
-            *p = '/';
-        }
-    }
-    return (mkdir(b, 0755) == 0 || errno == EEXIST) ? 0 : -1;
-}
-static void SCTmpRoot(char *out, size_t cap) {   // <container tmp>/simcam-state
-    const char *t = getenv("TMPDIR");
-    char b[1024];
-    if (t && *t) snprintf(b, sizeof b, "%s", t);
-    else snprintf(b, sizeof b, "%s", NSTemporaryDirectory().fileSystemRepresentation);
-    size_t l = strlen(b);
-    while (l > 1 && b[l - 1] == '/') b[--l] = 0;
-    snprintf(out, cap, "%s/simcam-state", b);
-}
-// at load: no I/O apart from the marker stat()s (and the explicit clear below)
-static void SCLoadInit(void) {
-    const char *sw = getenv(ENV_SENTINEL);
-    gSCSentinel = sw && sw[0] == '0' ? 0 : sw && !strcmp(sw, "clear") ? 2 : 1;
-    gSCScale = (dlsym(RTLD_DEFAULT, "__tsan_init") || dlsym(RTLD_DEFAULT, "__asan_init")) ? 10 : 1;
-    Dl_info di;
-    if (dladdr((const void *)SCLoadInit, &di) && di.dli_fname) {   // build = the content-hash dir of our dylib
-        const char *dirEnd = strrchr(di.dli_fname, '/');
-        if (dirEnd) {
-            const char *dirStart = dirEnd;
-            while (dirStart > di.dli_fname && dirStart[-1] != '/') dirStart--;
-            snprintf(gSCBuild, sizeof gSCBuild, "%.*s", (int)(dirEnd - dirStart), dirStart);
-        }
-    }
-    CFBundleRef mainBundle = CFBundleGetMainBundle();
-    CFStringRef bundleID = mainBundle ? CFBundleGetIdentifier(mainBundle) : NULL;
-    if (bundleID) CFStringGetCString(bundleID, gSCBundle, sizeof gSCBundle, kCFStringEncodingUTF8);
-    const char *stateDir = getenv(ENV_STATE_DIR);
-    char tmp[1024];
-    SCTmpRoot(tmp, sizeof tmp);
-    if (stateDir && *stateDir) {
-        snprintf(gSCDir[0], sizeof gSCDir[0], "%s/%s", stateDir, gSCBundle);
-        snprintf(gSCPfPath[0], sizeof gSCPfPath[0], "%s/preflight-fail-%s", stateDir, gSCBuild);
-    }
-    snprintf(gSCDir[1], sizeof gSCDir[1], "%s/%s", tmp, gSCBundle);
-    snprintf(gSCPfPath[1], sizeof gSCPfPath[1], "%s/preflight-fail-%s", tmp, gSCBuild);
-    for (int i = 0; i < 2; i++) {
-        if (gSCDir[i][0]) {
-            snprintf(gSCMarker[i], sizeof gSCMarker[i], "%s/latched-%s", gSCDir[i], gSCBuild);
-            snprintf(gSCMotionMarker[i], sizeof gSCMotionMarker[i], "%s/latched-motion-%s", gSCDir[i], gSCBuild);
-        }
-    }
+//
+// Provides: SentinelLoadInit, SentinelLatchMarkerValidAtLoad, SentinelMotionStockAtLoad, SentinelClearAtLoad,
+//           SentinelPreflightMarker (core/lazy.inc)
+//           SentinelCountStrikes, SentinelMarkersUpdate (core/sentinel_activate.inc)
+//           SentinelMkdirP (core/events_file.inc, core/sentinel_activate.inc, core/trace.inc)
+// Owns:     nothing shared (it sets the sentinel's load-time fields, core/sentinel.h, at load).
+// Uses:     core/act.inc, core/safety.inc, core/crash_handler.inc
+#include "sentinel.h"
+#include "activation.h"
+
+// ---- load-time state and markers ----
+// A marker's mtime is its until. A marker past its until is ignored, and the next PREPARE deletes it.
+//   <state>/<bundle>/latched-<build>         the latched camera features. Read at load: the camera starts STOCK, with
+//                                            no PREPARE, and CoreMotion is stock.
+//   <state>/<bundle>/latched-motion-<build>  `motion`. Read at load by motion only; the camera is unaffected.
+//   <state>/preflight-fail-<build>           a real preflight failure, valid for 24 h. Read at load by motion only
+//                                            (the camera always runs its own preflight); a passing preflight unlinks
+//                                            it.
+// Every location exists twice: under SIMCAM_STATE_DIR and under the container-tmp fallback (for iOS 17.5, where the
+// state dir can't be written).
+// The modes, the two locations (kStateDir*) and the paths in each are declared in core/sentinel.h, in gSentinel.paths;
+// what the load-time stat()s found is in gSentinel.atLoad.
+#define kSentinelMarkerTempPathBytes 1300    // a marker's temp file: its directory plus ".<name>.tmp-<pid>"
+#define kSentinelLatchedPrefixLen 8          // strlen("latched-")
+#define kSentinelLatchedMotionPrefixLen 15   // strlen("latched-motion-")
+#define kSentinelPreflightFailPrefixLen 15   // strlen("preflight-fail-")
+#define kSentinelStaleTempSeconds 60         // a marker temp file this old was left by a process that died mid-write
+
+// the sentinel's off switches and test faults, read once at load (SentinelLoadInit)
+static void SentinelParseTestEnv(void) {
     gOffHandlerMotionMarker = getenv(ENV_OFF_HANDLER_MOTION_MARKER) != NULL;
     gOffMarkerRename = getenv(ENV_OFF_MARKER_RENAME) != NULL;
     const char *slowMarker = getenv(ENV_TEST_SLOW_MARKER_MS);
-    if (slowMarker) gTestSlowMarkerMs = atol(slowMarker);
+    if (slowMarker) {
+        gTestSlowMarkerMs = atol(slowMarker);
+    }
     const char *prunePause = getenv(ENV_TEST_PRUNE_PAUSE_MS);
-    if (prunePause) gTestPrunePauseMs = atol(prunePause);
+    if (prunePause) {
+        gTestPrunePauseMs = atol(prunePause);
+    }
 }
-static BOOL SCMarkerValidAtLoad(void) {
-    if (gSCSentinel != 1) return NO;
+
+static int SentinelMkdirP(const char *path) {
+    char partial[kSentinelDirPathBytes];
+    snprintf(partial, sizeof partial, "%s", path);
+    for (char *cursor = partial + 1; *cursor; cursor++) {
+        if (*cursor == '/') {
+            *cursor = 0;
+            (void)mkdir(partial, 0755);   // usually there already; a real failure shows when the file is opened
+            *cursor = '/';
+        }
+    }
+    return (mkdir(partial, 0755) == 0 || errno == EEXIST) ? 0 : -1;
+}
+
+static void SentinelTmpRoot(char *out, size_t cap) {   // <container tmp>/simcam-state
+    const char *tmpDir = getenv("TMPDIR");
+    char root[kSentinelDirPathBytes];
+    if (tmpDir && *tmpDir) {
+        snprintf(root, sizeof root, "%s", tmpDir);
+    } else {
+        snprintf(root, sizeof root, "%s", NSTemporaryDirectory().fileSystemRepresentation);
+    }
+    size_t len = strlen(root);
+    while (len > 1 && root[len - 1] == '/') {
+        root[--len] = 0;
+    }
+    snprintf(out, cap, "%s/simcam-state", root);
+}
+
+// at load: no I/O apart from the marker stat()s (and the explicit clear below)
+static void SentinelLoadInit(void) {
+    // SIMCAM_SENTINEL=0 turns off the ops, the watchdog and the sentinel; SIMCAM_SENTINEL=clear appends a clear line,
+    // which forgets the past (core/sentinel_activate.inc writes it)
+    const char *mode = getenv(ENV_SENTINEL);
+    if (mode && mode[0] == '0') {
+        gSentinel.mode = kSentinelModeOff;
+    } else if (mode && !strcmp(mode, "clear")) {
+        gSentinel.mode = kSentinelModeClear;
+    } else {
+        gSentinel.mode = kSentinelModeOn;
+    }
+    // the sanitizers slow everything down: op timeouts are ten times longer under them
+    gSentinel.scale = (dlsym(RTLD_DEFAULT, "__tsan_init") || dlsym(RTLD_DEFAULT, "__asan_init")) ? 10 : 1;
+    Dl_info selfInfo;
+
+    // the build is the name of the content-hash directory our dylib is in
+    if (dladdr((const void *)SentinelLoadInit, &selfInfo) && selfInfo.dli_fname) {
+        const char *dirEnd = strrchr(selfInfo.dli_fname, '/');
+        if (dirEnd) {
+            const char *dirStart = dirEnd;
+            while (dirStart > selfInfo.dli_fname && dirStart[-1] != '/') {
+                dirStart--;
+            }
+            snprintf(gSentinel.build, sizeof gSentinel.build, "%.*s", (int)(dirEnd - dirStart), dirStart);
+        }
+    }
+
+    CFBundleRef mainBundle = CFBundleGetMainBundle();
+    CFStringRef bundleID = mainBundle ? CFBundleGetIdentifier(mainBundle) : NULL;
+    if (bundleID) {
+        CFStringGetCString(bundleID, gSentinel.bundle, sizeof gSentinel.bundle, kCFStringEncodingUTF8);
+    }
+    const char *stateDir = getenv(ENV_STATE_DIR);
+    char tmpRoot[kSentinelDirPathBytes];
+    SentinelTmpRoot(tmpRoot, sizeof tmpRoot);
+
+    if (stateDir && *stateDir) {
+        snprintf(gSentinel.paths.eventsDirs[kStateDirState], sizeof gSentinel.paths.eventsDirs[kStateDirState], "%s/%s",
+                 stateDir, gSentinel.bundle);
+        snprintf(gSentinel.paths.preflightFail[kStateDirState], sizeof gSentinel.paths.preflightFail[kStateDirState],
+                 "%s/preflight-fail-%s", stateDir, gSentinel.build);
+    }
+
+    snprintf(gSentinel.paths.eventsDirs[kStateDirTmp], sizeof gSentinel.paths.eventsDirs[kStateDirTmp], "%s/%s",
+             tmpRoot, gSentinel.bundle);
+    snprintf(gSentinel.paths.preflightFail[kStateDirTmp], sizeof gSentinel.paths.preflightFail[kStateDirTmp],
+             "%s/preflight-fail-%s", tmpRoot, gSentinel.build);
+    for (int i = 0; i < kStateDirCount; i++) {
+        if (gSentinel.paths.eventsDirs[i][0]) {
+            snprintf(gSentinel.paths.latchMarker[i], sizeof gSentinel.paths.latchMarker[i], "%s/latched-%s",
+                     gSentinel.paths.eventsDirs[i], gSentinel.build);
+            snprintf(gSentinel.paths.motionMarker[i], sizeof gSentinel.paths.motionMarker[i], "%s/latched-motion-%s",
+                     gSentinel.paths.eventsDirs[i], gSentinel.build);
+        }
+    }
+
+    SentinelParseTestEnv();
+}
+
+static BOOL SentinelLatchMarkerValidAtLoad(void) {
+    if (gSentinel.mode != kSentinelModeOn) {
+        return NO;
+    }
     time_t now = time(NULL);
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < kStateDirCount; i++) {
         struct stat st;
-        if (gSCMarker[i][0] && stat(gSCMarker[i], &st) == 0 && st.st_mtime > now) {
-            snprintf(gSCMarkerAtLoad, sizeof gSCMarkerAtLoad, "%s", gSCMarker[i]);
+        if (gSentinel.paths.latchMarker[i][0] && stat(gSentinel.paths.latchMarker[i], &st) == 0 && st.st_mtime > now) {
+            snprintf(gSentinel.atLoad.latchMarker, sizeof gSentinel.atLoad.latchMarker, "%s",
+                     gSentinel.paths.latchMarker[i]);
             return YES;
         }
     }
     return NO;
 }
-// CoreMotion is decided once, at load, from markers only. Any valid one of this build's latched-<build> (a
-// camera latch), latched-motion-<build> or preflight-fail-<build>, in either location, with the sentinel on and no
-// clear, makes CoreMotion stock for the process. Markers this process writes later can't change it (a camera activation
-// that fails in this launch keeps the stand-in for the launch). SIMCAM_OFF_MOTION_MARKERS=1 (ledger L58) ignores them.
-static BOOL SCMotionStockAtLoad(void) {
-    if (gSCSentinel != 1 || getenv(ENV_OFF_MOTION_MARKERS)) return NO;
+
+// CoreMotion is decided once, at load, from markers only. Any valid one of this build's latched-<build> (a camera
+// latch), latched-motion-<build> or preflight-fail-<build>, in either location, with the sentinel on and no clear,
+// makes CoreMotion stock for the process. Markers this process writes later can't change it (a camera activation that
+// fails in this launch keeps the stand-in for the launch). SIMCAM_OFF_MOTION_MARKERS=1 ignores them.
+static BOOL SentinelMotionStockAtLoad(void) {
+    if (gSentinel.mode != kSentinelModeOn || !MotionMarkersOn()) {
+        return NO;
+    }
     time_t now = time(NULL);
-    const char *candidates[6] = {gSCMarker[0], gSCMarker[1], gSCMotionMarker[0], gSCMotionMarker[1], gSCPfPath[0],
-                                 gSCPfPath[1]};
+
+    // two of each kind, one per location: candidates 0-1 are camera latches, 2-3 motion latches, 4-5 preflight failures
+    const char *candidates[6] = {gSentinel.paths.latchMarker[0],   gSentinel.paths.latchMarker[1],
+                                 gSentinel.paths.motionMarker[0],  gSentinel.paths.motionMarker[1],
+                                 gSentinel.paths.preflightFail[0], gSentinel.paths.preflightFail[1]};
     for (int i = 0; i < 6; i++) {
         struct stat st;
         if (candidates[i][0] && stat(candidates[i], &st) == 0 && st.st_mtime > now) {
-            snprintf(gSCMotionStockAt, sizeof gSCMotionStockAt, "%s", candidates[i]);
-            // kept for the stock line: by the first motion call a passing preflight or PREPARE 1 may have unlinked the
-            // marker
-            gSCMotionStockUntil = st.st_mtime;
-            gSCMotionStockIno = st.st_ino;
-            gSCMotionStockKind = i < 2 ? "camera" : i < 4 ? "motion" : "preflight failed";
+            snprintf(gSentinel.atLoad.motionStockMarker, sizeof gSentinel.atLoad.motionStockMarker, "%s",
+                     candidates[i]);
+            // kept for the stock line: by the first motion call, a passing preflight or the sentinel step may have
+            // unlinked the marker
+            gSentinel.atLoad.motionStockUntil = st.st_mtime;
+            gSentinel.atLoad.motionStockInode = st.st_ino;
+            if (i < 2) {
+                gSentinel.atLoad.motionStockKind = "camera";
+            } else if (i < 4) {
+                gSentinel.atLoad.motionStockKind = "motion";
+            } else {
+                gSentinel.atLoad.motionStockKind = "preflight failed";
+            }
             return YES;
         }
     }
+
     return NO;
 }
-static void SCUnlinkLatchMarkers(const char *dir, const char *keepBuild) {   // every latched-* in dir (but keepBuild's)
-    DIR *d = opendir(dir);
-    if (!d) return;
-    struct dirent *e;
-    while ((e = readdir(d))) {
-        if (strncmp(e->d_name, "latched-", 8) || (keepBuild && !strcmp(e->d_name + 8, keepBuild))) continue;
-        char p[1400];
-        snprintf(p, sizeof p, "%s/%s", dir, e->d_name);
-        unlink(p);
+
+// unlinks every latched-* marker in dir, except keepBuild's when keepBuild is set
+static void SentinelUnlinkLatchMarkers(const char *dir, const char *keepBuild) {
+    DIR *dirStream = opendir(dir);
+    if (!dirStream) {
+        return;
     }
-    closedir(d);
+    struct dirent *entry;
+    while ((entry = readdir(dirStream))) {
+        if (strncmp(entry->d_name, "latched-", kSentinelLatchedPrefixLen)) {
+            continue;
+        }
+        if (keepBuild && !strcmp(entry->d_name + kSentinelLatchedPrefixLen, keepBuild)) {
+            continue;
+        }
+        char path[kSentinelEntryPathBytes];
+        snprintf(path, sizeof path, "%s/%s", dir, entry->d_name);
+        unlink(path);
+    }
+    closedir(dirStream);
 }
-// SIMCAM_SENTINEL=clear at load: an explicit user action, so I/O at load is acceptable. Appends the clear line (also
-// for an app that never runs prepare: a motion-only app) and unlinks the bundle's markers and this build's
-// preflight-fail.
-static void SCClearAtLoad(void) {
-    if (gSCSentinel != 2) return;
-    for (int i = 0; i < 2; i++) {
-        if (!gSCDir[i][0] || SCMkdirP(gSCDir[i])) continue;
-        char p[1100];
-        snprintf(p, sizeof p, "%s/events.log", gSCDir[i]);
-        int fd = open(p, O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC, 0644);
-        if (fd < 0) continue;
-        char b[256];
-        int n = SCFormat(b, sizeof b, 0, "clear", "-", "SIMCAM_SENTINEL=clear", -1);
-        // best effort: a failed write loses the clear line (PREPARE 1 then reads the older records); the markers are
-        // unlinked below either way
-        (void)write(fd, b, n);
+
+// SIMCAM_SENTINEL=clear at load is an explicit user action, so I/O at load is acceptable. It appends the clear line
+// (also for an app that never runs PREPARE, such as a motion-only app) and unlinks the bundle's markers and this
+// build's preflight-fail marker.
+static void SentinelClearAtLoad(void) {
+    if (gSentinel.mode != kSentinelModeClear) {
+        return;
+    }
+
+    for (int i = 0; i < kStateDirCount; i++) {
+        if (!gSentinel.paths.eventsDirs[i][0] || SentinelMkdirP(gSentinel.paths.eventsDirs[i])) {
+            continue;
+        }
+        char path[kSentinelPathBytes];
+        snprintf(path, sizeof path, "%s/events.log", gSentinel.paths.eventsDirs[i]);
+        int fd = open(path, O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC, 0644);
+        if (fd < 0) {
+            continue;
+        }
+        char line[kSentinelEventLineBytes];
+        int len = SentinelFormatEvent(line, sizeof line, 0, "clear", "-", "SIMCAM_SENTINEL=clear", -1);
+        // Best effort: a failed write loses the clear line (the sentinel step then reads the older records). The
+        // markers are unlinked below either way.
+        (void)write(fd, line, len);
         close(fd);
-        gSCClearedAtLoad = YES;
+        gSentinel.atLoad.cleared = YES;
         break;
     }
-    for (int i = 0; i < 2; i++) {
-        if (gSCDir[i][0]) SCUnlinkLatchMarkers(gSCDir[i], NULL);
-        if (gSCPfPath[i][0]) unlink(gSCPfPath[i]);
+
+    for (int i = 0; i < kStateDirCount; i++) {
+        if (gSentinel.paths.eventsDirs[i][0]) {
+            SentinelUnlinkLatchMarkers(gSentinel.paths.eventsDirs[i], NULL);
+        }
+        if (gSentinel.paths.preflightFail[i][0]) {
+            unlink(gSentinel.paths.preflightFail[i]);
+        }
     }
 }
-// A marker is written to "<dir>/.<name>.tmp-<pid>", its mtime set to the until, then renamed
-// into place. Written in place, it would exist with mtime = now between open(O_TRUNC) and futimens, and another
-// process's PREPARE 1 prune (st_mtime <= now) could unlink it. Temp names start with '.', so no prune, load-time stat
-// or CLI listing matches them. SIMCAM_OFF_MARKER_RENAME=1 (ledger L64's mutant) writes in place;
-// SIMCAM_TEST_SLOW_MARKER_MS=<n> pauses n ms after the content is written, before the until is set (pf-prune-race
-// widens the window with it).
-static void SCSlowMarker(const char *path) {
-    if (gTestSlowMarkerMs <= 0) return;
+
+// A marker is written to "<dir>/.<name>.tmp-<pid>", its mtime is set to the until, and then it is renamed into place.
+// Written in place, it would exist with mtime = now between open(O_TRUNC) and futimens, and another process's prune
+// (the sentinel step's st_mtime <= now) could unlink it. Temp names start with '.', so no prune, load-time stat or CLI
+// listing matches them. SIMCAM_OFF_MARKER_RENAME=1 writes in place. SIMCAM_TEST_SLOW_MARKER_MS=<n> pauses n ms after
+// the content is written, before the until is set (the pf-prune-race test widens the window with it).
+static void SentinelSlowMarker(const char *path) {
+    if (gTestSlowMarkerMs <= 0) {
+        return;
+    }
     fprintf(stderr, "[simcam %d] SIMCAM_TEST_SLOW_MARKER_MS: marker write paused %ld ms (%s)\n", getpid(),
             gTestSlowMarkerMs, path);
-    ActSleepMs(gTestSlowMarkerMs);
+    SlicedSleepMs(gTestSlowMarkerMs);
 }
-static BOOL SCWriteMarker(const char *path, const char *content, time_t until) {
-    char dir[1100];
+
+static BOOL SentinelWriteMarker(const char *path, const char *content, time_t until) {
+    char dir[kSentinelPathBytes];
     snprintf(dir, sizeof dir, "%s", path);
     char *slash = strrchr(dir, '/');
+
     if (slash) {
         *slash = 0;
-        SCMkdirP(dir);
+        SentinelMkdirP(dir);
     }
-    char tmp[1300];
+
+    char tmp[kSentinelMarkerTempPathBytes];
     const char *base = slash ? slash + 1 : path;
-    if (gOffMarkerRename) snprintf(tmp, sizeof tmp, "%s", path);
-    else snprintf(tmp, sizeof tmp, "%s/.%s.tmp-%d", slash ? dir : ".", base, getpid());
+    if (gOffMarkerRename) {
+        snprintf(tmp, sizeof tmp, "%s", path);
+    } else {
+        snprintf(tmp, sizeof tmp, "%s/.%s.tmp-%d", slash ? dir : ".", base, getpid());
+    }
     int fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
-    if (fd < 0) return NO;
-    // a failed write is not a failed marker: it latches by its name and mtime (set below). Its content is what
+    if (fd < 0) {
+        return NO;
+    }
+
+    // A failed write is not a failed marker: the marker latches by its name and mtime (set below). Its content is what
     // `stuntcam sentinel` and `status` show (the CLI derives the latch's effect from it), so a short write only
-    // degrades that report
+    // degrades that report.
     (void)write(fd, content, strlen(content));
-    SCSlowMarker(path);
+    SentinelSlowMarker(path);
     struct timespec ts[2] = {{until, 0}, {until, 0}};
-    futimens(fd, ts);
+    // a marker whose until couldn't be set reads as expired: the latch is lost early, never held too long
+    (void)futimens(fd, ts);
     close(fd);
-    if (gOffMarkerRename) return YES;
+    if (gOffMarkerRename) {
+        return YES;
+    }
+
     if (rename(tmp, path) != 0) {
         unlink(tmp);
         return NO;
     }
+
     return YES;
 }
-// a temp file left by a process that died mid-write: removed once it is a minute old (its mtime is the until, so ctime)
-static void SCPruneTmp(const char *dir, const char *name, long now) {
-    if (name[0] != '.' || !strstr(name, ".tmp-") ||
-        (strncmp(name + 1, "latched-", 8) && strncmp(name + 1, "preflight-fail-", 15)))
-        return;
-    char p[1400];
-    snprintf(p, sizeof p, "%s/%s", dir, name);
+
+// A temp file left by a process that died mid-write is removed once it is a minute old. Its mtime is the until, so its
+// age is read from ctime.
+static void SentinelPruneTmp(const char *dir, const char *name, long now) {
+    if (name[0] != '.' || !strstr(name, ".tmp-")) {
+        return;   // not a temp file
+    }
+    BOOL latchedTemp = !strncmp(name + 1, "latched-", kSentinelLatchedPrefixLen);
+    if (!latchedTemp && strncmp(name + 1, "preflight-fail-", kSentinelPreflightFailPrefixLen)) {
+        return;   // not a marker's temp file
+    }
+    char path[kSentinelEntryPathBytes];
+    snprintf(path, sizeof path, "%s/%s", dir, name);
     struct stat st;
-    if (stat(p, &st) == 0 && st.st_ctime < now - 60 && unlink(p) == 0)
-        LOG(@"sentinel: removed a stale marker temp file %s", p);
+    if (stat(path, &st) == 0 && st.st_ctime < now - kSentinelStaleTempSeconds && unlink(path) == 0) {
+        LOG(@"sentinel: removed a stale marker temp file %s", path);
+    }
 }
-// Prune one expired marker: a stat, then an unlink by path, could delete a fresh marker that another
-// process renamed over the expired one in between. So the file is renamed aside first (".<name>.tmp-prune-<pid>": a
-// temp name, which no reader matches and SCPruneTmp removes after 60 s if this process dies here), re-checked on the
-// renamed inode, and unlinked only if it is still expired; a fresh one goes back (RENAME_EXCL: if a newer marker landed
-// at the path meanwhile, that one stays and ours goes). Remaining window: while it is aside (a few syscalls), a fresh
-// marker is missing from its path, so another process's load-time stat in that instant reads "no marker" for one
-// launch.
-// SIMCAM_TEST_PRUNE_PAUSE_MS=<n> (activation.sh pf-prune-kept): pauses n ms after the caller's stat found the marker
+
+// Prunes one expired marker. A stat followed by an unlink by path could delete a fresh marker that another process
+// renamed over the expired one in between. So the file is first renamed aside, to ".<name>.tmp-prune-<pid>" (a temp
+// name, which no reader matches and which SentinelPruneTmp removes after 60 s if this process dies here). It is then
+// re-checked on the renamed inode and unlinked only if it is still expired. A fresh one goes back with RENAME_EXCL:
+// if a newer marker landed at the path meanwhile, that one stays and the one set aside goes. The remaining window:
+// while it is aside (a few syscalls) a fresh marker is missing from its path, so another process's load-time stat in
+// that instant reads "no marker" for one launch.
+// SIMCAM_TEST_PRUNE_PAUSE_MS=<n> (activation.sh pf-prune-kept) pauses n ms after the caller's stat found the marker
 // expired, before the rename, so a test can rename a fresh marker over it in between (the "kept" branch).
-static BOOL SCPruneExpired(const char *dir, const char *name, const char *p, long now) {
-    char aside[1400];
+static BOOL SentinelPruneExpired(const char *dir, const char *name, const char *path, long now) {
+    char aside[kSentinelEntryPathBytes];
     snprintf(aside, sizeof aside, "%s/.%s.tmp-prune-%d", dir, name, getpid());
     if (gTestPrunePauseMs > 0) {
-        fprintf(stderr, "[simcam %d] SIMCAM_TEST_PRUNE_PAUSE_MS: prune of %s paused %ld ms\n", getpid(), p,
+        fprintf(stderr, "[simcam %d] SIMCAM_TEST_PRUNE_PAUSE_MS: prune of %s paused %ld ms\n", getpid(), path,
                 gTestPrunePauseMs);
-        ActSleepMs(gTestPrunePauseMs);
+        SlicedSleepMs(gTestPrunePauseMs);
     }
-    if (rename(p, aside) != 0) return NO;
+    if (rename(path, aside) != 0) {
+        return NO;
+    }
     struct stat st;
     if (stat(aside, &st) == 0 && st.st_mtime <= now) {
         unlink(aside);
         return YES;
     }
-    if (renamex_np(aside, p, RENAME_EXCL) != 0) unlink(aside);
-    LOG(@"sentinel: %s was re-written while being pruned: kept", p);
+    if (renamex_np(aside, path, RENAME_EXCL) != 0) {
+        unlink(aside);
+    }
+    LOG(@"sentinel: %s was re-written while being pruned: kept", path);
     return NO;
 }
-// PREPARE 3: a real preflight failure writes preflight-fail-<build> (until +24 h) next to the events.log in use, as the
-// latch marker; a passing preflight unlinks it in both locations
-static void SCPreflightMarker(BOOL passed, const char *what) {
-    if (gSCSentinel == 0) return;
-    for (int i = 0; i < 2; i++) {
-        if (!gSCPfPath[i][0]) continue;
-        if (passed) unlink(gSCPfPath[i]);
-        else if (gSCIdx < 0 || i == gSCIdx) {
+
+// PREPARE's preflight step: a real preflight failure writes preflight-fail-<build> (valid for 24 h) next to the
+// events.log in use, like the latch marker; a passing preflight unlinks it in both locations.
+static void SentinelPreflightMarker(BOOL passed, const char *what) {
+    if (gSentinel.mode == kSentinelModeOff) {
+        return;
+    }
+    for (int i = 0; i < kStateDirCount; i++) {
+        if (!gSentinel.paths.preflightFail[i][0]) {
+            continue;
+        }
+        if (passed) {
+            unlink(gSentinel.paths.preflightFail[i]);
+        } else if (gSentinel.events.dirIndex < 0 || i == gSentinel.events.dirIndex) {
             char content[300];
             snprintf(content, sizeof content, "%s\n", what);
             // not retried: the next activation's preflight fails again and writes it
-            (void)SCWriteMarker(gSCPfPath[i], content, time(NULL) + SC_WINDOW_SECONDS);
+            (void)SentinelWriteMarker(gSentinel.paths.preflightFail[i], content, time(NULL) + kSentinelWindowSeconds);
         }
     }
 }
-// counted strikes of one build in the parsed past: the 20-activation / 24 h window. until[i] = the second-newest
-// counted event + 24 h (the latch holds while two are in the window).
-static void SCCountStrikes(NSArray *past, NSString *build, long now, int act, int counts[SC_NFEAT],
-                           long until[SC_NFEAT], long *newest) {
-    long newestEpoch[SC_NFEAT] = {0}, secondEpoch[SC_NFEAT] = {0};
-    for (int i = 0; i < SC_NFEAT; i++) {
+
+// Counts one build's strikes in the parsed past, within the window of 20 activations and 24 h. until[i] is the
+// second-newest counted event plus 24 h (the latch holds while two strikes are in the window).
+static void SentinelCountStrikes(NSArray *past, NSString *build, long now, int act, int counts[kFeatureCount],
+                                 long until[kFeatureCount], long *newest) {
+    long newestEpoch[kFeatureCount] = {0};
+    long secondEpoch[kFeatureCount] = {0};
+
+    for (int i = 0; i < kFeatureCount; i++) {
         counts[i] = 0;
         until[i] = 0;
     }
+
     for (NSArray *fields in past) {
-        NSString *kind = fields[2];
-        if (!([kind isEqual:@"crash"] || [kind isEqual:@"hang"])) continue;
-        if (![fields[4] isEqual:build]) continue;
-        long epoch = [fields[0] longLongValue];
-        if ([fields[1] intValue] <= act - SC_WINDOW_ACTIVATIONS || epoch < now - SC_WINDOW_SECONDS) continue;
-        int fi = SCFeatureIndex([fields[3] UTF8String]);
-        counts[fi]++;
-        if (epoch >= newestEpoch[fi]) {
-            secondEpoch[fi] = newestEpoch[fi];
-            newestEpoch[fi] = epoch;
-        } else if (epoch > secondEpoch[fi]) secondEpoch[fi] = epoch;
+        NSString *kind = fields[kEventFieldKind];
+        if (!([kind isEqual:@"crash"] || [kind isEqual:@"hang"])) {
+            continue;
+        }
+        if (![fields[kEventFieldBuild] isEqual:build]) {
+            continue;
+        }
+        long epoch = [fields[kEventFieldEpoch] longLongValue];
+        // outside the window of the last kSentinelWindowActivations activations and kSentinelWindowSeconds
+        if ([fields[kEventFieldActivation] intValue] <= act - kSentinelWindowActivations ||
+            epoch < now - kSentinelWindowSeconds) {
+            continue;
+        }
+        int featureIndex = SentinelFeatureIndex([fields[kEventFieldFeature] UTF8String]);
+        counts[featureIndex]++;
+        if (epoch >= newestEpoch[featureIndex]) {
+            secondEpoch[featureIndex] = newestEpoch[featureIndex];
+            newestEpoch[featureIndex] = epoch;
+        } else if (epoch > secondEpoch[featureIndex]) {
+            secondEpoch[featureIndex] = epoch;
+        }
     }
-    for (int i = 0; i < SC_NFEAT; i++)
-        if (counts[i] >= SC_STRIKES_TO_LATCH) until[i] = secondEpoch[i] + SC_WINDOW_SECONDS;
-    if (newest)
-        for (int i = 0; i < SC_NFEAT; i++) newest[i] = newestEpoch[i];
+
+    for (int i = 0; i < kFeatureCount; i++) {
+        if (counts[i] >= kSentinelStrikesToLatch) {
+            until[i] = secondEpoch[i] + kSentinelWindowSeconds;
+        }
+    }
+
+    if (newest) {
+        for (int i = 0; i < kFeatureCount; i++) {
+            newest[i] = newestEpoch[i];
+        }
+    }
 }
-// PREPARE 1 step 6: write this build's marker ONLY next to the events.log in use (gSCIdx), so `stuntcam sentinel
-// clear` (the state dir, and this container-tmp fallback on a booted sim) removes every marker that can latch; unlink
-// it in the other location (one an older engine wrote to both). In both locations, delete every other build's
-// latched-* marker the parsed past no longer supports (swap-back: another build's 20 activations pushed its strikes
-// out). The same for latched-motion-<build> (motion latched: >= 2 `motion` strikes; it never closes the camera), and a
-// stale latched-motion-<other build> is deleted like a stale latched-<other build>.
-static void SCMarkersUpdate(NSArray *past, long now, BOOL latched, const char *feats, long until, BOOL mLatched,
-                            long mUntil) {
-    for (int i = 0; i < 2; i++) {
-        if (!gSCDir[i][0]) continue;
-        if (latched && i == gSCIdx) {
-            char content[200];
-            snprintf(content, sizeof content, "%s\n", feats);
-            // not retried: the next activation's PREPARE 1 derives the markers from events.log and writes them again
-            (void)SCWriteMarker(gSCMarker[i], content, until);
-        } else if (unlink(gSCMarker[i]) == 0 && latched)
-            LOG(@"sentinel: removed this build's marker outside the events.log location: %s", gSCMarker[i]);
-        if (mLatched && i == gSCIdx) (void)SCWriteMarker(gSCMotionMarker[i], "motion\n", mUntil);   // as above
-        else if (unlink(gSCMotionMarker[i]) == 0)
-            LOG(@"sentinel: removed %s (%s)", gSCMotionMarker[i],
-                mLatched ? "outside the events.log location" : "motion no longer latched");
-        DIR *d = opendir(gSCDir[i]);
-        if (!d) continue;
-        struct dirent *e;
-        while ((e = readdir(d))) {
-            SCPruneTmp(gSCDir[i], e->d_name, now);
-            if (strncmp(e->d_name, "latched-", 8)) continue;
-            BOOL motion = !strncmp(e->d_name, "latched-motion-", 15);
-            const char *markerBuild = e->d_name + (motion ? 15 : 8);
-            if (!strcmp(markerBuild, gSCBuild)) continue;
-            char p[1400];
-            snprintf(p, sizeof p, "%s/%s", gSCDir[i], e->d_name);
-            int counts[SC_NFEAT];
-            long untils[SC_NFEAT];
-            SCCountStrikes(past, @(markerBuild), now, gSCAct, counts, untils, NULL);
-            BOOL still = NO;
-            for (int k = 0; k < SC_NFEAT; k++)
-                if (counts[k] >= SC_STRIKES_TO_LATCH && (motion ? k == SC_FMOTION : SCClosesCamera(k))) still = YES;
-            // the events say stale: removed whatever its until (a racing write of that build is stale too); otherwise
-            // only once expired, through SCPruneExpired
-            struct stat st;
-            if (!still || stat(p, &st) != 0) {
-                unlink(p);
-                LOG(@"sentinel: removed stale marker %s", p);
-            } else if (st.st_mtime <= now && SCPruneExpired(gSCDir[i], e->d_name, p, now))
-                LOG(@"sentinel: removed stale marker %s", p);
-        }
-        closedir(d);
+
+// This build's markers in state directory dirIndex: the latch and motion markers are written next to the events.log in
+// use, and unlinked in the other location (where an older engine that wrote to both may have left them).
+static void SentinelMarkersWriteOwn(int dirIndex, const SentinelLatch *latch) {
+    BOOL inUse = dirIndex == gSentinel.events.dirIndex;
+    if (latch->camera && inUse) {
+        char content[200];
+        snprintf(content, sizeof content, "%s\n", latch->features);
+        // not retried: the next activation's sentinel step derives the markers from events.log and writes them again
+        (void)SentinelWriteMarker(gSentinel.paths.latchMarker[dirIndex], content, latch->until);
+    } else if (unlink(gSentinel.paths.latchMarker[dirIndex]) == 0 && latch->camera) {
+        LOG(@"sentinel: removed this build's marker outside the events.log location: %s",
+            gSentinel.paths.latchMarker[dirIndex]);
     }
-    // preflight-fail-<any build> past its until, in both locations' sim-level dirs. Unexpired ones of
-    // other builds stay: no event records a preflight failure, so nothing says they are stale, and that build still
-    // reads them.
-    for (int i = 0; i < 2; i++) {
-        char dir[1100];
-        snprintf(dir, sizeof dir, "%s", gSCPfPath[i]);
+    if (latch->coreMotion && inUse) {
+        // not retried, as above
+        (void)SentinelWriteMarker(gSentinel.paths.motionMarker[dirIndex], "motion\n", latch->motionUntil);
+    } else if (unlink(gSentinel.paths.motionMarker[dirIndex]) == 0) {
+        LOG(@"sentinel: removed %s (%s)", gSentinel.paths.motionMarker[dirIndex],
+            latch->coreMotion ? "outside the events.log location" : "motion no longer latched");
+    }
+}
+
+// YES if the parsed past still latches another build's marker: latched-motion-<build> at kSentinelStrikesToLatch
+// motion strikes, latched-<build> at that many strikes of a camera-closing feature.
+static BOOL SentinelMarkerStillLatched(NSArray *past, const char *markerBuild, BOOL motion, long now) {
+    int counts[kFeatureCount];
+    long untils[kFeatureCount];
+    SentinelCountStrikes(past, @(markerBuild), now, gSentinel.events.activationNumber, counts, untils, NULL);
+    for (int k = 0; k < kFeatureCount; k++) {
+        BOOL latchesMarker = motion ? k == kFeatureMotion : SentinelClosesCamera(k);
+        if (counts[k] >= kSentinelStrikesToLatch && latchesMarker) {
+            return YES;
+        }
+    }
+    return NO;
+}
+
+// In state directory dirIndex: the stale temp files, and every other build's latched-* and latched-motion-* marker
+// that the parsed past no longer supports (swap-back: another build's activations pushed its strikes out of the
+// window).
+static void SentinelMarkersPruneOtherBuilds(int dirIndex, NSArray *past, long now) {
+    const char *dirPath = gSentinel.paths.eventsDirs[dirIndex];
+    DIR *dirStream = opendir(dirPath);
+    if (!dirStream) {
+        return;
+    }
+    struct dirent *entry;
+    while ((entry = readdir(dirStream))) {
+        SentinelPruneTmp(dirPath, entry->d_name, now);
+        if (strncmp(entry->d_name, "latched-", kSentinelLatchedPrefixLen)) {
+            continue;
+        }
+        BOOL motion = !strncmp(entry->d_name, "latched-motion-", kSentinelLatchedMotionPrefixLen);
+        size_t prefixLen = motion ? kSentinelLatchedMotionPrefixLen : kSentinelLatchedPrefixLen;
+        const char *markerBuild = entry->d_name + prefixLen;
+        if (!strcmp(markerBuild, gSentinel.build)) {
+            continue;
+        }
+        char path[kSentinelEntryPathBytes];
+        snprintf(path, sizeof path, "%s/%s", dirPath, entry->d_name);
+        BOOL stillLatched = SentinelMarkerStillLatched(past, markerBuild, motion, now);
+        // If the events say the marker is stale, it is removed whatever its until (a racing write of that build is
+        // stale too). Otherwise it is removed only once expired, through SentinelPruneExpired.
+        struct stat st;
+        if (!stillLatched || stat(path, &st) != 0) {
+            unlink(path);
+            LOG(@"sentinel: removed stale marker %s", path);
+        } else if (st.st_mtime <= now && SentinelPruneExpired(dirPath, entry->d_name, path, now)) {
+            LOG(@"sentinel: removed stale marker %s", path);
+        }
+    }
+    closedir(dirStream);
+}
+
+// preflight-fail-<any build> past its until, in both locations' sim-level directories. Unexpired ones of other builds
+// stay: no event records a preflight failure, so nothing says they are stale, and that build still reads them.
+static void SentinelMarkersPrunePreflightFail(long now) {
+    for (int i = 0; i < kStateDirCount; i++) {
+        char dir[kSentinelPathBytes];
+        snprintf(dir, sizeof dir, "%s", gSentinel.paths.preflightFail[i]);
         char *slash = strrchr(dir, '/');
-        if (!gSCPfPath[i][0] || !slash) continue;
-        *slash = 0;
-        DIR *d = opendir(dir);
-        if (!d) continue;
-        struct dirent *e;
-        while ((e = readdir(d))) {
-            SCPruneTmp(dir, e->d_name, now);
-            if (strncmp(e->d_name, "preflight-fail-", 15)) continue;
-            char p[1400];
-            snprintf(p, sizeof p, "%s/%s", dir, e->d_name);
-            struct stat st;
-            if (stat(p, &st) == 0 && st.st_mtime <= now && SCPruneExpired(dir, e->d_name, p, now))
-                LOG(@"sentinel: removed expired marker %s", p);
+        if (!gSentinel.paths.preflightFail[i][0] || !slash) {
+            continue;
         }
-        closedir(d);
+        *slash = 0;
+        DIR *dirStream = opendir(dir);
+        if (!dirStream) {
+            continue;
+        }
+        struct dirent *entry;
+        while ((entry = readdir(dirStream))) {
+            SentinelPruneTmp(dir, entry->d_name, now);
+            if (strncmp(entry->d_name, "preflight-fail-", kSentinelPreflightFailPrefixLen)) {
+                continue;
+            }
+            char path[kSentinelEntryPathBytes];
+            snprintf(path, sizeof path, "%s/%s", dir, entry->d_name);
+            struct stat st;
+            if (stat(path, &st) == 0 && st.st_mtime <= now && SentinelPruneExpired(dir, entry->d_name, path, now)) {
+                LOG(@"sentinel: removed expired marker %s", path);
+            }
+        }
+        closedir(dirStream);
     }
+}
+
+// The sentinel step's marker update, in both state directories. This build's markers are written only next to the
+// events.log in use, so `stuntcam sentinel clear` (the state dir, and the container-tmp fallback on a booted sim)
+// removes every marker that can latch. Other builds' markers the events no longer support are deleted.
+static void SentinelMarkersUpdate(NSArray *past, long now, const SentinelLatch *latch) {
+    for (int i = 0; i < kStateDirCount; i++) {
+        if (!gSentinel.paths.eventsDirs[i][0]) {
+            continue;
+        }
+        SentinelMarkersWriteOwn(i, latch);
+        SentinelMarkersPruneOtherBuilds(i, past, now);
+    }
+    SentinelMarkersPrunePreflightFail(now);
 }

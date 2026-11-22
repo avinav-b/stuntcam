@@ -21,44 +21,52 @@ static inline uint64_t sch_now_ns(void) { return clock_gettime_nsec_np(CLOCK_UPT
 
 // 64 random bits, never 0 (a ring epoch).
 static inline uint64_t sch_epoch(void) {
-    uint64_t e = 0;
-    while (!e) arc4random_buf(&e, sizeof e);
-    return e;
+    uint64_t epoch = 0;
+    while (!epoch) arc4random_buf(&epoch, sizeof epoch);
+    return epoch;
 }
 
-// The helper lock (spec §8): flock(LOCK_EX) on `path`, opened O_CREAT|O_NOFOLLOW 0600, retried every 10 ms for 250 ms.
-// Returns the descriptor (held for the helper's life), or -1 with errno (EWOULDBLOCK: another helper holds it).
+// The helper lock is retried every SCH_LOCK_RETRY_US for SCH_LOCK_RETRIES times (250 ms), because a momentary holder
+// is not necessarily another helper.
+enum { SCH_LOCK_RETRIES = 25, SCH_LOCK_RETRY_US = 10000 };
+
+// The helper lock (docs/webcam-ring.md, "The pid file"): flock(LOCK_EX) on `path`, opened O_CREAT|O_NOFOLLOW 0600.
+// Returns the descriptor, which the helper holds for its whole life, or -1 with errno (EWOULDBLOCK: another helper
+// holds it).
 static inline int sch_lock(const char *path) {
     int fd = open(path, O_RDWR | O_CREAT | O_NOFOLLOW | O_CLOEXEC, 0600);
     if (fd < 0) return -1;
-    for (int i = 0; i <= 25; i++) {
+    for (int attempt = 0; attempt <= SCH_LOCK_RETRIES; attempt++) {
         if (flock(fd, LOCK_EX | LOCK_NB) == 0) return fd;
         if (errno != EWOULDBLOCK && errno != EINTR) break;
-        if (i < 25) usleep(10000);
+        if (attempt < SCH_LOCK_RETRIES) usleep(SCH_LOCK_RETRY_US);
     }
-    int e = errno;
+    int saved_errno = errno;
     close(fd);
-    errno = e;
+    errno = saved_errno;
     return -1;
 }
 
+// The longest temporary path sch_write_file makes: a path of about 1 KiB and the ".tmp" suffix.
+enum { SCH_TMP_PATH_MAX = 1100 };
+
 // Writes `len` bytes to `path` through `path`.tmp and a rename (mode 0600), so a reader never sees a partial file.
 static inline int sch_write_file(const char *path, const char *text, size_t len) {
-    char tmp[1100];
+    char tmp[SCH_TMP_PATH_MAX];
     if (snprintf(tmp, sizeof tmp, "%s.tmp", path) >= (int)sizeof tmp) return -1;
     unlink(tmp);
     int fd = open(tmp, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
     if (fd < 0) return -1;
-    size_t off = 0;
-    while (off < len) {
-        ssize_t n = write(fd, text + off, len - off);
+    size_t written = 0;
+    while (written < len) {
+        ssize_t n = write(fd, text + written, len - written);
         if (n < 0) {
             if (errno == EINTR) continue;
             close(fd);
             unlink(tmp);
             return -1;
         }
-        off += (size_t)n;
+        written += (size_t)n;
     }
     close(fd);
     if (rename(tmp, path) != 0) {
@@ -99,19 +107,36 @@ static inline int sch_pid_alive(int pid) {
     return kill(pid, 0) == 0 || errno == EPERM;
 }
 
-static inline void sch_copy_rows(uint8_t *dst, size_t dbpr, const uint8_t *src, size_t sbpr, size_t row,
-                                 uint32_t rows) {
-    if (dbpr == sbpr && dbpr == row) {
-        memcpy(dst, src, row * rows);
+// Copies `rows` rows of `row_bytes` bytes from src (src_stride bytes per row) to dst (dst_stride bytes per row); one
+// memcpy when both are packed.
+static inline void sch_copy_rows(uint8_t *dst, size_t dst_stride, const uint8_t *src, size_t src_stride,
+                                 size_t row_bytes, uint32_t rows) {
+    if (dst_stride == src_stride && dst_stride == row_bytes) {
+        memcpy(dst, src, row_bytes * rows);
         return;
     }
-    for (uint32_t y = 0; y < rows; y++) memcpy(dst + (size_t)y * dbpr, src + (size_t)y * sbpr, row);
+    for (uint32_t y = 0; y < rows; y++) {
+        memcpy(dst + (size_t)y * dst_stride, src + (size_t)y * src_stride, row_bytes);
+    }
 }
 
-// ---- latency stamp: an 8x8 grid of black/white cells in the centre of a BGRA frame, side = height/2.
-// 64 bits, bit k at row k/8, column k%8 (white = 1): seq (20 bits) | capture time on the host clock in 100 us units
-// (28 bits, wraps after 7.4 h) | a 16-bit check. fixtures/plain (M5APP_MODE=webcam) decodes it under any rotation,
-// mirror and scale, from video frames, photos and movies.
+// ---- The latency stamp: an 8x8 grid of black and white cells in the centre of a BGRA frame, half the frame's height
+// on a side. It holds 64 bits, bit k at row k/8 and column k%8 (white = 1): the frame's seq (20 bits), its capture
+// time on the host clock in 100 us units (28 bits, so it wraps after 7.4 h) and a 16-bit check. fixtures/plain
+// (M5APP_MODE=webcam) decodes it under any rotation, mirror and scale, from video frames, photos and movies.
+enum {
+    SCH_STAMP_SIDE_CELLS = 8,             // cells per side of the grid
+    SCH_STAMP_TIME_SHIFT = 20,            // the capture time's first bit; the seq takes the bits below it
+    SCH_STAMP_CHECK_SHIFT = 48,           // the check's first bit
+    SCH_STAMP_SEQ_MASK = 0xfffff,         // 20 bits
+    SCH_STAMP_TIME_MASK = 0xfffffff,      // 28 bits
+    SCH_STAMP_TIME_UNIT_NS = 100000,      // the capture time counts 100 us units
+};
+#define SCH_STAMP_WHITE 0xffffffffu      // opaque white and black BGRA pixels
+#define SCH_STAMP_BLACK 0xff000000u
+
+// The stamp's 16-bit check over its seq and time fields: an integer hash (multiply and xor-shift rounds with odd
+// constants), so that a misread bit almost never yields a valid stamp.
 static inline uint32_t sch_stamp_check(uint32_t seq20, uint32_t t28) {
     uint32_t x = (seq20 << 12) ^ (t28 * 2654435761u);
     x ^= x >> 15;
@@ -121,65 +146,100 @@ static inline uint32_t sch_stamp_check(uint32_t seq20, uint32_t t28) {
     x ^= x >> 15;
     return x & 0xffff;
 }
-static inline void sch_stamp(uint8_t *p, uint32_t bpr, uint32_t w, uint32_t h, uint64_t seq, uint64_t capture_ns) {
-    uint32_t s = (uint32_t)(seq & 0xfffff), t = (uint32_t)((capture_ns / 100000) & 0xfffffff);
-    uint64_t payload = (uint64_t)s | ((uint64_t)t << 20) | ((uint64_t)sch_stamp_check(s, t) << 48);
-    uint32_t cell = (h / 16) & ~1u, side = cell * 8;
-    if (!cell || side > w) return;
-    uint32_t x0 = ((w - side) / 2) & ~1u, y0 = ((h - side) / 2) & ~1u;
-    for (int k = 0; k < 64; k++) {
-        uint32_t v = ((payload >> k) & 1) ? 0xffffffffu : 0xff000000u;
-        uint32_t cx = x0 + (k % 8) * cell, cy = y0 + (k / 8) * cell;
-        for (uint32_t y = cy; y < cy + cell; y++) {
-            uint32_t *row = (uint32_t *)(p + (size_t)y * bpr) + cx;
-            for (uint32_t x = 0; x < cell; x++) row[x] = v;
+
+// Draws the stamp for frame `seq`, captured at `capture_ns`, into the BGRA frame at pixels (bpr bytes per row). The
+// cells are an even number of pixels wide and start at even coordinates. A frame too narrow for the grid gets no
+// stamp.
+static inline void sch_stamp(uint8_t *pixels, uint32_t bpr, uint32_t width, uint32_t height, uint64_t seq,
+                             uint64_t capture_ns) {
+    uint32_t seq20 = (uint32_t)(seq & SCH_STAMP_SEQ_MASK);
+    uint32_t t28 = (uint32_t)((capture_ns / SCH_STAMP_TIME_UNIT_NS) & SCH_STAMP_TIME_MASK);
+    uint64_t payload = (uint64_t)seq20 | ((uint64_t)t28 << SCH_STAMP_TIME_SHIFT) |
+                       ((uint64_t)sch_stamp_check(seq20, t28) << SCH_STAMP_CHECK_SHIFT);
+    uint32_t cell = (height / (2 * SCH_STAMP_SIDE_CELLS)) & ~1u;
+    uint32_t side = cell * SCH_STAMP_SIDE_CELLS;
+    if (!cell || side > width) return;
+    uint32_t left = ((width - side) / 2) & ~1u;
+    uint32_t top = ((height - side) / 2) & ~1u;
+    for (int bit = 0; bit < SCH_STAMP_SIDE_CELLS * SCH_STAMP_SIDE_CELLS; bit++) {
+        uint32_t colour = ((payload >> bit) & 1) ? SCH_STAMP_WHITE : SCH_STAMP_BLACK;
+        uint32_t cell_x = left + (bit % SCH_STAMP_SIDE_CELLS) * cell;
+        uint32_t cell_y = top + (bit / SCH_STAMP_SIDE_CELLS) * cell;
+        for (uint32_t y = cell_y; y < cell_y + cell; y++) {
+            uint32_t *row = (uint32_t *)(pixels + (size_t)y * bpr) + cell_x;
+            for (uint32_t x = 0; x < cell; x++) row[x] = colour;
         }
     }
 }
 
-// ---- synthetic pattern (BGRA): eight colour bars scrolling 8 px per frame, and a grey ramp band moving down 6 px per
-// frame.
-typedef struct { uint32_t w; uint32_t *bars, *ramp; } sch_synth;
-static inline void sch_synth_free(sch_synth *s) {
-    free(s->bars);
-    free(s->ramp);
-    s->bars = s->ramp = NULL;
-    s->w = 0;
+// ---- The synthetic pattern (BGRA): eight colour bars scrolling sideways, and a grey ramp band moving down.
+enum {
+    SCH_SYNTH_BAR_COUNT = 8,
+    SCH_SYNTH_SCROLL_PX = 8,        // the bars scroll this far per frame
+    SCH_SYNTH_BAND_STEP_PX = 6,     // the ramp band moves down this far per frame
+    SCH_SYNTH_BAND_FRACTION = 10,   // the band is 1/10 of the frame's height
+};
+#define SCH_SYNTH_OPAQUE 0xff000000u   // the alpha byte of an opaque BGRA pixel
+#define SCH_SYNTH_GREY_STEP 0x010101u  // one step of grey: the same increment in B, G and R
+
+typedef struct {
+    uint32_t w;      // the width bars and ramp were made for (0: none yet)
+    uint32_t *bars;  // two widths of the colour bars, so a scrolled row is one contiguous copy
+    uint32_t *ramp;  // two widths of the grey ramp
+} sch_synth;
+
+static inline void sch_synth_free(sch_synth *synth) {
+    free(synth->bars);
+    free(synth->ramp);
+    synth->bars = NULL;
+    synth->ramp = NULL;
+    synth->w = 0;
 }
-static inline void sch_synth_draw(sch_synth *s, uint8_t *p, uint32_t bpr, uint32_t w, uint32_t h, uint64_t frame) {
-    if (s->w != w || !s->bars) {
-        sch_synth_free(s);
-        static const uint32_t bars[8] = {0xffc0c0c0, 0xffc0c000, 0xff00c0c0, 0xff00c000,
-                                         0xffc000c0, 0xffc00000, 0xff0000c0, 0xff101010};
-        s->bars = malloc(2 * (size_t)w * 4);
-        s->ramp = malloc(2 * (size_t)w * 4);
-        if (!s->bars || !s->ramp) {
-            sch_synth_free(s);
+
+// Draws frame number `frame` of the pattern into the BGRA frame at pixels (bpr bytes per row). The bars and the ramp
+// are made once per width. Nothing is drawn if they can't be allocated.
+static inline void sch_synth_draw(sch_synth *synth, uint8_t *pixels, uint32_t bpr, uint32_t width, uint32_t height,
+                                  uint64_t frame) {
+    if (synth->w != width || !synth->bars) {
+        sch_synth_free(synth);
+        static const uint32_t bar_colours[SCH_SYNTH_BAR_COUNT] = {0xffc0c0c0, 0xffc0c000, 0xff00c0c0, 0xff00c000,
+                                                                  0xffc000c0, 0xffc00000, 0xff0000c0, 0xff101010};
+        synth->bars = malloc(2 * (size_t)width * 4);
+        synth->ramp = malloc(2 * (size_t)width * 4);
+        if (!synth->bars || !synth->ramp) {
+            sch_synth_free(synth);
             return;
         }
-        s->w = w;
-        for (uint32_t x = 0; x < 2 * w; x++) {
-            s->bars[x] = bars[(x % w) * 8 / w];
-            s->ramp[x] = 0xff000000u | (((x % w) * 255 / w) * 0x010101u);
+        synth->w = width;
+        for (uint32_t x = 0; x < 2 * width; x++) {
+            synth->bars[x] = bar_colours[(x % width) * SCH_SYNTH_BAR_COUNT / width];
+            synth->ramp[x] = SCH_SYNTH_OPAQUE | (((x % width) * 255 / width) * SCH_SYNTH_GREY_STEP);
         }
     }
-    uint32_t off = (uint32_t)((frame * 8) % w), band = (uint32_t)((frame * 6) % h), bandH = h / 10;
-    for (uint32_t y = 0; y < h; y++) {
-        const uint32_t *src = ((y - band) < bandH ? s->ramp : s->bars) + off;
-        memcpy(p + (size_t)y * bpr, src, (size_t)w * 4);
+    uint32_t scroll = (uint32_t)((frame * SCH_SYNTH_SCROLL_PX) % width);
+    uint32_t band_top = (uint32_t)((frame * SCH_SYNTH_BAND_STEP_PX) % height);
+    uint32_t band_height = height / SCH_SYNTH_BAND_FRACTION;
+    for (uint32_t y = 0; y < height; y++) {
+        // unsigned: rows above the band wrap to large values and so fall outside it
+        const uint32_t *src = ((y - band_top) < band_height ? synth->ramp : synth->bars) + scroll;
+        memcpy(pixels + (size_t)y * bpr, src, (size_t)width * 4);
     }
 }
 
-// The pid file record (spec §8) for this helper: ring version 1 only.
-static inline void sch_pidfile_fill(scw_pidfile *p, int pid, const char *sha, int auth, uint32_t state, const char *camera,
-                                    uint64_t started) {
-    memset(p, 0, sizeof *p);
-    p->pid = pid;
-    snprintf(p->sha, sizeof p->sha, "%s", sha);
-    p->rings[0] = 1; p->nrings = 1;
-    p->auth = auth; p->state = state;
-    snprintf(p->camera, sizeof p->camera, "%s", camera ? camera : "");
-    p->started = started;
+// The pid file record (docs/webcam-ring.md, "The pid file") for this helper, which serves ring version 1 only.
+static inline void sch_pidfile_fill(scw_pidfile *record, int pid, const char *sha, int auth, uint32_t state,
+                                    const char *camera, uint64_t started) {
+    memset(record, 0, sizeof *record);
+    record->pid = pid;
+    snprintf(record->sha, sizeof record->sha, "%s", sha);
+    record->rings[0] = 1;
+    record->nrings = 1;
+    record->auth = auth;
+    record->state = state;
+    snprintf(record->camera, sizeof record->camera, "%s", camera ? camera : "");
+    record->started = started;
 }
-static inline scw_writer *sch_ring(scw_shm_writer *w) { return &w->ring; }
-static inline const char *sch_report_msg(const scw_shm_report *r) { return r->msg; }
+
+// Field accessors Swift can't express directly: the writer inside a shm writer, and a report's message buffer.
+static inline scw_writer *sch_ring(scw_shm_writer *writer) { return &writer->ring; }
+static inline const char *sch_report_msg(const scw_shm_report *report) { return report->msg; }

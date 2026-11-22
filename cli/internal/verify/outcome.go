@@ -42,8 +42,8 @@ func (c canaryRun) refused() bool { return c.outcome == launchRefused }
 
 func (c canaryRun) crashed() bool { return c.outcome == exitedNoVerdict }
 
-// contentFail says whether the run is a content fail: core=FAIL from checks that ran, not a canary that exited without a
-// verdict (a crash, which already needs two in a row).
+// contentFail says whether the run is a content fail: core=FAIL from checks that ran, not a canary that exited without
+// a verdict (a crash, which already needs two in a row).
 func (c canaryRun) contentFail() bool {
 	st, _ := c.verdict()
 	return st == Fail && !c.crashed()
@@ -97,6 +97,7 @@ func (c canaryRun) inconclusiveWhy() string {
 	case crashedOnce:
 		return "the canary crashed once, after an inconclusive first run; not cached"
 	}
+
 	return ""
 }
 

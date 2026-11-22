@@ -595,6 +595,8 @@ func statusCases() []goldenCase {
 	return []goldenCase{
 		{name: "status: every mode", args: []string{"status"}, setup: statusWorld},
 		{name: "status --json: every mode", args: []string{"status", "--json"}, setup: statusWorld},
+		{name: "status: qr source", args: []string{"status"}, setup: qrStatusWorld},
+		{name: "status --json: qr source", args: []string{"status", "--json"}, setup: qrStatusWorld},
 		{name: "status: latched apps in order", args: []string{"status"}, setup: func(w *world) {
 			w.dev("U", "iPhone", "Booted", iosRT)
 			w.current("U", "aaaaaaaaaaaa")
@@ -856,6 +858,11 @@ func armCases() []goldenCase {
 			w.dev("U1", "iPhone A", "Booted", iosRT)
 		}},
 		{name: "up: bad --source", args: []string{"up", "--source", "picture:x"}},
+		{name: "up: booted sim, launchd mode, --source qr:",
+			args: []string{"up", "--skip-verify", "--source", "qr:WIFI:S:my net;T:WPA;P:p@ss%w;rd;;"}, setup: func(w *world) {
+				w.dev("U1", "iPhone A", "Booted", iosRT)
+			}},
+		{name: "up: --source qr: without text", args: []string{"up", "--source", "qr:"}},
 		{name: "up: being booted", args: []string{"up", "--skip-verify"}, setup: func(w *world) {
 			w.dev("U1", "iPhone A", "Shutdown", iosRT)
 			w.booting("U1")
@@ -887,6 +894,22 @@ func armCases() []goldenCase {
 			w.dev("U1", "iPhone A", "Booted", iosRT)
 		}},
 	}
+}
+
+// qrStatusWorld: a launchd-armed sim showing a qr source, a boot-armed one showing an image, and a shut-down one whose
+// stale control file status ignores
+func qrStatusWorld(w *world) {
+	controlWorld(w)
+	w.launchdEnv("U1", "DYLD_INSERT_LIBRARIES", "/h/builds/bbbbbbbbbbbb/libsimcamstub.dylib")
+	w.write(w.sim("U1", "control"), "orientation=auto\nsource=qr:caf%C3%A9%0Aline%202%20%25\n")
+	w.dev("B1", "iPhone C", "Booted", iosRT)
+	w.bootArmed("B1", "")
+	w.current("B1", "aaaaaaaaaaaa")
+	w.record("B1", "boot", -30*time.Minute)
+	w.write(w.sim("B1", "control"), "source=image:/h/data/0123456789ab/pic.png\n")
+	w.dev("U2", "iPhone B", "Shutdown", iosRT)
+	w.current("U2", "aaaaaaaaaaaa")
+	w.write(w.sim("U2", "control"), "source=qr:old\n")
 }
 
 func controlWorld(w *world) {
@@ -931,6 +954,18 @@ func otherCases() []goldenCase {
 			w.write(filepath.Join(w.wd, "pic.png"), "png")
 		}},
 		{name: "source: missing image", args: []string{"source", "image:none.png"}, setup: controlWorld},
+		{name: "source qr", args: []string{"source", "qr:https://example.com/pay?id=42"}, setup: controlWorld},
+		// spaces at both ends, a newline, '%' and non-ASCII: one line of ASCII in the control file
+		{name: "source qr: any bytes", args: []string{"source", "qr: Grüße\n日本 50% "}, setup: controlWorld},
+		{name: "source qr: no text", args: []string{"source", "qr:"}, setup: controlWorld},
+		// apps still load another build (an older stuntcam's, until `up` again): it may not know qr:
+		{name: "source qr: another build", args: []string{"source", "qr:x"}, setup: func(w *world) {
+			controlWorld(w)
+			w.current("U1", "eeeeeeeeeeee")
+		}},
+		{name: "source qr: not armed", args: []string{"source", "qr:x"}, setup: func(w *world) {
+			w.dev("U1", "iPhone A", "Booted", iosRT)
+		}},
 		{name: "source: webcam without a helper", args: []string{"source", "webcam"}, setup: controlWorld},
 		{name: "source: not armed", args: []string{"source", "scene"}, setup: func(w *world) {
 			w.dev("U1", "iPhone A", "Booted", iosRT)

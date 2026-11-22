@@ -47,25 +47,31 @@ func TestParseErrors(t *testing.T) {
 	if _, err := Parse([]byte(good)); err != nil {
 		t.Fatal(err)
 	}
-	cases := map[string]error{
-		"":                                  ErrNotTrace,
-		"hello\n":                           ErrNotTrace,
-		strings.TrimSuffix(good, "end\n"):   ErrIncomplete, // a reader never sees this (temp + rename), but a copy cut short might
-		"stuntcam-trace 1\npid 7\n":         ErrIncomplete,
-		"stuntcam-trace 2\npid 7\nend\n":    ErrNotTrace, // another format version
-		"stuntcam-trace 1\nop 1 2 3\nend\n": nil,         // bad op line: an error, checked below
+	tests := []struct {
+		name, in string
+		want     error // nil: any error
+	}{
+		{"empty", "", ErrNotTrace},
+		{"not a trace", "hello\n", ErrNotTrace},
+		// a reader never sees this (temp + rename), but a copy cut short might
+		{"no end line", strings.TrimSuffix(good, "end\n"), ErrIncomplete},
+		{"header only", "stuntcam-trace 1\npid 7\n", ErrIncomplete},
+		{"another format version", "stuntcam-trace 2\npid 7\nend\n", ErrNotTrace},
+		{"bad op line", "stuntcam-trace 1\nop 1 2 3\nend\n", nil},
 	}
-	for in, want := range cases {
-		_, err := Parse([]byte(in))
-		if want == nil {
-			if err == nil {
-				t.Errorf("%q: no error", in)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Parse([]byte(tt.in))
+			if tt.want == nil {
+				if err == nil {
+					t.Errorf("%q: no error", tt.in)
+				}
+				return
 			}
-			continue
-		}
-		if !errors.Is(err, want) {
-			t.Errorf("%q: %v, want %v", in, err, want)
-		}
+			if !errors.Is(err, tt.want) {
+				t.Errorf("%q: %v, want %v", tt.in, err, tt.want)
+			}
+		})
 	}
 }
 
@@ -124,7 +130,7 @@ func TestBuildOrderAndGaps(t *testing.T) {
 		}
 		return f
 	}
-	// an engine before the ledger L68 fix: the timestamp after the encode
+	// an engine from before the timestamp moved ahead of the encode: the timestamp after the encode
 	old := Build(mk("shutter", "slot12", "will-capture", "did-capture", "encode-start", "encoded", "timestamp", "still-complete", "did-finish"), nil, "", "", nil)
 	if p := old.Photos[0]; p.InOrder || !p.Complete {
 		t.Errorf("old order: %+v", p)
