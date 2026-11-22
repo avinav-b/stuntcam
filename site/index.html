@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>stuntcam · a camera for the iOS Simulator</title>
+<meta name="description" content="Give the iOS Simulator a working camera. Your app's AVFoundation, VisionCamera, expo-camera or Flutter camera code runs unmodified. Free and open source.">
+<link rel="canonical" href="https://stuntcam.dev/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="stuntcam">
+<meta property="og:url" content="https://stuntcam.dev/">
+<meta property="og:title" content="stuntcam · a camera for the iOS Simulator">
+<meta property="og:description" content="Give the iOS Simulator a working camera. Your app's AVFoundation, VisionCamera, expo-camera or Flutter camera code runs unmodified. Free and open source.">
+<meta property="og:image" content="https://stuntcam.dev/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="stuntcam: a camera for the iOS Simulator. A phone scanning a QR code next to the npx stuntcam up command.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="stuntcam · a camera for the iOS Simulator">
+<meta name="twitter:description" content="Give the iOS Simulator a working camera. Your app's AVFoundation, VisionCamera, expo-camera or Flutter camera code runs unmodified. Free and open source.">
+<meta name="twitter:image" content="https://stuntcam.dev/og.png">
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "SoftwareApplication", "name": "stuntcam", "alternateName": "stuntcam iOS Simulator camera", "description": "stuntcam gives the iOS Simulator a camera. Your app's camera code runs unmodified through Apple's own AVFoundation; stuntcam replaces only the camera hardware underneath. Works with AVFoundation (Swift, Objective-C), React Native VisionCamera, Expo expo-camera and Flutter camera / mobile_scanner. Install: npx stuntcam up", "url": "https://stuntcam.dev/", "applicationCategory": "DeveloperApplication", "applicationSubCategory": "iOS Simulator camera", "operatingSystem": "macOS (Apple silicon)", "softwareRequirements": "Xcode 27; iOS Simulator runtime 17.5 to 27.2", "installUrl": "https://www.npmjs.com/package/stuntcam", "downloadUrl": "https://www.npmjs.com/package/stuntcam", "license": "https://www.apache.org/licenses/LICENSE-2.0", "isAccessibleForFree": true, "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}, "sameAs": ["https://github.com/avinav-b/stuntcam", "https://www.npmjs.com/package/stuntcam"], "featureList": ["Live camera preview in the iOS Simulator", "Photos (JPEG and HEIC, with EXIF)", "Video recording with audio (1080p and 4K)", "QR code and EAN-13 barcode scanning through AVFoundation metadata output and Vision", "Front and back cameras", "Use your own image or video, or a built-in test scene", "UI tests and CI with stuntcam exec", "No app code, dependency or project changes"], "keywords": "iOS Simulator camera, camera in iOS Simulator, AVFoundation simulator, VisionCamera simulator, expo-camera simulator, Flutter camera simulator, test camera code, QR scanning simulator, XCUITest camera, React Native camera testing"}</script>
+<meta name="color-scheme" content="light dark">
+<script>(() => { let t; try { t = localStorage.getItem('theme'); } catch (e) {} document.documentElement.classList.add('js'); document.documentElement.dataset.theme = t || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); })();</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpolygon points='50,4 89.84,27 65.62,53.45' fill='%231F4BFF'/%3E%3Cpolygon points='89.84,27 89.84,73 54.82,65.26' fill='%230A1640'/%3E%3Cpolygon points='89.84,73 50,96 39.2,61.8' fill='%238DB8FF'/%3E%3Cpolygon points='50,96 10.16,73 34.38,46.55' fill='%231F4BFF'/%3E%3Cpolygon points='10.16,73 10.16,27 45.18,34.74' fill='%230A1640'/%3E%3Cpolygon points='10.16,27 50,4 60.8,38.2' fill='%238DB8FF'/%3E%3C/svg%3E">
+<style>
+:root{--navy:#0A1640;--blue:#1F4BFF;--sky:#8DB8FF;
+  --bg:#fff;--text:#0A1640;--soft:#4B5578;--faint:#6B7493;--rule:#E4E8F2;--tint:#F4F6FB;--card:#fff;--link:#1F4BFF;--accent:#1F4BFF;
+  --nav:rgba(255,255,255,.9);--code:#0A1640;--blade:#0A1640;--word:#0A1640;--cam:#1F4BFF;--us:#EEF2FF;
+  --dot:rgba(10,22,64,.11);--band:#F5F7FC;--glow:rgba(31,75,255,.13);--vf:rgba(10,22,64,.22);--ease:cubic-bezier(.2,.7,.2,1);
+  --ok:#15803D;--okbg:#DCFCE7;--no:#C2262E;--nobg:#FDE4E5;--part:#B45309;--partbg:#FEF3C7;
+  --head:'Chakra Petch',system-ui,sans-serif;--body:'Inter',system-ui,-apple-system,sans-serif;--mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+  color-scheme:light}
+[data-theme=dark]{--bg:#070C22;--text:#E8ECFA;--soft:#A7B0CF;--faint:#7F89AA;--rule:#1C2750;--tint:#0F1838;--card:#0B1330;--link:#8DB8FF;--accent:#5B7FFF;
+  --nav:rgba(7,12,34,.88);--code:#0F1838;--blade:#E8ECFA;--word:#F2F5FF;--cam:#8DB8FF;--us:#111D47;
+  --dot:rgba(141,184,255,.12);--band:#0A1129;--glow:rgba(31,75,255,.32);--vf:rgba(141,184,255,.28);
+  --ok:#4ADE80;--okbg:rgba(74,222,128,.15);--no:#F87171;--nobg:rgba(248,113,113,.15);--part:#FBBF24;--partbg:rgba(251,191,36,.15);
+  color-scheme:dark}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:72px}
+body{margin:0;font:16px/1.6 var(--body);color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased}
+a{color:var(--link);text-decoration:none} a:hover{text-decoration:underline}
+code{font-family:var(--mono);font-size:.9em}
+.wrap{max-width:1040px;margin:0 auto;padding:0 28px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+
+/* nav */
+header.nav{position:sticky;top:0;z-index:10;background:var(--nav);backdrop-filter:blur(8px);border-bottom:1px solid var(--rule)}
+header.nav .wrap{display:flex;align-items:center;height:60px;gap:28px}
+.brand{display:flex;align-items:center;gap:9px;color:var(--word)} .brand:hover{text-decoration:none}
+.brand svg{width:26px;height:26px}
+.word{font:700 22px/1 var(--head);letter-spacing:-.03em} .word b{color:var(--cam);font-weight:700}
+header.nav nav{margin-left:auto;display:flex;align-items:center;gap:24px;font-size:14px}
+header.nav nav a{color:var(--soft)} header.nav nav a:hover{color:var(--text);text-decoration:none}
+.theme{width:32px;height:32px;border:1px solid var(--rule);border-radius:8px;background:none;color:var(--soft);display:grid;place-items:center;cursor:pointer;margin-left:-4px}
+.theme:hover{color:var(--text)}
+.theme svg{width:16px;height:16px}
+.theme .sun,[data-theme=dark] .theme .moon{display:none} [data-theme=dark] .theme .sun{display:block}
+@media (max-width:760px){header.nav nav{gap:18px} header.nav nav a:not(.keep){display:none}}
+
+/* hero */
+.hero{position:relative;overflow:hidden}
+.hero::before{content:"";position:absolute;width:900px;height:900px;right:-220px;top:-300px;background:radial-gradient(closest-side,var(--glow),transparent);pointer-events:none}
+.hero::after{content:"";position:absolute;inset:0;pointer-events:none;background-image:radial-gradient(var(--dot) 1px,transparent 1.6px);background-size:22px 22px;-webkit-mask-image:radial-gradient(ellipse 55% 75% at 75% 45%,#000,transparent 75%);mask-image:radial-gradient(ellipse 55% 75% at 75% 45%,#000,transparent 75%)}
+.hero .wrap{position:relative;z-index:1;display:grid;grid-template-columns:1fr 280px;gap:72px;align-items:center;padding-top:88px;padding-bottom:96px}
+.vf{position:absolute;inset:32px 12px;pointer-events:none}
+.vf i{position:absolute;width:26px;height:26px;border:0 solid var(--vf)}
+.vf i:nth-child(1){top:0;left:0;border-width:2px 0 0 2px}.vf i:nth-child(2){top:0;right:0;border-width:2px 2px 0 0}
+.vf i:nth-child(3){bottom:0;left:0;border-width:0 0 2px 2px}.vf i:nth-child(4){bottom:0;right:0;border-width:0 2px 2px 0}
+.demo{position:relative}
+.ap{position:absolute;left:50%;top:47%;width:540px;height:540px;margin:-270px 0 0 -270px;color:var(--accent);opacity:.09;z-index:-1;animation:spin 140s linear infinite;pointer-events:none}
+[data-theme=dark] .ap{color:var(--sky);opacity:.09}
+@keyframes spin{to{transform:rotate(360deg)}}
+.phone{animation:float 7s ease-in-out 1.6s infinite}
+@keyframes float{50%{transform:translateY(-8px)}}
+.js .hero [data-h]{animation:rise .9s var(--ease) both;animation-delay:var(--d,0s)}
+.js .demo{animation:focus 1.3s var(--ease) .25s both}
+@keyframes rise{from{opacity:0;transform:translateY(22px);filter:blur(8px)}to{opacity:1;transform:none;filter:none}}
+@keyframes focus{from{opacity:0;transform:translateY(28px) scale(.96);filter:blur(14px)}to{opacity:1;transform:none;filter:none}}
+.js .rv{opacity:0;transform:translateY(28px);filter:blur(8px);transition:opacity .8s var(--ease),transform .8s var(--ease),filter .8s var(--ease);transition-delay:var(--d,0s)}
+.js .rv.in{opacity:1;transform:none;filter:none}
+@media (max-width:860px){.hero::before{top:auto;bottom:-320px;right:-360px}.hero::after{-webkit-mask-image:radial-gradient(ellipse 80% 40% at 50% 78%,#000,transparent 75%);mask-image:radial-gradient(ellipse 80% 40% at 50% 78%,#000,transparent 75%)}}
+@media (max-width:560px){.vf{inset:18px 8px 22px}.ap{width:420px;height:420px;margin:-210px 0 0 -210px}}
+@media (max-width:860px){.hero .wrap{grid-template-columns:1fr;gap:48px;padding-top:80px;padding-bottom:72px}}
+h1{font:700 52px/1.05 var(--head);letter-spacing:-.025em;margin:0 0 18px}
+@media (max-width:560px){h1{font-size:40px}}
+.hero p.sub{font-size:19px;color:var(--soft);margin:0 0 28px;max-width:470px}
+.cmd{display:flex;align-items:center;max-width:420px;border:1px solid var(--rule);border-radius:10px;background:var(--tint);font:15px var(--mono)}
+.cmd span{padding:13px 0 13px 16px;flex:1;white-space:nowrap;overflow:auto}
+.cmd span::before{content:"$ ";color:var(--faint)}
+.cmd button{border:0;border-left:1px solid var(--rule);background:none;padding:0 16px;align-self:stretch;font:500 13px var(--body);color:var(--soft);cursor:pointer;border-radius:0 10px 10px 0}
+.cmd button:hover{color:var(--text)}
+
+/* phone (always dark, like a camera app) */
+.demo{justify-self:center;width:280px}
+.phone video{display:block;width:100%;aspect-ratio:720/1566;border-radius:36px;background:#000}
+.phone{position:relative;width:280px;border-radius:46px;background:#111522;padding:10px;box-shadow:0 0 0 1px var(--rule)}
+
+/* sections */
+section .wrap{display:grid;grid-template-columns:180px 1fr;gap:40px;padding-top:84px;padding-bottom:84px}
+@media (max-width:760px){section .wrap{grid-template-columns:1fr;gap:18px;padding-top:56px;padding-bottom:56px}}
+h2{font:600 26px/1.25 var(--head);letter-spacing:-.015em;margin:0}
+@media (max-width:560px){h2{font-size:24px}}
+section.band{position:relative;background:var(--band);border-top:1px solid var(--rule);border-bottom:1px solid var(--rule)}
+section.band::before{content:"";position:absolute;inset:0;pointer-events:none;background-image:radial-gradient(var(--dot) 1px,transparent 1.6px);background-size:22px 22px;-webkit-mask-image:linear-gradient(transparent,#000 30%,#000 70%,transparent);mask-image:linear-gradient(transparent,#000 30%,#000 70%,transparent)}
+section.band>.wrap{position:relative}
+.band .cmp td:first-child,.band .cmp th:first-child{background:var(--band)}
+.band .cmp .us{background:color-mix(in srgb,var(--accent) 9%,var(--card))}
+.band .v.u::before{background:var(--rule)}
+.band .tl-mono,.band .tl-meta{background:var(--card);box-shadow:inset 0 0 0 1px var(--rule)}
+.body{max-width:680px;min-width:0}
+
+/* quick start */
+.term{position:relative;border-radius:14px;overflow:hidden;background:var(--code);box-shadow:0 24px 60px -28px rgba(10,22,64,.55),0 0 0 1px rgba(10,22,64,.06)}
+[data-theme=dark] .term{box-shadow:0 24px 60px -28px rgba(0,0,0,.8),0 0 0 1px var(--rule)}
+.term-bar{display:flex;align-items:center;gap:16px;padding:8px 12px;background:rgba(255,255,255,.05);border-bottom:1px solid rgba(255,255,255,.08)}
+.dots{display:flex;gap:7px;flex:none;padding-left:2px}
+.dots i{width:12px;height:12px;border-radius:50%;background:#FF5F57}
+.dots i:nth-child(2){background:#FEBC2E} .dots i:nth-child(3){background:#28C840}
+.tabs{display:flex;flex-wrap:wrap;gap:4px}
+.tabs button{border:0;background:none;padding:6px 10px;border-radius:7px;font:500 13px var(--body);color:rgba(227,233,255,.6);cursor:pointer}
+.tabs button:hover{color:#fff}
+.tabs button.on{color:#fff;background:rgba(255,255,255,.1)}
+pre{margin:0;background:none;color:#E3E9FF;padding:18px 20px;font:14px/1.75 var(--mono);overflow:hidden;white-space:pre-wrap}
+.pre-measure{position:absolute;left:0;top:0;visibility:hidden;pointer-events:none}
+pre .o{color:#8FE3A8}
+pre .c{color:#7F8BB8}
+.caret{display:inline-block;width:8px;height:1.05em;background:#E3E9FF;vertical-align:-2px;animation:blink 1s step-end infinite}
+@keyframes blink{50%{opacity:0}}
+
+/* your app gets (big) */
+#features .wrap{display:block}
+#features h2{margin-bottom:22px}
+.feats{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;list-style:none;margin:0;padding:0}
+.feats li{border:1px solid var(--rule);border-radius:16px;background:var(--card);padding:22px 12px 20px 14px}
+.feats i{display:grid;place-items:center;width:52px;height:52px;margin-bottom:16px;border-radius:14px;background:color-mix(in srgb,var(--accent) 11%,transparent);color:var(--accent)}
+.feats svg{width:26px;height:26px}
+.feats b{display:block;font-size:16px;font-weight:600;line-height:1.3}
+.feats small{display:block;margin-top:4px;font-size:13.5px;line-height:1.4;color:var(--faint)}
+.feats b,.feats small,.logo small{text-wrap:balance}
+.nw{white-space:nowrap}
+@media (max-width:860px){.feats{grid-template-columns:1fr 1fr}.feats li:last-child{grid-column:1/-1}}
+@media (max-width:560px){.feats{gap:10px}.feats li{padding:16px 14px}.feats i{width:44px;height:44px;margin-bottom:12px}.feats svg{width:22px;height:22px}.feats b{font-size:15px}.feats small{font-size:12.5px}}
+
+/* works with: a quiet strip in the hero */
+.stack{display:flex;flex-wrap:wrap;align-items:center;gap:10px 20px;margin-top:30px;font-size:13px;color:var(--faint)}
+.stack ul{display:flex;flex-wrap:wrap;gap:10px 18px;list-style:none;margin:0;padding:0}
+.stack li{display:inline-flex;align-items:center;gap:7px;color:var(--soft);font-weight:500}
+.stack svg{width:16px;height:16px;flex:none;opacity:.85}
+@media (max-width:560px){.stack{gap:8px 14px;margin-top:24px}.stack ul{gap:8px 14px}}
+
+/* how it works: three stacks side by side */
+.lanes{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(7,auto);column-gap:16px;max-width:640px}
+.lane{display:grid;grid-row:span 7;grid-template-rows:subgrid;text-align:center;min-width:0}
+.lane-h{margin:0 0 10px;font:600 15px/1.3 var(--body)}
+.lane-h small{display:block;font-weight:400;font-size:12.5px;color:var(--faint);margin-top:3px}
+.blk{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:12px 6px;border:1px solid var(--rule);border-radius:12px;background:var(--card);font-size:14px;font-weight:600;line-height:1.25;transition:box-shadow .3s,border-color .3s}
+.blk svg{width:20px;height:20px}
+.blk em{font-style:normal;font-weight:600;font-size:10.5px;letter-spacing:.07em;text-transform:uppercase}
+.blk.apple{background:color-mix(in srgb,var(--accent) 9%,var(--card));border-color:color-mix(in srgb,var(--accent) 35%,var(--rule))}
+.blk.apple em{color:var(--accent)}
+.blk.fake{background:var(--partbg);border:1px dashed var(--part)}
+.blk.fake em{color:var(--part)}
+.blk.src{color:var(--soft)}
+.blk.us{background:var(--navy);border-color:var(--navy);color:#fff}
+[data-theme=dark] .blk.us{background:var(--blue);border-color:var(--blue)}
+.blk.us em{color:var(--sky)} [data-theme=dark] .blk.us em{color:#DCE6FF}
+.blk.us .tile{width:20px;height:20px;border-radius:5px;background:#fff;display:grid;place-items:center;--blade:#0A1640}
+.blk.us .tile svg{width:15px;height:15px}
+.blk.lit{border-color:var(--accent);box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 18%,transparent)}
+.blk.fake.lit{border-color:var(--part);box-shadow:0 0 0 4px color-mix(in srgb,var(--part) 28%,transparent)}
+[data-theme=dark] .blk.us.lit{box-shadow:0 0 0 4px color-mix(in srgb,var(--sky) 55%,transparent)}
+.got{position:absolute;right:-9px;top:-9px;width:22px;height:16px;border-radius:4px;opacity:0;transform:scale(.4);transition:opacity .25s,transform .25s}
+.got.on{opacity:1;transform:none}
+.wire{position:relative;width:2px;height:30px;margin:0 auto;background:var(--rule)}
+.pkt{position:absolute;left:1px;top:0;opacity:0;pointer-events:none}
+.pkt.req{width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 22%,transparent)}
+.photo{background:linear-gradient(135deg,#8DB8FF,#1F4BFF);box-shadow:0 2px 6px rgba(10,22,64,.25)}
+.photo.amber{background:linear-gradient(135deg,#FCD34D,#D97706)}
+.photo::after{content:"";position:absolute;left:5px;top:4px;width:6px;height:6px;border-radius:1px;background:#fff}
+.pkt.photo{width:22px;height:16px;margin:-8px 0 0 -11px;border-radius:4px}
+.verdict{display:flex;align-items:center;justify-content:center;gap:7px;margin:14px 0 0;min-height:24px;font-size:14px;font-weight:500;opacity:0;transform:translateY(4px);transition:opacity .35s,transform .35s}
+.verdict.show{opacity:1;transform:none}
+.verdict .mk{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;flex:none}
+.verdict.ok .mk{background:var(--okbg);color:var(--ok)} .verdict.ok .mk::before{content:"✓";content:"✓" / ""}
+.verdict.no .mk{background:var(--nobg);color:var(--no)} .verdict.no .mk::before{content:"✕";content:"✕" / ""}
+@media (max-width:560px){.lanes{column-gap:12px}.got{right:-6px}.lane-h{font-size:13px}.lane-h small{font-size:11px}.blk{font-size:12.5px;padding:10px 4px}.blk em{font-size:10px}.verdict{flex-direction:column;justify-content:flex-start;gap:4px;font-size:12.5px;text-align:center}}
+
+/* compare */
+.cmp-wrap{position:relative;overflow-x:auto}
+@media (max-width:760px){.cmp-wrap.more{-webkit-mask-image:linear-gradient(90deg,#000 85%,transparent);mask-image:linear-gradient(90deg,#000 85%,transparent)}}
+.cmp{width:100%;min-width:560px;border-collapse:collapse;font-size:14px}
+.cmp th,.cmp td{padding:11px 12px;border-bottom:1px solid var(--rule);text-align:left;vertical-align:middle;white-space:nowrap}
+.cmp th{font-weight:600;font-size:13px}
+.cmp th[scope=row]{font-size:14px}
+.cmp th a{color:var(--soft)}
+.tool{display:flex;flex-direction:column;align-items:flex-start;gap:7px}
+.cmp th a.tool:hover{text-decoration:none;color:var(--text)}
+.tl{width:28px;height:28px;border-radius:7px;flex:none;display:grid;place-items:center;overflow:hidden}
+.tl-us{background:#fff;box-shadow:inset 0 0 0 1px var(--rule);--blade:#0A1640} .tl-us svg{width:20px;height:20px}
+.tl-meta{background:var(--tint);color:#0081FB} .tl-meta svg{width:20px;height:20px}
+.tl-mono{background:var(--tint);color:var(--soft);font:600 15px/1 var(--mono)}
+img.tl{outline:1px solid var(--rule);outline-offset:-1px}
+.cmp td:first-child,.cmp th:first-child{color:var(--soft);font-weight:400;padding-left:0;padding-right:16px;background:var(--bg)}
+.cmp .us{background:var(--us);color:var(--text)}
+.cmp th.us{color:var(--text);border-radius:8px 8px 0 0}
+.cmp tr:last-child td{border-bottom:0}
+.v{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--soft)}
+.v::before{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;flex:none}
+.v.y::before{content:"✓";content:"✓" / "";background:var(--okbg);color:var(--ok)}
+.v.n::before{content:"✕";content:"✕" / "";background:var(--nobg);color:var(--no)}
+.v.p::before{content:"~";content:"~" / "";background:var(--partbg);color:var(--part)}
+.v.u::before{content:"?";content:"?" / "";background:var(--tint);color:var(--faint)}
+#compare .wrap{display:block}
+#compare h2{margin-bottom:18px}
+@media (max-width:760px){.cmp td:first-child,.cmp th:first-child{position:sticky;left:0;z-index:1}.cmp{min-width:480px}.cmp th,.cmp td{padding:10px 8px}.v{flex-direction:column;align-items:flex-start;gap:3px;font-size:12px}}
+
+footer{border-top:1px solid var(--rule)}
+footer .wrap{display:flex;flex-wrap:wrap;align-items:center;gap:14px 28px;padding-top:28px;padding-bottom:40px;font-size:13px;color:var(--faint)}
+.flinks{margin-left:auto;display:flex;flex-wrap:wrap;gap:8px 22px;font-size:14px}
+.flinks a{color:var(--soft)} .flinks a:hover{color:var(--text)}
+@media (max-width:560px){.flinks{margin-left:0;gap:8px 14px;font-size:13px}}
+@media (max-width:560px){.wrap{padding:0 20px}.term-bar{flex-wrap:wrap;gap:10px}.tabs{width:100%;gap:2px}.tabs button{padding:6px 7px;font-size:12.5px}pre{font-size:13px;padding:16px}}
+@media print{.js .rv{opacity:1;transform:none;filter:none;transition:none}}
+@media (min-width:861px) and (max-height:820px){.hero .wrap{padding-top:56px;padding-bottom:64px}.vf{inset:20px 12px}}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}.js .rv{opacity:1;transform:none;filter:none;transition:none}.js .hero [data-h],.js .demo,.phone,.ap{animation:none}.det{transition:none}}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="mark" viewBox="0 0 100 100">
+<polygon points="50,4 89.84,27 65.62,53.45" fill="#1F4BFF"/><polygon points="89.84,27 89.84,73 54.82,65.26" style="fill:var(--blade)"/><polygon points="89.84,73 50,96 39.2,61.8" fill="#8DB8FF"/>
+<polygon points="50,96 10.16,73 34.38,46.55" fill="#1F4BFF"/><polygon points="10.16,73 10.16,27 45.18,34.74" style="fill:var(--blade)"/><polygon points="10.16,27 50,4 60.8,38.2" fill="#8DB8FF"/>
+</symbol></svg>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="stuntcam"><svg aria-hidden="true"><use href="#mark"/></svg><span class="word">stunt<b>cam</b></span></a>
+    <nav>
+      <button type="button" class="theme" id="theme" aria-label="Dark mode" aria-pressed="false"><svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg><svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+<div class="hero">
+  <div class="wrap">
+    <div class="vf" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+    <div>
+      <h1 data-h>A camera for the<br>iOS Simulator.</h1>
+      <p class="sub" data-h style="--d:.12s">Your app's camera code runs unmodified in the Simulator, through Apple's own AVFoundation.</p>
+      <div class="cmd" data-h style="--d:.24s"><span>npx stuntcam up</span><button type="button" id="copy">Copy</button></div>
+      <div class="stack" data-h style="--d:.36s"><span>Works with</span><ul><li title="AVFoundation, Swift or Objective-C"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/></svg>Native iOS</li><li title="tested with VisionCamera"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M14.23 12.004a2.236 2.236 0 0 1-2.235 2.236 2.236 2.236 0 0 1-2.236-2.236 2.236 2.236 0 0 1 2.235-2.236 2.236 2.236 0 0 1 2.236 2.236zm2.648-10.69c-1.346 0-3.107.96-4.888 2.622-1.78-1.653-3.542-2.602-4.887-2.602-.41 0-.783.093-1.106.278-1.375.793-1.683 3.264-.973 6.365C1.98 8.917 0 10.42 0 12.004c0 1.59 1.99 3.097 5.043 4.03-.704 3.113-.39 5.588.988 6.38.32.187.69.275 1.102.275 1.345 0 3.107-.96 4.888-2.624 1.78 1.654 3.542 2.603 4.887 2.603.41 0 .783-.09 1.106-.275 1.374-.792 1.683-3.263.973-6.365C22.02 15.096 24 13.59 24 12.004c0-1.59-1.99-3.097-5.043-4.032.704-3.11.39-5.587-.988-6.38-.318-.184-.688-.277-1.092-.278zm-.005 1.09v.006c.225 0 .406.044.558.127.666.382.955 1.835.73 3.704-.054.46-.142.945-.25 1.44-.96-.236-2.006-.417-3.107-.534-.66-.905-1.345-1.727-2.035-2.447 1.592-1.48 3.087-2.292 4.105-2.295zm-9.77.02c1.012 0 2.514.808 4.11 2.28-.686.72-1.37 1.537-2.02 2.442-1.107.117-2.154.298-3.113.538-.112-.49-.195-.964-.254-1.42-.23-1.868.054-3.32.714-3.707.19-.09.4-.127.563-.132zm4.882 3.05c.455.468.91.992 1.36 1.564-.44-.02-.89-.034-1.345-.034-.46 0-.915.01-1.36.034.44-.572.895-1.096 1.345-1.565zM12 8.1c.74 0 1.477.034 2.202.093.406.582.802 1.203 1.183 1.86.372.64.71 1.29 1.018 1.946-.308.655-.646 1.31-1.013 1.95-.38.66-.773 1.288-1.18 1.87-.728.063-1.466.098-2.21.098-.74 0-1.477-.035-2.202-.093-.406-.582-.802-1.204-1.183-1.86-.372-.64-.71-1.29-1.018-1.946.303-.657.646-1.313 1.013-1.954.38-.66.773-1.286 1.18-1.868.728-.064 1.466-.098 2.21-.098zm-3.635.254c-.24.377-.48.763-.704 1.16-.225.39-.435.782-.635 1.174-.265-.656-.49-1.31-.676-1.947.64-.15 1.315-.283 2.015-.386zm7.26 0c.695.103 1.365.23 2.006.387-.18.632-.405 1.282-.66 1.933-.2-.39-.41-.783-.64-1.174-.225-.392-.465-.774-.705-1.146zm3.063.675c.484.15.944.317 1.375.498 1.732.74 2.852 1.708 2.852 2.476-.005.768-1.125 1.74-2.857 2.475-.42.18-.88.342-1.355.493-.28-.958-.646-1.956-1.1-2.98.45-1.017.81-2.01 1.085-2.964zm-13.395.004c.278.96.645 1.957 1.1 2.98-.45 1.017-.812 2.01-1.086 2.964-.484-.15-.944-.318-1.37-.5-1.732-.737-2.852-1.706-2.852-2.474 0-.768 1.12-1.742 2.852-2.476.42-.18.88-.342 1.356-.494zm11.678 4.28c.265.657.49 1.312.676 1.948-.64.157-1.316.29-2.016.39.24-.375.48-.762.705-1.158.225-.39.435-.788.636-1.18zm-9.945.02c.2.392.41.783.64 1.175.23.39.465.772.705 1.143-.695-.102-1.365-.23-2.006-.386.18-.63.406-1.282.66-1.933zM17.92 16.32c.112.493.2.968.254 1.423.23 1.868-.054 3.32-.714 3.708-.147.09-.338.128-.563.128-1.012 0-2.514-.807-4.11-2.28.686-.72 1.37-1.536 2.02-2.44 1.107-.118 2.154-.3 3.113-.54zm-11.83.01c.96.234 2.006.415 3.107.532.66.905 1.345 1.727 2.035 2.446-1.595 1.483-3.092 2.295-4.11 2.295-.22-.005-.406-.05-.553-.132-.666-.38-.955-1.834-.73-3.703.054-.46.142-.944.25-1.438zm4.56.64c.44.02.89.034 1.345.034.46 0 .915-.01 1.36-.034-.44.572-.895 1.095-1.345 1.565-.455-.47-.91-.993-1.36-1.565z"/></svg>React Native</li><li title="tested with expo-camera"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M0 20.084c.043.53.23 1.063.718 1.778.58.849 1.576 1.315 2.303.567.49-.505 5.794-9.776 8.35-13.29a.761.761 0 011.248 0c2.556 3.514 7.86 12.785 8.35 13.29.727.748 1.723.282 2.303-.567.57-.835.728-1.42.728-2.046 0-.426-8.26-15.798-9.092-17.078-.8-1.23-1.044-1.498-2.397-1.542h-1.032c-1.353.044-1.597.311-2.398 1.542C8.267 3.991.33 18.758 0 19.77Z"/></svg>Expo</li><li title="tested with camera and mobile_scanner"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M14.314 0L2.3 12 6 15.7 21.684.013h-7.357zm.014 11.072L7.857 17.53l6.47 6.47H21.7l-6.46-6.468 6.46-6.46h-7.37z"/></svg>Flutter</li></ul></div>
+    </div>
+    <div class="demo">
+      <svg class="ap" viewBox="0 0 100 100" aria-hidden="true" fill="currentColor"><polygon points="50,4 89.84,27 65.62,53.45"/><polygon points="89.84,27 89.84,73 54.82,65.26" opacity=".55"/><polygon points="89.84,73 50,96 39.2,61.8" opacity=".8"/><polygon points="50,96 10.16,73 34.38,46.55"/><polygon points="10.16,73 10.16,27 45.18,34.74" opacity=".55"/><polygon points="10.16,27 50,4 60.8,38.2" opacity=".8"/></svg>
+      <div class="phone"><video id="rec" autoplay muted loop playsinline preload="auto" poster="demo-poster.jpg" aria-label="Recording: a camera app in the iOS Simulator shows a cat video, then a café table, and scans the QR code on it"><source src="demo.mp4" type="video/mp4"></video></div>
+    </div>
+  </div>
+</div>
+
+<section id="features" class="band">
+  <div class="wrap">
+    <h2>Your app gets</h2>
+    <ul class="feats">
+          <li><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><circle cx="12" cy="12" r="3"/></svg></i><b>Live preview</b><small>Front and back cameras</small></li>
+          <li><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></i><b>Photos</b><small>JPEG and HEIC, with EXIF</small></li>
+          <li><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3z"/></svg></i><b>Video + audio</b><small>1080p and 4K, AAC audio</small></li>
+          <li><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="M14 14h2v2M20 14v.01M14 20h.01M17 17h3v3h-3z"/></svg></i><b>QR &amp; EAN-13</b><small>Metadata output and Vision</small></li>
+          <li><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="m21 16-5-5-8 8"/></svg></i><b>Your image or video</b><small>Or the built&#8209;in test scene</small></li>
+    </ul>
+  </div>
+</section>
+
+<section id="compare">
+  <div class="wrap">
+    <h2>Compared</h2>
+    <div class="cmp-wrap"><table class="cmp">
+<tr><th></th><th class="us"><span class="tool"><span class="tl tl-us" aria-hidden="true"><svg viewBox="0 0 100 100"><use href="#mark"/></svg></span>stuntcam</span></th><th><a class="tool" href="https://simcam.swmansion.com" title="Their docs, read 15 Nov 2026"><img class="tl" src="data:image/png;base64,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" alt="">SimCam</a></th><th><a class="tool" href="https://github.com/EvanBacon/serve-sim" title="Their docs, read 15 Nov 2026"><span class="tl tl-mono" aria-hidden="true">s</span>serve-sim</a></th><th><a class="tool" href="https://github.com/tddworks/baguette/blob/main/docs/features/camera/README.md" title="Their docs, read 15 Nov 2026"><img class="tl" src="data:image/png;base64,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" alt="">baguette</a></th><th><a class="tool" href="https://github.com/meta/idb/blob/main/Shims/Shimulator/VideoInjection/README.md" title="Their docs, read 15 Nov 2026"><span class="tl tl-meta" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6.915 4.03c-1.968 0-3.683 1.28-4.871 3.113C.704 9.208 0 11.883 0 14.449c0 .706.07 1.369.21 1.973a6.624 6.624 0 0 0 .265.86 5.297 5.297 0 0 0 .371.761c.696 1.159 1.818 1.927 3.593 1.927 1.497 0 2.633-.671 3.965-2.444.76-1.012 1.144-1.626 2.663-4.32l.756-1.339.186-.325c.061.1.121.196.183.3l2.152 3.595c.724 1.21 1.665 2.556 2.47 3.314 1.046.987 1.992 1.22 3.06 1.22 1.075 0 1.876-.355 2.455-.843a3.743 3.743 0 0 0 .81-.973c.542-.939.861-2.127.861-3.745 0-2.72-.681-5.357-2.084-7.45-1.282-1.912-2.957-2.93-4.716-2.93-1.047 0-2.088.467-3.053 1.308-.652.57-1.257 1.29-1.82 2.05-.69-.875-1.335-1.547-1.958-2.056-1.182-.966-2.315-1.303-3.454-1.303zm10.16 2.053c1.147 0 2.188.758 2.992 1.999 1.132 1.748 1.647 4.195 1.647 6.4 0 1.548-.368 2.9-1.839 2.9-.58 0-1.027-.23-1.664-1.004-.496-.601-1.343-1.878-2.832-4.358l-.617-1.028a44.908 44.908 0 0 0-1.255-1.98c.07-.109.141-.224.211-.327 1.12-1.667 2.118-2.602 3.358-2.602zm-10.201.553c1.265 0 2.058.791 2.675 1.446.307.327.737.871 1.234 1.579l-1.02 1.566c-.757 1.163-1.882 3.017-2.837 4.338-1.191 1.649-1.81 1.817-2.486 1.817-.524 0-1.038-.237-1.383-.794-.263-.426-.464-1.13-.464-2.046 0-2.221.63-4.535 1.66-6.088.454-.687.964-1.226 1.533-1.533a2.264 2.264 0 0 1 1.088-.285z"/></svg></span>Meta idb</a></th><th><a class="tool" href="https://www.rocketsim.app/docs/features/capturing/simulator-camera-support/" title="Their docs, read 15 Nov 2026"><img class="tl" src="data:image/png;base64,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" alt="">RocketSim</a></th></tr>
+<tr><th scope="row" title="Apple&#x27;s own AVFoundation objects stay in place">Real AVFoundation</th><td class="us"><span class="v y"><span class="sr">Yes</span></span></td><td><span class="v n"><span class="sr">No</span></span></td><td><span class="v n"><span class="sr">No</span></span></td><td><span class="v n"><span class="sr">No</span></span></td><td><span class="v n"><span class="sr">No</span></span></td><td><span class="v n"><span class="sr">No</span></span></td></tr>
+<tr><th scope="row">Free</th><td class="us"><span class="v y"><span class="sr">Yes</span></span></td><td><span class="v n"><span class="sr">No, </span><span class="lbl">$19</span></span></td><td><span class="v y"><span class="sr">Yes</span></span></td><td><span class="v y"><span class="sr">Yes</span></span></td><td><span class="v y"><span class="sr">Yes</span></span></td><td><span class="v n"><span class="sr">No, </span><span class="lbl">Pro $9.99/mo</span></span></td></tr>
+<tr><th scope="row">Live webcam</th><td class="us"><span class="v y"><span class="sr">Yes</span></span></td><td><span class="v y"><span class="sr">Yes</span></span></td><td><span class="v y"><span class="sr">Yes</span></span></td><td><span class="v y"><span class="sr">Yes</span></span></td><td><span class="v n"><span class="sr">No</span></span></td><td><span class="v y"><span class="sr">Yes</span></span></td></tr>
+<tr><th scope="row">Image or video</th><td class="us"><span class="v y"><span class="sr">Yes</span></span></td><td><span class="v y"><span class="sr">Yes</span></span></td><td><span class="v y"><span class="sr">Yes</span></span></td><td><span class="v y"><span class="sr">Yes</span></span></td><td><span class="v p"><span class="sr">Partly, </span><span class="lbl">Video only</span></span></td><td><span class="v n"><span class="sr">No</span></span></td></tr>
+<tr><th scope="row">Audio in video</th><td class="us"><span class="v y"><span class="sr">Yes</span></span></td><td><span class="v u" title="Not in their docs"><span class="sr">Not in their docs</span></span></td><td><span class="v n"><span class="sr">No</span></span></td><td><span class="v n"><span class="sr">No</span></span></td><td><span class="v n"><span class="sr">No</span></span></td><td><span class="v n"><span class="sr">No</span></span></td></tr>
+<tr><th scope="row">Barcodes</th><td class="us"><span class="v y"><span class="sr">Yes</span></span></td><td><span class="v y"><span class="sr">Yes</span></span></td><td><span class="v n" title="Our side-by-side test, 11 Nov 2026"><span class="sr">No</span></span></td><td><span class="v n"><span class="sr">No</span></span></td><td><span class="v n"><span class="sr">No</span></span></td><td><span class="v y"><span class="sr">Yes</span></span></td></tr>
+</table></div>
+  </div>
+</section>
+
+<section id="how" class="band">
+  <div class="wrap">
+    <h2>How it works</h2>
+    <div class="body">
+      <div class="lanes" id="flow">
+<div class="lane"><h3 class="lane-h">iPhone<small>the real thing</small></h3><div class="blk"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m8 8-4 4 4 4M16 8l4 4-4 4"/></svg>Your app<span class="got photo" aria-hidden="true"></span></div><div class="wire" aria-hidden="true"><i class="pkt"></i></div><div class="blk apple"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/></svg>AVFoundation<em>Apple's code</em></div><div class="wire" aria-hidden="true"><i class="pkt"></i></div><div class="blk src"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/></svg>Camera</div><p class="verdict ok"><span class="mk"></span><span class="sr">Yes: </span>Real AVFoundation</p></div>
+<div class="lane"><h3 class="lane-h">stuntcam<small>in the Simulator</small></h3><div class="blk"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m8 8-4 4 4 4M16 8l4 4-4 4"/></svg>Your app<span class="got photo" aria-hidden="true"></span></div><div class="wire" aria-hidden="true"><i class="pkt"></i></div><div class="blk apple"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/></svg>AVFoundation<em>Apple's code</em></div><div class="wire" aria-hidden="true"><i class="pkt"></i></div><div class="blk us"><span class="tile" aria-hidden="true"><svg viewBox="0 0 100 100"><use href="#mark"/></svg></span>stuntcam<em>as the camera</em></div><p class="verdict ok"><span class="mk"></span><span class="sr">Yes: </span>Same path as iPhone</p></div>
+<div class="lane"><h3 class="lane-h">Most other tools<small>serve-sim, baguette, Meta idb</small></h3><div class="blk"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m8 8-4 4 4 4M16 8l4 4-4 4"/></svg>Your app<span class="got photo amber" aria-hidden="true"></span></div><div class="wire" aria-hidden="true"><i class="pkt"></i></div><div class="blk fake"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/></svg>AVFoundation<em>Imitation</em></div><div class="wire" aria-hidden="true"><i class="pkt"></i></div><div class="blk src"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3z"/></svg>Webcam or file</div><p class="verdict no"><span class="mk"></span><span class="sr">No: </span>Imitation</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="start">
+  <div class="wrap">
+    <h2>Get started</h2>
+    <div class="body">
+      <div class="term">
+        <div class="term-bar">
+          <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+          <div class="tabs">
+            <button type="button" class="on" aria-pressed="true" data-t="rn">React Native / Expo</button>
+            <button type="button" aria-pressed="false" data-t="xcode">Xcode</button>
+            <button type="button" aria-pressed="false" data-t="flutter">Flutter</button>
+            <button type="button" aria-pressed="false" data-t="ci">Tests &amp; CI</button>
+          </div>
+        </div>
+        <pre id="code" aria-hidden="true"><div><span class="c"># arm the booted simulator</span></div><div><span class="c">$ </span>npx stuntcam up</div><div><span class="o">self-test passed · armed iPhone 17 Pro (iOS 27.0)</span></div><div><span class="c"># then run your app as usual</span></div><div><span class="c">$ </span>npx expo run:ios</div></pre>
+        <div class="sr" id="qs-text">
+          <h3>Install and run</h3>
+          <dl>
+            <dt>React Native / Expo</dt><dd><code>npx stuntcam up</code>, then <code>npx expo run:ios</code></dd>
+            <dt>Xcode</dt><dd><code>npx stuntcam up --udid &lt;simulator&gt;</code> with the simulator shut down (or <code>npx stuntcam up --reboot</code> if it is already booted), then Run (⌘R) in Xcode as usual</dd>
+            <dt>Flutter</dt><dd><code>npx stuntcam up</code>, then <code>flutter run</code></dd>
+            <dt>Tests &amp; CI</dt><dd><code>npx stuntcam up --udid $SIM --grant com.example.app</code>, then <code>npx stuntcam exec -- xcodebuild test -scheme MyApp -destination "platform=iOS Simulator,id=$SIM"</code></dd>
+            <dt>Use your own picture</dt><dd><code>npx stuntcam source image:/path/photo.png</code> (or <code>video:/path/clip.mov</code>)</dd>
+            <dt>Show a QR code</dt><dd><code>npx stuntcam source qr:'https://example.com'</code></dd>
+            <dt>Turn it off</dt><dd><code>npx stuntcam down</code> (no reboot)</dd>
+            <dt>Camera not showing?</dt><dd><code>npx stuntcam doctor</code></dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>stuntcam is Apache-2.0 and not affiliated with Apple.</span>
+    <nav class="flinks" aria-label="Docs"><a href="https://github.com/avinav-b/stuntcam#readme">Docs</a><a href="https://github.com/avinav-b/stuntcam/blob/main/docs/ARCHITECTURE.md">Architecture</a><a href="https://github.com/avinav-b/stuntcam/blob/main/docs/TROUBLESHOOTING.md">Troubleshooting</a><a href="https://www.npmjs.com/package/stuntcam">npm</a><a href="https://github.com/avinav-b/stuntcam">GitHub</a></nav>
+  </div>
+</footer>
+
+<script>
+(() => {
+  const $ = q => document.querySelector(q);
+  const root = document.documentElement;
+  const themeBtn = $('#theme'), syncTheme = () => themeBtn.setAttribute('aria-pressed', root.dataset.theme === 'dark');
+  themeBtn.onclick = () => { const t = root.dataset.theme === 'dark' ? 'light' : 'dark'; root.dataset.theme = t; syncTheme(); try { localStorage.setItem('theme', t); } catch (e) {} };
+  syncTheme();
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => { let s; try { s = localStorage.getItem('theme'); } catch (_) {} if (!s) { root.dataset.theme = e.matches ? 'dark' : 'light'; syncTheme(); } });
+
+  const copy = $('#copy');
+  copy.onclick = async () => { try { await navigator.clipboard.writeText('npx stuntcam up'); } catch (e) {} copy.textContent = 'Copied'; setTimeout(() => copy.textContent = 'Copy', 1200); };
+
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const wait = ms => new Promise(r => setTimeout(r, reduce ? 0 : ms));
+  const esc = t => t.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+
+  /* quick start: typed terminal */
+  const lines = {
+    rn: [['c','# arm the booted simulator'],['$','npx stuntcam up'],['o','self-test passed · armed iPhone 17 Pro (iOS 27.0)'],['c','# then run your app as usual'],['$','npx expo run:ios']],
+    xcode: [['c','# boots the simulator with the camera'],['$','npx stuntcam up --udid <simulator>'],['o','self-test passed · booted and armed'],['c','# then Run (⌘R) in Xcode, as usual']],
+    flutter: [['$','npx stuntcam up'],['o','self-test passed · armed iPhone 17 Pro (iOS 27.0)'],['$','flutter run']],
+    ci: [['$','npx stuntcam up --udid $SIM --grant com.example.app'],['o','armed · camera and microphone granted'],['$','npx stuntcam exec -- xcodebuild test -scheme MyApp \\\n    -destination "platform=iOS Simulator,id=$SIM"'],['c','# UI tests run with the camera on']]
+  };
+  const pre = $('#code'), tabs = document.querySelectorAll('[data-t]');
+  let typing = 0;
+  async function type(t) {
+    const id = ++typing; tabs.forEach(b => { b.classList.toggle('on', b.dataset.t === t); b.setAttribute('aria-pressed', b.dataset.t === t); }); pre.innerHTML = '';
+    for (const [k, txt] of lines[t]) {
+      if (id !== typing) return;
+      const ln = document.createElement('div'); pre.appendChild(ln);
+      if (k === '$') {
+        ln.innerHTML = '<span class="c">$ </span><span></span><span class="caret"></span>';
+        const tx = ln.children[1];
+        for (const ch of txt) { if (id !== typing) return; tx.textContent += ch; await wait(22 + Math.random() * 30); }
+        ln.lastChild.remove(); await wait(350);
+      } else { ln.innerHTML = `<span class="${k}">${esc(txt)}</span>`; await wait(k === 'o' ? 450 : 250); }
+    }
+    if (id === typing) { const c = document.createElement('div'); c.innerHTML = '<span class="c">$ </span><span class="caret"></span>'; pre.appendChild(c); }
+  }
+  tabs.forEach(b => b.onclick = () => type(b.dataset.t));
+  const full = k => lines[k].map(([c, txt]) => `<div><span class="${c === '$' ? 'c' : c}">${c === '$' ? '$ ' : ''}</span>${c === '$' ? esc(txt) : ''}${c !== '$' ? `<span class="${c}">${esc(txt)}</span>` : ''}</div>`).join('') + '<div><span class="c">$ </span></div>';
+  function sizeTerm() {
+    const m = document.createElement('pre'); m.className = 'pre-measure'; m.style.width = pre.clientWidth + 'px'; pre.parentNode.appendChild(m);
+    let h = 0; for (const k in lines) { m.innerHTML = full(k); h = Math.max(h, m.offsetHeight); }
+    m.remove(); pre.style.height = h + 'px';
+  }
+  sizeTerm(); document.fonts && document.fonts.ready.then(sizeTerm); let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(sizeTerm, 120); });
+  new IntersectionObserver((e, o) => { if (e[0].isIntersecting) { type('rn'); o.disconnect(); } }, { threshold: .4 }).observe(pre);
+
+  /* how it works: the same request runs down all three stacks at once */
+  const lanes = [...document.querySelectorAll('.lane')].map(l => ({
+    blk: [...l.querySelectorAll('.blk')], wire: [...l.querySelectorAll('.wire')], got: l.querySelector('.got'), verdict: l.querySelector('.verdict'), fake: !!l.querySelector('.blk.fake')
+  }));
+  const lit = (i, on) => lanes.forEach(l => l.blk[i].classList.toggle('lit', on));
+  function travel(i, dir, kind) {
+    return Promise.all(lanes.map(l => {
+      const p = l.wire[i].firstElementChild, h = l.wire[i].offsetHeight;
+      p.className = 'pkt ' + kind + (kind === 'photo' && l.fake && i === 0 ? ' amber' : '');
+      const [a, b] = dir === 'down' ? [0, h] : [h, 0];
+      return p.animate([{ transform: `translateY(${a}px)`, opacity: 0 }, { opacity: 1, offset: .2 }, { opacity: 1, offset: .8 }, { transform: `translateY(${b}px)`, opacity: 0 }],
+        { duration: reduce ? 0 : 600, easing: 'ease-in-out', fill: 'forwards' }).finished.catch(() => {});
+    }));
+  }
+  function reset() {
+    lanes.forEach(l => { l.blk.forEach(b => b.classList.remove('lit')); l.got.classList.remove('on'); l.verdict.classList.remove('show');
+      l.wire.forEach(w => w.firstElementChild.getAnimations().forEach(a => a.cancel())); });
+  }
+  async function runFlow() {
+    reset(); await wait(300);
+    for (;;) {
+      while (!flowSeen) await new Promise(r => setTimeout(r, 300));
+      lit(0, true); await wait(450);
+      await travel(0, 'down', 'req'); lit(0, false); lit(1, true); await wait(400);
+      await travel(1, 'down', 'req'); lit(1, false); lit(2, true); await wait(450);
+      await travel(1, 'up', 'photo'); lit(2, false); lit(1, true); await wait(400);
+      await travel(0, 'up', 'photo'); lit(1, false); lit(0, true);
+      lanes.forEach(l => l.got.classList.add('on'));
+      for (const l of lanes) { l.verdict.classList.add('show'); await wait(300); }
+      if (reduce) { lit(0, false); return; }
+      await wait(3000); reset(); await wait(800);
+    }
+  }
+  let flowSeen = false, started = false;
+  new IntersectionObserver(e => { flowSeen = e[0].isIntersecting; if (flowSeen && !started) { started = true; runFlow(); } }, { threshold: .4 }).observe($('#flow'));
+
+  /* compare: fade the right edge while more columns are off screen */
+  const cw = $('.cmp-wrap'), more = () => cw.classList.toggle('more', cw.scrollLeft + cw.clientWidth < cw.scrollWidth - 4);
+  cw.addEventListener('scroll', more, { passive: true }); addEventListener('resize', more); more();
+
+  /* scroll reveal: things come into focus as they enter */
+  const io = 'IntersectionObserver' in window ? new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { threshold: .12, rootMargin: '0px 0px -6% 0px' }) : null;
+  const rv = (sel, step = 0) => document.querySelectorAll(sel).forEach((el, i) => { el.classList.add('rv'); el.style.setProperty('--d', (i * step) + 'ms'); io ? io.observe(el) : el.classList.add('in'); });
+  rv('section h2'); rv('.feats li', 90); rv('#start .body'); rv('.lane', 120); rv('.cmp-wrap');
+
+})();
+</script>
+<script>
+(function(){var v=document.getElementById('rec');if(!v)return;
+if(matchMedia('(prefers-reduced-motion: reduce)').matches){v.removeAttribute('autoplay');v.pause();v.controls=true;v.currentTime=7.7;return}
+v.play().catch(function(){v.controls=true});
+if('IntersectionObserver' in window)new IntersectionObserver(function(e){e[e.length-1].isIntersecting?v.play().catch(function(){}):v.pause()}).observe(v)})();
+</script>
+</body>
+</html>

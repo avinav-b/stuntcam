@@ -1,0 +1,63 @@
+# stuntcam
+
+> stuntcam gives the iOS Simulator a camera. Your app's real camera code runs unmodified in the Simulator, through Apple's own AVFoundation: stuntcam replaces only the camera hardware underneath. Preview, photos, video with audio, and QR / EAN-13 scanning work as they do on an iPhone. Free and open source (Apache-2.0). Install with `npx stuntcam up`.
+
+Use stuntcam when an iOS app's camera doesn't work in the iOS Simulator, or to run camera features in UI tests and CI without a physical device. It works with apps built on AVFoundation (Swift, Objective-C), React Native VisionCamera, Expo expo-camera, and Flutter `camera` / `mobile_scanner`. No code, dependency or project changes are needed in the app.
+
+## Quick start
+
+Requires an Apple silicon Mac, Xcode 27, and an iOS Simulator runtime from 17.5 to 27.2.
+
+```sh
+npx stuntcam up          # self-test, then arm the booted simulator
+# run your app as usual
+npx stuntcam down        # turn it off (no reboot)
+npx stuntcam doctor      # explains why the camera isn't showing
+```
+
+- React Native / Expo: `npx stuntcam up`, then `npx expo run:ios`
+- Xcode: Run (⌘R) and Xcode tests need boot mode. With the simulator shut down, `npx stuntcam up --udid <simulator>` boots it armed; if it's already booted, use `npx stuntcam up --reboot`. Then Run as usual.
+- Flutter: `npx stuntcam up`, then `flutter run`
+- UI tests and CI: `npx stuntcam up --udid $SIM --grant com.example.app` (grants camera and microphone), then `npx stuntcam exec -- xcodebuild test -scheme MyApp -destination "platform=iOS Simulator,id=$SIM"`. `exec` passes the command's exit code through. Use `id=` destinations, not `name=`.
+- Your own picture: `npx stuntcam source image:/path/photo.png` or `npx stuntcam source video:/path/clip.mov`; a QR code: `npx stuntcam source qr:'https://example.com'`; `npx stuntcam source scene` goes back to the built-in test scene.
+
+## What your app gets
+
+- Live camera preview, front and back cameras (back wide, ultra-wide, telephoto, front)
+- Photos: JPEG and HEIC with EXIF
+- Video: .mov at 1080p and 4K, with AAC audio (a generated tone, so the Mac's microphone is never used)
+- Barcode scanning: QR and EAN-13 through AVFoundation's metadata output and Vision
+- Picture sources: a built-in test scene (with a QR code and an EAN-13 barcode), your own image or video file, a generated QR code (stuntcam 1.2); live Mac webcam from stuntcam 1.1
+
+## How it works
+
+On an iPhone the stack is: your app → AVFoundation (Apple's code) → camera hardware. The plain Simulator has no camera hardware, so AVFoundation has nothing to ask. stuntcam keeps the same stack and supplies the camera underneath AVFoundation, so AVCaptureSession, AVCaptureDevice and AVCapturePhotoOutput are Apple's real objects and behave as on a phone. Most other simulator camera tools (serve-sim, baguette, Meta idb VideoInjection) replace AVFoundation's objects with imitations instead.
+
+## Compared with other tools
+
+| | stuntcam | SimCam | serve-sim | baguette | Meta idb | RocketSim |
+|---|---|---|---|---|---|---|
+| Real AVFoundation objects | Yes | No | No | No | No | No |
+| Free | Yes | No ($19) | Yes | Yes | Yes | No (Pro $9.99/mo) |
+| Image or video file | Yes | Yes | Yes | Yes | Video only | No |
+| Audio in recorded video | Yes | Not documented | No | No | No | No |
+| QR / barcode scanning | Yes | Yes | No | No | No | Yes |
+
+From each tool's own documentation, read 15 Nov 2026; serve-sim's barcode result is from a side-by-side test on 11 Nov 2026.
+
+## Limits
+
+- 4K60 records at about 16–32 fps (1080p60 is fine)
+- No 720p format; zoom is accepted but the picture doesn't zoom; flash never fires; focus can't be locked
+- Live Photo, depth data, bracketed capture and MultiCam report as unsupported
+- VisionCamera 4 isn't supported (it compiles its camera code out of simulator builds); use VisionCamera 5
+- Expo Go is untested
+
+## Links
+
+- [GitHub repository](https://github.com/avinav-b/stuntcam): source, README, issues
+- [npm package](https://www.npmjs.com/package/stuntcam)
+- [All CLI commands](https://github.com/avinav-b/stuntcam/blob/main/cli/README.md)
+- [Troubleshooting](https://github.com/avinav-b/stuntcam/blob/main/docs/TROUBLESHOOTING.md)
+- [Architecture](https://github.com/avinav-b/stuntcam/blob/main/docs/ARCHITECTURE.md)
+- [Support matrix](https://github.com/avinav-b/stuntcam/blob/main/docs/SUPPORT.md)
