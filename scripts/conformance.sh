@@ -50,7 +50,7 @@ trap restore_current EXIT
 # for a trap), then exits 130.
 on_interrupt() {
   local state_dir=$SIMCAM_HOME/sims/$UDID/state
-  # the canary's and plain's bundle ids (m10: the milestone that added them; ids are data and stay)
+  # the canary's and plain's bundle ids (historical names, kept: apps use them)
   rm -rf $state_dir/dev.simcam.spike.m10canary $state_dir/dev.simcam.spike.m10plain
   exit 130
 }

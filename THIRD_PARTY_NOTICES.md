@@ -2,7 +2,7 @@
 # Third-party notices
 
 stuntcam is Apache-2.0 ([LICENSE](LICENSE)). This file lists every file or fragment in the tree that isn't ours, with
-where it came from and under which licence (design §1). Our own source files
+where it came from and under which licence. Our own source files
 carry an `SPDX-License-Identifier: Apache-2.0` line, checked by `tools/spdx-check.sh`; the files below don't, and that
 script skips the third-party source files among them.
 
@@ -18,13 +18,13 @@ other dependencies). None of the other third-party files below are in the packag
 ## Code from other camera tools: none
 
 No file or fragment in the shipped tree is copied from serve-sim, baguette, idb, SimulatorCamera, SimCam or any other
-simulator camera tool. Their issue trackers and designs informed the design (design §1), but the
+simulator camera tool. Their issue trackers and designs informed the design, but the
 engine, loader, stub, CLI, canary, scripts and tools are written from scratch. Names of other tools in the code (for
 example `serve-sim` paths in `cli/internal/arm/arm_test.go`, `idb` in `engine/loader/loader.c`) are test data or
 detection of those tools, not their code.
 
-Software Mansion SimCam, sim-cli and the other unlicensed or closed projects the design research marked "Do not copy" have
-contributed nothing.
+Software Mansion SimCam, sim-cli and the other unlicensed or closed projects have contributed
+nothing.
 
 ## Apple: AVCam sample (`fixtures/avcam/`)
 
@@ -90,7 +90,7 @@ Ours (Apache-2.0): `fixtures/flutter/lib/main.dart` (SPDX header) and `fixtures/
 | | |
 |---|---|
 | Upstream | The Go Programming Language, https://go.dev |
-| Version | the toolchain `cli/build.sh` / `scripts/package.sh` ran with (go1.25.4 for the w4 e51 package; `go version -m bin/stuntcam` prints it) |
+| Version | the toolchain `cli/build.sh` / `scripts/package.sh` ran with (`go version -m bin/stuntcam` prints it) |
 | Licence | BSD-3-Clause, the Go distribution's `LICENSE`, reproduced here because binary redistribution requires it |
 | In this repo | nothing: linked into the CLI binary at build time |
 

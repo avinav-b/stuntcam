@@ -425,7 +425,7 @@ let features: [Feature] = {
     return AVCapturePhotoBracketSettings(rawPixelFormatType: 0, processedFormat: [AVVideoCodecKey: AVVideoCodecType.jpeg], bracketedSettings: b)
   }
   a.append(br)
-  // AVCam-style "enable if supported" for the three features design §6.5 wants unsupported: flash .auto / .on if
+  // AVCam-style "enable if supported" for the three features stuntcam can't deliver: flash .auto / .on if
   // offered, a 3-photo bracket if maxBracketedCapturePhotoCount >= 3, MultiCam if back-wide + front-wide is a supported set.
   // Logs IFSUPPORTED lines; RESULT carries enabled=<list> (none = nothing turned on)
   var ifs = Feature(name: "ifsupported", kind: "photo")

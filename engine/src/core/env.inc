@@ -70,7 +70,7 @@
 // armed by 1.1.0 carries the old names in its boot or launchd environment until it is re-armed, and must keep its
 // camera when a newer engine loads there (`up` on a boot-armed sim, `swap`). The new name wins when both are set.
 // The CLI sets both (cli/internal/arm LegacyNames), for older engines. Drop the old names here and there together:
-// in 2.0 at the earliest (docs/renames.md, "Upgrading from 1.1.0").
+// in 2.0 at the earliest (docs/UPGRADING.md).
 // master switch: the Fig source factories answer with profile sources (presence); also required by the session hook
 //   and the profile read
 #define ENV_FIG_SOURCES                 "SIMCAM_FIG_SOURCES"
@@ -143,8 +143,8 @@ static inline const char *EnvConfig(const char *name, const char *legacyName) {
 #define ENV_DIAG_SET_PROPERTY           "SIMCAM_DIAG_SET_PROPERTY"
 
 // ---- Off switches: each turns one fix or feature off, so the old behaviour is back for that launch. The mutation
-// suite (scripts/mutation.sh) and the activation suite set them to show that a test catches the bug (docs/ledger.md
-// rows)
+// suite (scripts/mutation.sh) and the activation suite set them to show that a test catches the bug (by regression
+// id)
 // no session finalize wrapper (teardown not tracked)
 #define ENV_OFF_SESSION_FINALIZE        "SIMCAM_OFF_SESSION_FINALIZE"
 // no ReadyForResponsiveRequest (didFinishCaptureFor never fires)

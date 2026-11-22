@@ -19,7 +19,7 @@ CYCLES=$3
 TAG=$4
 need_udid "$0" "$RUNTIME" UDID long
 
-# the React Native app (fixtures/expo); m1b is the milestone that added it, kept because the id and log name are data
+# the React Native app (fixtures/expo); m1b is a historical name, kept because the app uses the id and log name
 BUNDLE=dev.spike.m1bcam
 APP_LOG_NAME=m1b.log
 LIB=${MODE%cycle}

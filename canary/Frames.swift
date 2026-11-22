@@ -36,7 +36,7 @@ extension Canary {
   // The time to the first frame is its own check, with an explicit bound, and the frame-rate windows start only once
   // frames flow. Fixed windows right after startRunning failed on a cold first launch and after foregrounding, though
   // frames then arrived normally: the first frame came 1.8 s after the process started on a virtual runner, and about
-  // 7 s after it when a simulator had just booted on the Mac. CANARY_FIRST_FRAME_S overrides the bound (default 5 s).
+  // 7 s after it when a sim had just booted on a local Mac. CANARY_FIRST_FRAME_S overrides the bound (default 5 s).
   func firstFrame(_ label: String) {
     let limit = Config.firstFrameLimit()
     let start = Date()

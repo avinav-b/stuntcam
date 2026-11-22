@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// motion-probe (design U2): two CMMotionManager instances recording accelerometer updates at an IMU rate, optionally
+// motion-probe: two CMMotionManager instances recording accelerometer updates at an IMU rate, optionally
 // next to a running AVCaptureSession, in either start order. A measurement app: it logs, it checks nothing. README.md.
 // Launch arguments: -camera 0|1 (default 0)  -order motionFirst|cameraFirst (default motionFirst)  -dur <s> (10)  -hz <Hz> (100)
 import UIKit

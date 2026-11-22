@@ -20,7 +20,7 @@ RUNTIME=${1:?usage: $0 <rt> [reps]}
 REPS=${2:-3}
 need_udid "$0" "$RUNTIME" UDID short
 
-# fixtures/plain's bundle id and product (m10, m5: the milestones that added it; names that are data stay)
+# fixtures/plain's bundle id and product (historical names, kept: apps, logs and saved results use them)
 PLAIN_BUNDLE=dev.simcam.spike.m10plain
 PLAIN_EXECUTABLE=m5app.app/m5app   # fixtures/plain's product name
 STATE_DIR=$SIMCAM_HOME/sims/$UDID/state/$PLAIN_BUNDLE

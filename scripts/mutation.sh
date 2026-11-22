@@ -1,12 +1,12 @@
 #!/bin/zsh
 # SPDX-License-Identifier: Apache-2.0
-# mutation.sh <rt> [n] — does the canary catch known bugs coming back? (the mutation suite; docs/ledger.md)
+# mutation.sh <rt> [n] — does the canary catch known bugs coming back? (the mutation suite)
 #   Most fixes in the engine carry an off switch. Setting one for a launch brings that bug back without a rebuild.
 #   For each mutant the canary runs n times (default 1, with SIMCAM_NO_RETRY=1) on a sim armed by
-#   scripts/boot.sh <rt> stub. The result is compared with what the ledger expects:
+#   scripts/boot.sh <rt> stub. The result is compared with what the mutant's entry expects:
 #     catch   A real canary verdict flags it: core=FAIL (core), ext=FAIL (ext), or the named check in the timing list
-#             (timing, for a check that can only be a timing one). A PASS is a gap in the ledger.
-#     miss    A known canary gap, which another fixture guards. A catch means the ledger is stale.
+#             (timing, for a check that can only be a timing one). A PASS is a gap in the canary.
+#     miss    A known canary gap, which another fixture guards. A catch means the entry is stale.
 #     pass    A positive control: a fault the engine's fix must absorb, so the verdict must be a real PASS. It counts
 #             like miss. A catch means the fix stopped working.
 #   Some runs count as neither: a run with no real verdict, and an INCONCLUSIVE that doesn't name the timing check.
@@ -28,7 +28,7 @@ EXTRA_RUNS=3   # runs without a real verdict are rerun, at most this many times 
 
 # One mutant per entry, "env|ledger|expect|where[|min runs]", run in this order:
 #   env     the settings that bring the bug back (K=V, space-separated)
-#   ledger  its ledger id
+#   ledger  its regression id (L<nn>, one per fixed bug)
 #   expect  catch | miss | pass (see the header)
 #   where   which verdict shows it: core | ext | timing:<check text>
 #   min     (optional) a mutant whose bug shows only sometimes runs at least this many times, stopping at the first

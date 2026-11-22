@@ -44,7 +44,7 @@ APP_START_GRACE_S=6          # the other apps: "APP GONE" is only checked after 
 app_running() { xcrun simctl spawn $UDID launchctl list 2>/dev/null | grep -q "UIKitApplication:$BUNDLE"; }
 
 # the app's bundle id, launch arguments, log file name and end marker; MAXW: 1 s polls for the end marker. The m10, m1b
-# and m7 in these names (and in cfg-m10.plist above) are the milestones that added each app; they are data and stay.
+# and m7 in these names (and in cfg-m10.plist above) are historical names, kept because apps and logs use them.
 APP_LOG_NAME=m1b.log
 LOG_MARK=M1B
 END_PATTERN="END "

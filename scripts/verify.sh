@@ -80,7 +80,7 @@ mkdir -p "$DEVICE_SET"
 VERDICT_DIR=$SIMCAM_HOME/verdicts
 mkdir -p "$VERDICT_DIR"
 
-# m10: the milestone that added the canary; its product and bundle id are data and keep the name
+# the canary's product and bundle id: historical names, kept because the CLI and saved verdicts use them
 APP=$ROOT/canary/build/m10canary.app
 CANARY_BUNDLE=dev.simcam.spike.m10canary
 if [[ ! -d $APP ]]; then

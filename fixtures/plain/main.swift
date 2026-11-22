@@ -108,7 +108,7 @@ final class M9: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCaptur
   func photoOutput(_ o: AVCapturePhotoOutput, didFinishCaptureFor r: AVCaptureResolvedPhotoSettings, error: Error?) { E("photo.didFinishCapture", error); finished.signal() }
   func fileOutput(_ o: AVCaptureFileOutput, didFinishRecordingTo u: URL, from c: [AVCaptureConnection], error: Error?) { E("movie.didFinishRecording", error); movieCB?(u, error) }
 }
-// the NSError a callback got, field by field (maps engine statuses to app-visible errors, design §5.4); nothing when nil
+// the NSError a callback got, field by field (maps engine statuses to app-visible errors); nothing when nil
 func E(_ cb: String, _ e: Error?) {
   guard let e else { return }; let n = e as NSError
   let ui = n.userInfo.keys.sorted().map { k in "\(k)=\(n.userInfo[k].map { "\($0)" } ?? "nil")".replacingOccurrences(of: "\n", with: " ") }.joined(separator: "; ")
@@ -283,13 +283,13 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
     let c = UISceneConfiguration(name: nil, sessionRole: s.role); c.delegateClass = SceneDelegate.self; return c
   }
 }
-// ---- ordering fixtures (design §10.3, U2): what the app touches before its first camera call.
+// ---- ordering fixtures (several CMMotionManagers in one process): what the app touches before its first camera call.
 //   M5APP_ORDER=motion  : CoreMotion first (one manager, push updates at 100 Hz), then the camera steps
 //   M5APP_ORDER=motion2 : a two-manager motion recorder: a pull manager plus a push manager on an OperationQueue, both kept running
 //                         through the camera steps; gyro/magnetometer/deviceMotion availability reported (INFO, not gated yet)
 //   M5APP_ORDER=audio   : AVCaptureDevice.default(for: .audio) first
 //   M5APP_ORDER=session : an AVCaptureSession exists before discovery
-//   M5APP_ORDER=threads : three threads make their first capture call at once (U13), then the camera steps
+//   M5APP_ORDER=threads : three threads make their first capture call at once, then the camera steps
 //   M5APP_ORDER=motion-main-camera-bg : the first motion call on main; a background thread makes the first camera call
 //                         0.3 s later (SIMCAM_TEST_ORIENT_FAULT=start|runmain wait in that main-thread call until it arms)
 //   M5APP_ORDER=motion-subclass-camera : a CMMotionManager subclass whose accelerometerUpdateInterval getter makes the
@@ -424,7 +424,7 @@ extension VC {
     }
   }
 }
-// ---- bounded activation (design §4.1) ----
+// ---- bounded activation ----
 //   M5APP_EXPECT=stock       activation is expected to end stock: the camera checks become stock.* checks (no devices), then DONE
 //   M5APP_SIGCHECK=1         after the first capture call returns, print the image owning the current SIGSEGV handler
 //   M5APP_FAKESDK_AT_MS=<n>  n ms after the first capture call starts, a background thread installs a chaining SIGSEGV/SIGBUS

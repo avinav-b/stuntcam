@@ -1,6 +1,6 @@
 #!/bin/zsh
 # SPDX-License-Identifier: Apache-2.0
-# selftest.sh <rt> [test ...] — checks of drive.sh itself (TODO U5 item 5), on our own sim with the probe installed.
+# selftest.sh <rt> [test ...] — checks of drive.sh itself, on our own sim with the probe installed.
 #   timeout     drive.sh t-timeout waits for a marker the probe never logs: the case must fail with exit 1 and one
 #               "FAIL t-timeout/<rt>: timed out …" line, and the probe must be gone afterwards
 #   <case>:<sig>:<target>   start drive.sh <case> in its own process group, wait until it holds the app (c3-session: the

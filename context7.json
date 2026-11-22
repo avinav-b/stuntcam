@@ -10,10 +10,7 @@
     "testdata"
   ],
   "excludeFiles": [
-    "design.md",
-    "inventory.md",
-    "ledger.md",
-    "renames.md"
+    "inventory.md"
   ],
   "rules": [
     "Run `npx stuntcam up` before launching the app in the iOS Simulator; the app needs no code, dependency or project changes.",

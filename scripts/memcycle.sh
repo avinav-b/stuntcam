@@ -26,7 +26,7 @@ N=${2:-50}
 VARIANT=${3:-plain}
 need_udid "$0" "$RUNTIME" UDID long
 
-BUNDLE=dev.simcam.spike.m10plain   # fixtures/plain (m10: the milestone that added it; the id is data and stays)
+BUNDLE=dev.simcam.spike.m10plain   # fixtures/plain (a historical id, kept: the app uses it)
 OUT=$SIMCAM_RESULTS/memcycle-$RUNTIME-$VARIANT.txt
 
 (( N >= 25 )) ||

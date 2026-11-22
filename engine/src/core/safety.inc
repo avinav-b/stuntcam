@@ -296,7 +296,7 @@ static void SentinelWatchdogHang(const char *feature, int traced) {
         SessInjectRuntimeError(kSentinelLatchAuto, NO);
     } else if (featureIndex == kFeatureMovie) {
         // Not reached yet: no movie op is bracketed with SentinelOpBegin("movie"), so a movie latch can only come from
-        // an earlier activation's events (TODO.md).
+        // an earlier activation's events (a known gap).
         MovieStopAll(kSentinelLatchStatus);
     }
     fprintf(stderr, "simcam: %s latched after %d hangs in this process\n", feature, hangs);

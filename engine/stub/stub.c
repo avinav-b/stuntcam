@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// simcam boot stub: frozen, libSystem only (design §4.1, B-MF4). Inserted at boot into every simulator process; it returns at
+// simcam boot stub: frozen, libSystem only. Inserted at boot into every simulator process; it returns at
 // once unless the process is an app (an executable in a .app bundle outside the runtime root) and SIMCAM != 0. Then it reads
 // $SIMCAM_SIM_DIR/current, one line "<proto> <absolute path of libsimcamloader.dylib>", and dlopens that loader, which does
 // the rest (restore rules, chain file, engine). Rewriting `current` upgrades the next launch, no reboot. A newer proto than

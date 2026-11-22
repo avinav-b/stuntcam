@@ -50,7 +50,7 @@ func TestLegacyNamesAre110Names(t *testing.T) {
 
 func TestVarsEmitsLegacyNames(t *testing.T) {
 	t.Setenv("SIMCAM_HOME", t.TempDir())
-	milestone := regexp.MustCompile(`^M[0-9]+_`)
+	oldStyle := regexp.MustCompile(`^M[0-9]+_`) // the 1.1.0 naming scheme
 	for _, stubLog := range []bool{false, true} {
 		vars := Vars("U", fullSet(), Options{StubLog: stubLog, Extra: map[string]string{"SIMCAM_SOURCE": "scene"}})
 		for i, kv := range vars {
@@ -60,7 +60,7 @@ func TestVarsEmitsLegacyNames(t *testing.T) {
 					t.Errorf("stubLog=%v: %s is not followed by %s=%s: %v", stubLog, kv, old, v, vars)
 				}
 			}
-			if milestone.MatchString(k) && !slices.Contains(names110, k) {
+			if oldStyle.MatchString(k) && !slices.Contains(names110, k) {
 				t.Errorf("stubLog=%v: %s is set, an M*_ name that is not a 1.1.0 name", stubLog, k)
 			}
 		}

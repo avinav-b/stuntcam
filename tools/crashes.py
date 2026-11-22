@@ -9,7 +9,7 @@
 # Simulator daemons (notifyd, syslogd, and so on) run from the runtime root and often carry no UDID, so matching on
 # UDIDs alone misses them. Those that clearly come from a simulator (their parent is launchd_sim, or a path is inside a
 # simulator runtime) are listed with the label "sim?", so they are never silently dropped. A "sim?" report can come
-# from any simulator on the Mac.
+# from any simulator on this host.
 #
 # Each row says whether our loader or engine was loaded in the process (engine=yes or engine=no). A report labelled
 # with our UDID can be any process on our simulators, including system daemons; engine=yes narrows it to apps that

@@ -109,7 +109,7 @@ func archName() -> String {
     #endif
 }
 
-// U4: what the scheme's diagnostics actually do in this process
+// what the scheme's diagnostics actually do in this process
 func u4Diag() -> String {
     let h = UnsafeMutableRawPointer(bitPattern: -2)   // RTLD_DEFAULT
     func sym(_ n: String) -> Bool { dlsym(h, n) != nil }

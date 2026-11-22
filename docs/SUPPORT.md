@@ -2,17 +2,17 @@
 # Support policy
 
 stuntcam is open source (Apache-2.0) and maintained on a best-effort basis. This page says what has been verified, what
-happens outside that, how to report a problem and what to expect back. Every claim here comes from the measured runs in
-[MATRIX.md](MATRIX.md) and from the design ([design.md](design.md) §11–§12).
+happens outside that, how to report a problem and what to expect back. Every "verified" claim here comes from a measured
+run on the version named.
 
 ## What is supported
 
 | | Verified | Notes |
 |---|---|---|
-| **Xcode** | 27.0 (27A266a); 27.1 (27A9275) and 27.2 (27B52) | 27.0: ⌘R, ⌘U, `xcodebuild test` (hosted and UI tests) and `stuntcam exec` were all run on it. 27.1 and 27.2 (GitHub's `xcode-27` runner, three Xcodes side by side): `xcodebuild test` hosted and UI tests measured, inserted libraries and markers identical to 27.0's, camera frames delivered with each one's own `restore-rules` file; ⌘R not driven (its libraries checked present with the same install names). An Xcode update with a simulator booted is not tested yet (design §11 U4 part 2). measured internally, W4 e64 |
-| **iOS Simulator runtimes, full** | 26.3.1 (23D8133), 27.0 (24A434) | Boot mode: the whole matrix (plain AVFoundation, VisionCamera 5, expo-camera, Flutter `camera` + `mobile_scanner`), orientation, Xcode Run and tests, soak, TSan torture, mutation suite. Launchd mode: the matrix, orientation and UI tests via `stuntcam exec` (hosted tests run there without a camera). MATRIX.md; measured internally, W4 e46 |
-| **iOS Simulator runtime, point release** | 27.2 (24B8117) | W4 e56: the self-test (`verify` 5/5 pass); boot mode: the matrix (plain AVFoundation, VisionCamera 5, expo-camera, Flutter `camera` + `mobile_scanner`), plain-AVFoundation orientation, `conformance.sh` and a 20-launch plain soak; launchd mode: the matrix and plain orientation. Preflight passed on 27.0's layout with no engine change. Not run on 27.2: Xcode Run and tests, `stuntcam exec`/UI tests, `activation.sh`, the all-app soak, TSan, the mutation suite, the other stacks' orientation. measured internally, W4 e56 |
-| **iOS Simulator runtime, smoke** | 17.5 (21F79) | A smaller run that passed in boot and launchd modes (e46): the self-test, the four app stacks' checks and plain-AVFoundation orientation. If an app can't open stuntcam's state folder, its records go to its container's `tmp/` instead (any runtime; `status` and `sentinel clear` look there) |
+| **Xcode** | 27.0 (27A266a); 27.1 (27A9275) and 27.2 (27B52) | 27.0: ⌘R, ⌘U, `xcodebuild test` (hosted and UI tests) and `stuntcam exec` were all run on it. 27.1 and 27.2 (GitHub's `xcode-27` runner, three Xcodes side by side): `xcodebuild test` hosted and UI tests measured, inserted libraries and markers identical to 27.0's, camera frames delivered with each one's own `restore-rules` file; ⌘R not driven (its libraries checked present with the same install names). An Xcode update with a simulator booted is not tested yet. |
+| **iOS Simulator runtimes, full** | 26.3.1 (23D8133), 27.0 (24A434) | Boot mode: the whole matrix (plain AVFoundation, VisionCamera 5, expo-camera, Flutter `camera` + `mobile_scanner`), orientation, Xcode Run and tests, soak, TSan torture, mutation suite. Launchd mode: the matrix, orientation and UI tests via `stuntcam exec` (hosted tests run there without a camera). |
+| **iOS Simulator runtime, point release** | 27.2 (24B8117) | The self-test (`verify` 5/5 pass); boot mode: the matrix (plain AVFoundation, VisionCamera 5, expo-camera, Flutter `camera` + `mobile_scanner`), plain-AVFoundation orientation, `conformance.sh` and a 20-launch plain soak; launchd mode: the matrix and plain orientation. Preflight passed on 27.0's layout with no engine change. Not run on 27.2: Xcode Run and tests, `stuntcam exec`/UI tests, `activation.sh`, the all-app soak, TSan, the mutation suite, the other stacks' orientation. |
+| **iOS Simulator runtime, smoke** | 17.5 (21F79) | A smaller run that passed in boot and launchd modes: the self-test, the four app stacks' checks and plain-AVFoundation orientation. If an app can't open stuntcam's state folder, its records go to its container's `tmp/` instead (any runtime; `status` and `sentinel clear` look there) |
 | **Mac** | Apple silicon | Every measurement ran on Apple-silicon Macs. The 26 and 27 simulator runtimes are arm64-only. Intel Macs are untested |
 | **macOS** | 26.6 | The host of the measured runs; other versions untested |
 | **Webcam** (`stuntcam source webcam`) | A MacBook Pro's built-in camera, and the synthetic test pattern | iOS 17.5, 26.3 and 27.0: plain AVFoundation (photo, 5 s movie, video data, preview, front and back, portrait, landscape and upside-down, up to 4K and 1080p60), VisionCamera 5, expo-camera, Flutter `camera` + `mobile_scanner`, and Apple's AVCam sample (26.3 and 27.0). 30 fps with no dropped or repeated frames, about 70 ms from the camera to the app, 6–14 % app CPU; three simulators on one camera at once. A 30-minute run with photos, movies, source switches and helper restarts kept the app's memory flat. Barcode scanning through the webcam wasn't checked. The real-camera runs checked timing and geometry, not picture quality. Two different cameras for front and back aren't supported yet. Not measured: an external or 60 fps camera, a Continuity Camera, Mac sleep and unplugging a camera |
@@ -21,17 +21,17 @@ happens outside that, how to report a problem and what to expect back. Every cla
 **Camera stacks:** plain AVFoundation (Swift, Objective-C), VisionCamera 5, expo-camera, Flutter `camera` and
 `mobile_scanner`. Known gaps: Expo Go is untested; Flutter `camera` in landscape is 90° off; Detox needs launchd mode
 (docs/TROUBLESHOOTING.md). Libraries that compile their camera code out of simulator builds (for example VisionCamera 4) can't be fixed at
-runtime by stuntcam; that is a question for the library (design §12, §13).
+runtime by stuntcam; that is a question for the library.
 
-stuntcam 1.0 is on npm (`npx stuntcam up`). The webcam source comes with 1.1.
+stuntcam is on npm (`npx stuntcam up`). The webcam source needs 1.1 or later.
 
 ## Outside what's verified
 
 stuntcam is built to fail safe: a runtime layout the preflight gate doesn't recognise gives your app the stock simulator (no
-camera) with a line saying why. A semantic change can still slip past a shape check (design §13), which is why the sentinel
+camera) with a line saying why. A semantic change can still slip past a shape check, which is why the sentinel
 latches an app after two crashes attributed to stuntcam.
 
-- **Another runtime** (18.x, a point release such as 26.5 or 27.1, a beta). Xcode 27.0's default (arm64) download request reports iOS 18 runtimes as not available (W4 e56; Apple's index lists 18.x as universal-only, and the universal variant wasn't tried), so 18.x is unmeasured. A device-specific runtime such as 27.2 `24B91016s` (`iOS-27-2-iPhone19-4`) has no device type Xcode 27.0 can create, and `verify` reports it `inconclusive` (W4 e56). Before arming, `stuntcam up` runs its
+- **Another runtime** (18.x, a point release such as 26.5 or 27.1, a beta). Xcode 27.0's default (arm64) download request reports iOS 18 runtimes as not available (Apple's index lists 18.x as universal-only, and the universal variant wasn't tried), so 18.x is unmeasured. A device-specific runtime such as 27.2 `24B91016s` (`iOS-27-2-iPhone19-4`) has no device type Xcode 27.0 can create, and `verify` reports it `inconclusive`. Before arming, `stuntcam up` runs its
   self-test on that runtime. If the self-test fails, `up` doesn't arm (unless `--allow-unverified` or `--skip-verify`); if it
 can't reach a verdict, `up` arms anyway with a warning. At the app's first camera call, a preflight check
   compares the runtime's private surface with what the engine expects; anything off means no camera, not a crash.
@@ -61,28 +61,29 @@ Open an issue with the bug report template. It asks for:
 - the camera stack and its version, what you expected and what happened;
 - `stuntcam sentinel ls` if an app is latched.
 
-`doctor --json` is the triage path for "no camera" reports (design §13): a bug in stuntcam's safety machinery shows up as
+`doctor --json` is the triage path for "no camera" reports: a bug in stuntcam's safety machinery shows up as
 a false "no camera", and the doctor output says which check stood in the way.
 
 ## What to expect
 
 - **Best effort.** stuntcam has a single maintainer and no paid support. There is no response-time commitment.
-- **Bugs are fixed once.** Every bug found gets an entry in [ledger.md](ledger.md) with the test that guards it.
+- **Bugs are fixed once.** Every fixed bug gets a test that guards it: a canary or fixture check, and for a canary
+  check a mutant in `scripts/mutation.sh` that turns the fix off and expects the canary to catch it.
 - **Upstream problems go upstream.** If the report shows a library compiled its camera out of simulator
   builds, or an app's own bug (Apple's AVCam sample is one: see TROUBLESHOOTING.md), the fix belongs to that project.
 
 ## Yearly cadence
 
-Apple ships a major iOS and Xcode each year, plus point releases. The plan (design §12 "Yearly maintenance"):
+Apple ships a major iOS and Xcode each year, plus point releases. The plan:
 
 | When | What | Year-1 budget |
 |---|---|---|
 | June (betas) | Inventory the new runtime's private surface (`tools/inventory.py`) and diff Xcode's inserted libraries against the restore rules (that diff is not built yet); run the self-test | 3–5 days |
 | Each major runtime | Port the engine: 26 → 27 took +34/−9 lines and one key; 17.5 → 26 needed one offset and one semantic change | 2–5 days |
-| Point releases (6–8 a year) | The runtime inherits its major's entry and the local self-test decides; no code change expected (measured once: 27.0 → 27.2 needed none, W4 e56; design §11 U10) | about 1 day |
+| Point releases (6–8 a year) | The runtime inherits its major's entry and the local self-test decides; no code change expected (27.0 → 27.2 needed none) | about 1 day |
 | Each Xcode build | A measured `restore-rules/<build>.json` | 1–2 days |
 | Ongoing | Fixture updates for the five camera stacks | 7–10 days |
-| Ongoing | Ledger and self-test upkeep, triage of reports | 6–8 days |
+| Ongoing | Regression-test and self-test upkeep, triage of reports | 6–8 days |
 
 About 4–5½ weeks in the first year, 3–4 weeks after.
 

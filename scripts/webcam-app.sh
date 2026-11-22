@@ -24,7 +24,7 @@ CONTROL=$OUT/control.txt
 print -r -- "source=${SRC:-webcam:synthetic}" > $CONTROL
 [[ -n ${ORIENT:-} ]] && print -r -- "orientation=$ORIENT" >> $CONTROL
 
-BUNDLE=dev.simcam.spike.m10plain   # fixtures/plain (m10: the milestone that added it; the id is data and stays)
+BUNDLE=dev.simcam.spike.m10plain   # fixtures/plain (a historical id, kept: the app uses it)
 typeset -a ENVS
 ENVS=(SIMCTL_CHILD_M5APP_MODE=webcam "SIMCTL_CHILD_SIMCAM_CONTROL=$CONTROL")
 for kv in "$@"; do

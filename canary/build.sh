@@ -6,7 +6,7 @@ set -e
 cd ${0:a:h}
 
 SDK=$(xcrun --sdk iphonesimulator --show-sdk-path)
-# m10: the milestone that added the canary; the product and its bundle id keep the name, which scripts and the CLI use
+# m10canary: a historical name; the product and its bundle id keep it because scripts and the CLI use it
 APP=build/m10canary.app
 rm -rf $APP
 mkdir -p $APP

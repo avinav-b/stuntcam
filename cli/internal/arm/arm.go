@@ -56,7 +56,7 @@ type Options struct {
 //     (engine/src/core/env.inc).
 //
 // Arm records list both names, so `down` unsets both. Drop both sides together, in 2.0 at the earliest
-// (docs/renames.md, "Upgrading from 1.1.0").
+// (docs/UPGRADING.md).
 // The keys are also the list of a sim's camera settings that `exec` never forwards from the caller's shell
 // (cmd/stuntcam hook.go). When the old names go, keep that list.
 var LegacyNames = map[string]string{

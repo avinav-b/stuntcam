@@ -146,7 +146,7 @@ func Same(a, b string) bool {
 	return realA == realB
 }
 
-// Installed lists the Xcodes on the Mac: Spotlight's com.apple.dt.Xcode bundles plus /Applications/Xcode*.app and
+// Installed lists the Xcodes on this Mac: Spotlight's com.apple.dt.Xcode bundles plus /Applications/Xcode*.app and
 // ~/Applications/Xcode*.app (Spotlight can be off), each with its version.plist's version and build.
 func Installed() []Info {
 	// Spotlight may be off: the globs below still find Xcodes

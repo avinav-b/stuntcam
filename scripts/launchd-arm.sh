@@ -52,7 +52,7 @@ launchd_set() {
     got=$(launchd_get $1) && [[ $got == "$2" ]] && return 0
     if [[ -z $got ]]; then
       echo "$0: $1 read back as '' (try $i); it may already be in the sim's boot environment (set at boot:" \
-        "simctl boot passes SIMCTL_CHILD_$1 on, and launchd then ignores setenv of it; w3 e13, w4 e46)" >&2
+        "simctl boot passes SIMCTL_CHILD_$1 on, and launchd then ignores setenv of it)" >&2
     else
       echo "$0: $1 read back as '$got' (try $i)" >&2
     fi

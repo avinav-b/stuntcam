@@ -53,7 +53,7 @@ shift
 need_udid "$0" "$RUNTIME" UDID short
 
 # ---------------------------------------------------------------- the cases
-# A mutation-L<nn> case runs with the fix for bug L<nn> (its id in docs/ledger.md) switched off by that fix's
+# A mutation-L<nn> case runs with the fix for bug L<nn> (its regression id) switched off by that fix's
 # SIMCAM_OFF_* switch, and passes if the case catches the bug coming back.
 typeset -a CASES MOTION_CASES
 CASES=("$@")
@@ -94,8 +94,8 @@ STATE_DIR=$SIMCAM_HOME/sims/$UDID/state
 BUILD=$(<$ROOT/build/current_dylib.txt)
 BUILD=${BUILD:h:t}
 
-# the test apps' bundle ids: plain (fixtures/plain), the canary, plain-orient, the motion probe. m10, m12 and e24 are
-# the milestone or experiment that added each app; bundle ids are data and keep those names.
+# the test apps' bundle ids: plain (fixtures/plain), the canary, plain-orient, the motion probe. The m10, m12 and
+# e24 in them are historical names, kept because apps and logs use them.
 PLAIN_BUNDLE=dev.simcam.spike.m10plain
 CANARY_BUNDLE=dev.simcam.spike.m10canary
 ORIENT_BUNDLE=dev.simcam.spike.m12plain

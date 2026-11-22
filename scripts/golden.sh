@@ -25,8 +25,8 @@ CMD=${1:?capture|compare}
 shift
 SCRIPT=$0   # for messages: inside a function, $0 is the function's name
 
-# fixtures/plain's bundle id. Bundle ids, the fixture's M5APP_* and GF_* inputs and its GF* log tokens are names from
-# the project's early milestones (m10, m5, "golden frames"); they are data, so they keep those names.
+# fixtures/plain's bundle id. Bundle ids, the fixture's M5APP_* and GF_* inputs and its GF* log tokens are historical
+# names (m10, m5, "golden frames"), kept because the app and its logs use them.
 BUNDLE=dev.simcam.spike.m10plain
 
 # Each case: name W H fps fmt pos rot mirror orientation (the source comes from SOURCES). A name is p, l or u for the

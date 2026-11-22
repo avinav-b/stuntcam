@@ -79,7 +79,7 @@ func TestGuardSpringBoard(t *testing.T) {
 		t.Fatalf("guard returned after %s, want ~3 s (2 s after the last pid change at 1 s)", e)
 	}
 	if spawns != 0 {
-		t.Fatalf("%d spawn polls while the host saw the device's launchd_sim (w4 e38: one took ~10 s under load)", spawns)
+		t.Fatalf("%d spawn polls while the host saw the device's launchd_sim (one took ~10 s under load)", spawns)
 	}
 	// ps fails (times out): no answer, and no spawn until the third failure in a row
 	spawns = 0

@@ -2,8 +2,7 @@
 
 stuntcam gives the iOS Simulator a camera by answering one layer below AVFoundation. Apps, and the libraries they use, only
 ever talk to Apple's genuine AVFoundation objects; stuntcam supplies the hardware those objects expect underneath.
-This page is the map for anyone changing the code or porting it to a new iOS. The full design, with the reasoning behind
-each choice, is [design.md](design.md).
+This page is the map for anyone changing the code or porting it to a new iOS.
 
 ```
  Your app + any camera library (AVFoundation, VisionCamera, expo-camera, Flutter camera, mobile_scanner)    unchanged
@@ -55,7 +54,7 @@ Either way, what an app gets is decided per launch by `current`: `stuntcam down`
 Fig is Apple's private capture layer underneath AVFoundation (CoreMedia/CMCapture). AVFoundation's capture objects
 (AVFCapture) ask Fig for capture sources at discovery, and run a session through a Fig session object's vtable, with
 Fig's notifications arriving through CoreMedia's notification centre. In the simulator the camera side of that is
-stubbed out. stuntcam fills those stubs and leaves everything above them to Apple (design §1, §3).
+stubbed out. stuntcam fills those stubs and leaves everything above them to Apple.
 
 **Who owns what.** Apple's code is every object the app touches, plus validation, KVO, notification fan-out, error
 mapping, point conversions and the encoders. stuntcam's is what the simulator stubs out: Fig sources answering from a
@@ -76,7 +75,7 @@ simulator's AVFoundation compiles paths out.
 
 That small, inventoried surface is what a port touches (below): Apple's own initializers absorbed most of the 26 → 27
 changes. The preflight gate checks its shape at the first camera call, so a runtime that moved something gets the stock
-simulator; a semantic change can still slip past it (design §13), and the sentinel latches after two attributed crashes.
+simulator; a semantic change can still slip past it, and the sentinel latches after two attributed crashes.
 
 ## Inside the engine
 
@@ -116,7 +115,7 @@ simulator; a semantic change can still slip past it (design §13), and the senti
   activations (and 24 hours) of a build keep its next launches stock, until they age out or a new build arrives. Crashes
   under a debugger never count. `stuntcam sentinel clear` resets an app.
 
-## On the Mac
+## Host-side state
 
 Everything a simulator process reads or writes lives under `$SIMCAM_HOME` (`~/Library/Application Support/stuntcam`),
 because simulator processes can't read macOS privacy-protected folders:
@@ -136,7 +135,7 @@ because simulator processes can't read macOS privacy-protected folders:
 
 `stuntcam up` and `verify` run the canary (`canary/`) on a throwaway simulator in the private set. The canary
 walks every capture path and prints `PASS`, `FAIL` or `INCONCLUSIVE`. "Late" is inconclusive and "never" is a fail.
-Pass and fail are cached per key; inconclusive never is. A content fail is cached only after a second launch fails too; a pass after a fail is cached for an hour (W4 e40). A failed verdict stops `up` from arming.
+Pass and fail are cached per key; inconclusive never is. A content fail is cached only after a second launch fails too; a pass after a fail is cached for an hour. A failed verdict stops `up` from arming.
 
 ## Porting to a new iOS
 
@@ -150,4 +149,5 @@ initializers absorbed most changes. The steps:
    `restore-rules/`.
 4. Run the canary, the fixture matrix and the mutation suite.
 
-Every bug found so far, with what guards it, is in [ledger.md](ledger.md).
+Every fixed bug has a test that guards it; for the canary's checks, `scripts/mutation.sh` turns each fix off and
+checks that the canary catches it (scripts/README.md).

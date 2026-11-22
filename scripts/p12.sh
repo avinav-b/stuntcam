@@ -21,8 +21,8 @@ TAG=$5
 shift 5
 need_udid "$0" "$RUNTIME" UDID long
 
-# plain-orient's bundle id. "p12" and "plain12" (p12.app, the P12_* inputs, the "P12| " log lines) and "m12" are names
-# from the milestone that added it; they are data and keep those names.
+# plain-orient's bundle id. "p12" and "plain12" (p12.app, the P12_* inputs, the "P12| " log lines) and "m12" are
+# historical names, kept because apps and logs use them.
 BUNDLE=${P12_BID:-dev.simcam.spike.m12plain}
 OUT=$SIMCAM_RESULTS/p12-$MODE-$RUNTIME-$CAM-$ORIENTATION-$TAG
 rm -rf $OUT

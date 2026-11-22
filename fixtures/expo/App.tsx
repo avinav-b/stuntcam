@@ -435,13 +435,13 @@ function ExpoOrient() {
 type Sz = { width: number; height: number };
 const VCF_EXPECTED = new Set([
   'vcf.video.4k60.fps', // the simulator's software encoder manages 16-32 fps at 4K60 (v1.0 cap)
-  'vcf.format.video.1280x720', // engine gap: no 720p format in the profiles (TODO.md)
-  'vcf.zoom.ramp', // engine gap: zoom ramps never reach the engine (TODO.md)
-  'vcf.front.mirror', // engine gap: mirrored front photos keep EXIF Orientation 6 (TODO.md)
+  'vcf.format.video.1280x720', // engine gap: no 720p format in the profiles
+  'vcf.zoom.ramp', // engine gap: zoom ramps never reach the engine
+  'vcf.front.mirror', // engine gap: mirrored front photos keep EXIF Orientation 6
 ]);
 const VCF_EXPECTED_NA = new Set([
   'vcf.format.video.1280x720.fps30', 'vcf.format.video.1280x720.fps60', // follow from the missing 720p format
-  'vcf.focus.locked', // engine gap: focus locking not offered (TODO.md)
+  'vcf.focus.locked', // engine gap: focus locking not offered
 ]);
 const VCF_TOTAL = (audio: boolean) => (audio ? 109 : 102); // the README's denominator
 const sameSize = (a?: Sz, b?: Sz) =>

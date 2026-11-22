@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-"""inventory.py — static inventory of what the engine depends on (design §3 "private dependencies", §10.7).
+"""inventory.py — static inventory of what the engine depends on (its private dependencies).
 
 Scans engine/src (the single translation unit and its fragments) and lists:
   frameworks   dlopen()ed framework paths (public / private by path)
@@ -17,7 +17,7 @@ Scans engine/src (the single translation unit and its fragments) and lists:
   strings      contract strings in fig/ and providers/ (heuristic: identifier-like @"…"/CFSTR literals)
   env          environment switches the engine reads
 
-With --sdk <iPhoneSimulator.sdk> (on the Mac: `xcrun --sdk iphonesimulator --show-sdk-path`), classes and
+With --sdk <iPhoneSimulator.sdk> (on the host: `xcrun --sdk iphonesimulator --show-sdk-path`), classes and
 selectors are marked public if they appear in the SDK's public framework headers, otherwise private.
 Without it, a name heuristic is used (marked "guess").
 

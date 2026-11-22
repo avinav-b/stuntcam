@@ -207,7 +207,7 @@ static void InterruptBegin(int reason, const char *why) {
                 }
             }
             // in-flight photos complete first; photo blocks never wait on the pump queue. Holds the pump during the
-            // encode (TODO.md)
+            // encode (a known gap)
             if (PhotoDrainOn()) {
                 dispatch_sync(PhotoQueue(), ^{});
             }

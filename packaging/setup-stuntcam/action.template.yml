@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-# setup-stuntcam (design §10, CI): install stuntcam from npm on a macOS runner, cache the canary passes, and arm a
+# setup-stuntcam (CI): install stuntcam from npm on a macOS runner, cache the canary passes, and arm a
 # simulator with `stuntcam up`. TEMPLATE: scripts/package.sh writes the action, with @VERSION@ replaced by the VERSION
 # file, to build/package/setup-stuntcam/action.yml. NOT PUBLISHED: to use it, the generated action needs a release tag in
 # a public repo, e.g. uses: avinav-b/setup-stuntcam@v1
@@ -81,7 +81,7 @@ runs:
         rt="$(xcrun simctl list runtimes | sed -nE 's/^iOS [0-9.]+ \([0-9.]+ - ([0-9A-Za-z]+)\).*/\1/p' | paste -sd- -)"
         echo "key=stuntcam-verdicts-$(printf '%s' "$v" | tr -c 'A-Za-z0-9.' '-')-${rt:-none}" >> "$GITHUB_OUTPUT"
     - name: Restore cached canary passes
-      # design §10: verdicts are cached. The key is new on every run (actions/cache never overwrites a key), so each run
+      # Verdicts are cached. The key is new on every run (actions/cache never overwrites a key), so each run
       # saves what it measured; restore-keys pick the newest entry for this stuntcam build and these runtimes.
       uses: actions/cache/restore@v4
       with:

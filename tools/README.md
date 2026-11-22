@@ -1,6 +1,6 @@
 # tools/
 
-Small helpers for the lab (`scripts/`) and for inspecting the engine. The compiled ones are built into `tools/bin/`
+Small helpers for the test scripts (`scripts/`) and for inspecting the engine. The compiled ones are built into `tools/bin/`
 (git-ignored) by `tools/build.sh [name ...]` on a Mac with Xcode; each file's header says how to call it.
 
 When a tool can't do its job it usually says so in one line on stderr: called with wrong arguments, it prints its

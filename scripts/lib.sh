@@ -29,7 +29,7 @@ typeset -a ARGS ENVS
 ARGS=()
 ENVS=()
 
-# m7 (Flutter) and m1b (React Native): the milestones that added each app; bundle ids and log names are data and stay
+# m7 (Flutter) and m1b (React Native): historical names, kept because the apps use these bundle ids and log names
 if [[ $TEST == flutter* ]]; then
   BUNDLE=dev.spike.m7cam
   APP_LOG_NAME=m7.log

@@ -298,7 +298,7 @@ jobs:
           scripts/ci-verdicts-test.sh   # its branches against stubs (~20 s), on this runner's bash and zsh
           scripts/package.sh "${args[@]}"
           # the packaged canary once on each of this runner's iOS runtimes: its plain passes ship, so a user's first `up`
-          # on those runtime builds skips the self-test (design C-MF1); a confirmed fail fails the build
+          # on those runtime builds skips the self-test; a confirmed fail fails the build
           scripts/ci-verdicts.sh "${args[@]}"
       - name: Upload the canary logs
         if: always()   # diagnostics: also after a timeout, and never a reason to fail the release

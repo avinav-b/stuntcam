@@ -187,7 +187,7 @@ func TestStatusFromBootEnv(t *testing.T) {
 		t.Fatalf("other home: %+v", s)
 	}
 	if dir := foreignBootArm(d); dir != "/other/home/sims/U1" || !strings.Contains(foreignBootArmMsg(d, dir), "--reboot") || !strings.Contains(foreignBootArmMsg(d, dir), "another stuntcam home") {
-		t.Fatalf("up must refuse a sim armed under another home (w4 e30, L8): %q", dir)
+		t.Fatalf("up must refuse a sim armed under another home: %q", dir)
 	}
 	// the stub without SIMCAM_SIM_DIR is not "another directory"
 	bootEnv = func(string) (map[string]string, error) { return map[string]string{"DYLD_INSERT_LIBRARIES": stub}, nil }

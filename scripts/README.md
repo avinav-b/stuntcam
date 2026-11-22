@@ -1,6 +1,6 @@
 # scripts/
 
-The lab: zsh scripts that build the test apps, arm simulators, launch apps and run the test suites on a Mac with
+The test scripts: zsh scripts that build the test apps, arm simulators, launch apps and run the test suites on a Mac with
 Xcode. Each script's header says how to call it and what it prints; `--help` prints that header where a script has it.
 
 Most of them need:
@@ -10,10 +10,10 @@ Most of them need:
 
 Results go to `$SIMCAM_RESULTS` (`$SIMCAM_HOME/results`; `<clone>/results` links there).
 
-## Names from the project's history
+## Historical names
 
-Some names in these scripts come from the milestone that added them (m5, m10, m12, ...). They are data that apps, logs
-and saved results already use, so they keep these names (docs/renames.md, "Not renamed"):
+Some bundle ids, product names, inputs and log prefixes keep short historical names (m5, m10, m12, ...). Apps, logs
+and saved results already use them, so they stay as they are:
 - `dev.simcam.spike.m10canary` / `m10canary.app`: the canary (`canary/`).
 - `dev.simcam.spike.m10plain` / `m5app.app` (process `m5app`): the plain app (`fixtures/plain`). Its inputs are
   `M5APP_*`, its log lines start `M5APP| `, and its golden mode's inputs and log tokens are `GF_*` and `GFH`,
@@ -24,8 +24,8 @@ and saved results already use, so they keep these names (docs/renames.md, "Not r
   `m1b.log` and its lines start `M1B`. `dev.spike.m7cam`: the Flutter app (`fixtures/flutter`), with `M7_*` inputs,
   `m7.log` and `M7| ` lines.
 - `cfg-m10.plist`: the camera profile the package ships.
-- `mutation-L<nn>` (activation.sh cases) and the ledger column of `mutation.sh`: `L<nn>` is the id of a fixed bug in
-  docs/ledger.md. The case turns that fix's `SIMCAM_OFF_*` switch on and passes if the test catches the bug.
+- `mutation-L<nn>` (activation.sh cases) and the id column of `mutation.sh`: `L<nn>` is a regression id, one per
+  fixed bug. The case turns that fix's `SIMCAM_OFF_*` switch on and passes if the test catches the bug.
 
 ## Sourced by the others
 
@@ -54,8 +54,8 @@ and saved results already use, so they keep these names (docs/renames.md, "Not r
 ## Arm a simulator
 
 - `boot.sh` — (re)boots a sim armed at boot (`stub`), armed in launchd mode (`launchd`) or plain (`plain`).
-- `launchd-arm.sh` — arms or disarms an already-booted sim in launchd mode, no reboot (design §4.2).
-- `swap.sh` — points an armed sim at another engine build without a reboot (design §4.1).
+- `launchd-arm.sh` — arms or disarms an already-booted sim in launchd mode, no reboot.
+- `swap.sh` — points an armed sim at another engine build without a reboot.
 
 ## Run one app
 
@@ -68,22 +68,22 @@ and saved results already use, so they keep these names (docs/renames.md, "Not r
 
 ## Suites
 
-- `verify.sh` — the canary verdict on a throwaway sim in a private device set, cached per build (design §5.3; the CLI's
+- `verify.sh` — the canary verdict on a throwaway sim in a private device set, cached per build (the CLI's
   `stuntcam verify` follows the same key, lock and cache format). Needs `./build.sh` and the canary; no armed sim and
   no `SIMCAM_UDID_*`.
 - `conformance.sh` — the safety and arming paths: kill switch, motion gate, broken `current`, proto skew, photo latch,
-  crash latch (docs/MATRIX.md, docs/ledger.md).
+  crash latch.
 - `activation.sh` — bounded lazy activation, sentinel latches, crash attribution, CoreMotion's load-time decision, the op
-  trace (design §4.1; docs/ledger.md). The cases are in `activation/`, one file per concern. Needs `cli/bin/stuntcam`
+  trace. The cases are in `activation/`, one file per concern. Needs `cli/bin/stuntcam`
   for the trace cases.
-- `mutation.sh` — turns each fix's off switch on in turn and checks that the canary catches it as the ledger expects
-  (design §5.3, docs/ledger.md).
+- `mutation.sh` — turns each fix's off switch on in turn and checks that the canary catches it as each mutant's
+  row expects (catch, or a known miss that another test guards).
 - `bgfg.sh` — the engine follows the app's start/stop calls across background and foreground; the per-run check is
   `bgfg-check.py`. Needs `fixtures/bgfg-probe`.
-- `features.sh` — camera features stuntcam can't deliver read as unsupported (design §6.5). Needs
+- `features.sh` — camera features stuntcam can't deliver read as unsupported. Needs
   `fixtures/features-probe`.
 - `wd-traced.sh` — the watchdog doesn't count a hang while a debugger is attached; attaches lldb with `lldb-attach.py`.
-- `memcycle.sh` — memory stays flat over open/close cycles in one process (docs/ledger.md).
+- `memcycle.sh` — memory stays flat over open/close cycles in one process.
 - `golden.sh` — captures and compares the hashes of every frame the scene, image and video sources deliver
   (docs/ARCHITECTURE.md).
 - `webcam-test.sh` — the webcam source end to end, with the camera helper (`helper/dev.sh`), on the 263 and 27 sims.

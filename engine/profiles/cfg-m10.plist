@@ -34,9 +34,9 @@
 		<true/>
 		<key>ExposurePointOfInterest</key>
 		<true/>
-		<!-- Flash stays offered on the back cameras (design §5, §6.5): photos with flash .on/.auto complete normally but the
-		     engine never fires one (resolved isFlashEnabled 0, no EXIF Flash; w4 e22), a documented limit. Taking flash away
-		     made apps that set flashMode .on without checking supportedFlashModes throw at capturePhoto (review). -->
+		<!-- Flash stays offered on the back cameras: photos with flash .on/.auto complete normally but the engine never
+		     fires one (resolved isFlashEnabled 0, no EXIF Flash), a documented limit. Taking flash away made apps that set
+		     flashMode .on without checking supportedFlashModes throw at capturePhoto. -->
 		<key>Flash</key>
 		<true/>
 		<key>Focus</key>

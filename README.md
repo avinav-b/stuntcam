@@ -27,6 +27,7 @@ Needs an Apple silicon Mac and Xcode 27. Works with AVFoundation, VisionCamera 5
 | No camera? | `stuntcam doctor` |
 
 All commands: [cli/README.md](cli/README.md). Problems: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
+Upgrading from 1.1.0: [docs/UPGRADING.md](docs/UPGRADING.md).
 
 ## Limits
 

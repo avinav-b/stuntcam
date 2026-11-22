@@ -2,7 +2,7 @@
   "proto": 1,
   "xcode": "27.2",
   "xcode_build": "27B52",
-  "source": "derived from 27A266a; test-runner and test-target rules measured on GitHub's xcode-27 runner (W4 e64, measured internally: Xcode 27.2 27B52, iOS 27.2 runtime); xcode-run libs present and identical (same install names and sizes as 27.0's; each runtime build has its own sha256); ⌘R not driven",
+  "source": "derived from 27A266a; test-runner and test-target rules measured on GitHub's xcode-27 runner (Xcode 27.2 27B52, iOS 27.2 runtime); xcode-run libs present and identical (same install names and sizes as 27.0's; each runtime build has its own sha256); ⌘R not driven",
   "root": "the simulator runtime root ($SIMULATOR_ROOT, else $DYLD_ROOT_PATH); paths below starting with / are relative to it",
   "loader_reads": "rules[].name and rules[].libs (ordered; each {path, if?, unless?}; a condition is VAR=value, PREFIX* (any variable with that prefix) or VAR (set)). Everything else is documentation. A missing rule or file falls back to the loader's built-in copy of this file",
   "never_dlopened": "libclang_rt.* (sanitizer runtimes) and libgmalloc.dylib, in every rule and the chain: they only work inserted at launch (ASan aborts with 'Interceptors are not working' when dlopened; a second TSan runtime gets mapped). Hard-coded in the loader, not read from here",
@@ -47,7 +47,7 @@
       "measured": {
         "hosted_unarmed": ["/usr/lib/libRPAC.dylib", "<built products>/M11App.app/Frameworks/libXCTestBundleInject.dylib (mapped from Xcode's platform usr/lib)", "<root>/usr/lib/libMainThreadChecker.dylib"],
         "ui_runner_boot_mode": ["/usr/lib/libRPAC.dylib", "<root>/usr/lib/libMainThreadChecker.dylib"],
-        "with_TEST_RUNNER_DYLD_INSERT_LIBRARIES": "/usr/lib/libRPAC.dylib:<hook>:<hook> (RPAC still loads; MTC and libXCTestBundleInject don't, and hosted tests hang without the latter: w4 e26)"
+        "with_TEST_RUNNER_DYLD_INSERT_LIBRARIES": "/usr/lib/libRPAC.dylib:<hook>:<hook> (RPAC still loads; MTC and libXCTestBundleInject don't, and hosted tests hang without the latter)"
       },
       "engine": false
     },
@@ -62,9 +62,9 @@
       ],
       "measured_set": ["libLogRedirect", "libMainThreadChecker", "libRPAC", "libViewDebuggerSupport"],
       "not_inserted_by_xcode_27_0": ["libBacktraceRecording (any queue-debugging setting)", "libgmalloc (the scheme's DYLD_INSERT_LIBRARIES option)", "sanitizer runtimes (the app links them)"],
-      "notes": "each of these removes itself from DYLD_INSERT_LIBRARIES on load, so only libViewDebuggerSupport is visible in a plain run's env; MTC has no on/off signal (SIMCAM_MTC=0 skips it). Under ⌘R nothing in the app names the launching Xcode (e26), so which file applies comes from the build recorded at arm time"
+      "notes": "each of these removes itself from DYLD_INSERT_LIBRARIES on load, so only libViewDebuggerSupport is visible in a plain run's env; MTC has no on/off signal (SIMCAM_MTC=0 skips it). Under ⌘R nothing in the app names the launching Xcode, so which file applies comes from the build recorded at arm time"
     }
   ],
   "switches": {"SIMCAM_XCODE_LIBS=0": "no restores", "SIMCAM_MTC=0": "skip libMainThreadChecker"},
-  "unverified": ["the xcode-run rule under Xcode 27.2 ⌘R (not driven headless; its libs and Xcode's helper names checked statically only)", "Detox / idb inserts (displaced; design §4.1 rule 4: announced, not restored)"]
+  "unverified": ["the xcode-run rule under Xcode 27.2 ⌘R (not driven headless; its libs and Xcode's helper names checked statically only)", "Detox / idb inserts (displaced: announced, not restored)"]
 }

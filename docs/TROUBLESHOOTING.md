@@ -80,7 +80,7 @@ library list, and boot mode replaces that list; a sanitizer runtime can't be loa
 with sanitizers, ⌘R with sanitizer schemes and plain UI tests are not affected. Thread Sanitizer UI tests are expected to
 behave the same (not measured yet).
 
-No arming mode gives a sanitizer UI test the camera today (W4 e32): in launchd mode, and on a simulator stuntcam hasn't
+No arming mode gives a sanitizer UI test the camera today: in launchd mode, and on a simulator stuntcam hasn't
 armed, those tests run and pass, but the app under test has no camera, because Xcode sets its own library list for every
 process it launches in a test. So run sanitizer UI tests on a simulator stuntcam hasn't boot-armed (shut it down with
 `xcrun simctl shutdown <udid>` and boot it normally, or use another simulator), and keep camera UI tests to runs without

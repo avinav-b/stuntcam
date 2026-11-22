@@ -39,7 +39,7 @@ final class VC: UIViewController, AVCapturePhotoCaptureDelegate, AVCaptureFileOu
     if mode == "coord-bg" { DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.coordBg() }; return }
     DispatchQueue.global().async { mode == "stress" ? self.stress() : mode == "lifecycle" ? self.lifecycle() : self.orient() }
   }
-  // ---- lazy activation (design §4.1): the RotationCoordinator built right at the first capture call
+  // ---- lazy activation: the RotationCoordinator built right at the first capture call
   //   coord-first  on main, in the same run-loop turn as the first capture call (use with P12_UI=landscape)
   //   coord-bg     the first capture call and the coordinator on a serial camera queue, while main is busy for 300 ms
   // Each prints "COORD <when> preview=<a> capture=<a> ui=<o> dev=<o>" right away and again 1.5 s later, and PASS/FAIL coord-<mode>:

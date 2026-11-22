@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # tools/build.sh [name ...] — compile the helper tools in tools/ into tools/bin/ (git-ignored). No args: all of them.
 #
-#   macOS host tools (run on the Mac):  avaudio avinfo mkqr mkvideo upright (Swift), pstart (C)
+#   macOS host tools (run on the host): avaudio avinfo mkqr mkvideo upright (Swift), pstart (C)
 #   iOS Simulator CLIs (run inside a sim with `xcrun simctl spawn <udid> tools/bin/<name>`):
 #     audiosrc dumpkeys mrctest (ObjC)
 #
