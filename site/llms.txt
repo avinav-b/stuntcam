@@ -55,6 +55,7 @@ From each tool's own documentation, read 15 Nov 2026; serve-sim's barcode result
 
 ## Links
 
+- [Docs](https://stuntcam.dev/docs/): quick start, picture sources, commands, troubleshooting, limits
 - [GitHub repository](https://github.com/avinav-b/stuntcam): source, README, issues
 - [npm package](https://www.npmjs.com/package/stuntcam)
 - [All CLI commands](https://github.com/avinav-b/stuntcam/blob/main/cli/README.md)

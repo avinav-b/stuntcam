@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Docs · stuntcam</title>
+<meta name="description" content="How to use stuntcam, the camera for the iOS Simulator: quick start for Expo, React Native, Xcode, Flutter and UI tests, picture sources, commands, troubleshooting and limits.">
+<link rel="canonical" href="https://stuntcam.dev/docs/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="stuntcam">
+<meta property="og:url" content="https://stuntcam.dev/docs/">
+<meta property="og:title" content="Docs · stuntcam">
+<meta property="og:description" content="Quick start, picture sources, commands, troubleshooting and limits for stuntcam, the camera for the iOS Simulator.">
+<meta property="og:image" content="https://stuntcam.dev/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="color-scheme" content="light dark">
+<script>(() => { let t; try { t = localStorage.getItem('theme'); } catch (e) {} document.documentElement.dataset.theme = t || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); })();</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpolygon points='50,4 89.84,27 65.62,53.45' fill='%231F4BFF'/%3E%3Cpolygon points='89.84,27 89.84,73 54.82,65.26' fill='%230A1640'/%3E%3Cpolygon points='89.84,73 50,96 39.2,61.8' fill='%238DB8FF'/%3E%3Cpolygon points='50,96 10.16,73 34.38,46.55' fill='%231F4BFF'/%3E%3Cpolygon points='10.16,73 10.16,27 45.18,34.74' fill='%230A1640'/%3E%3Cpolygon points='10.16,27 50,4 60.8,38.2' fill='%238DB8FF'/%3E%3C/svg%3E">
+<style>
+:root{--navy:#0A1640;--blue:#1F4BFF;--sky:#8DB8FF;
+  --bg:#fff;--text:#0A1640;--soft:#2F3A62;--faint:#59628A;--rule:#DFE4EF;--tint:#F5F7FB;--card:#fff;--link:#1F4BFF;--accent:#1F4BFF;
+  --nav:rgba(255,255,255,.92);--blade:#0A1640;--word:#0A1640;--cam:#1F4BFF;
+  --codebg:#F1F4FA;--cmd:#0A1640;--prompt:#7F89AB;--flag:#7C3AED;
+  --ok:#15803D;--okbg:#DCFCE7;--no:#C2262E;--nobg:#FDE4E5;--part:#B45309;--partbg:#FEF3C7;
+  --body:'Inter',system-ui,-apple-system,sans-serif;--mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+  color-scheme:light}
+[data-theme=dark]{--bg:#070C22;--text:#E8ECFA;--soft:#C3CAE4;--faint:#99A2C2;--rule:#1E2A55;--tint:#0E1736;--card:#0B1330;--link:#8DB8FF;--accent:#7A97FF;
+  --nav:rgba(7,12,34,.9);--blade:#E8ECFA;--word:#F2F5FF;--cam:#8DB8FF;
+  --codebg:#0E1838;--cmd:#E3E9FF;--prompt:#6B76A0;--flag:#C4B5FD;
+  --ok:#4ADE80;--okbg:rgba(74,222,128,.15);--no:#F87171;--nobg:rgba(248,113,113,.15);--part:#FBBF24;--partbg:rgba(251,191,36,.15);
+  color-scheme:dark}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:88px}
+body{margin:0;font:16px/1.65 var(--body);color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased}
+a{color:var(--link);text-decoration:none} a:hover{text-decoration:underline}
+code{font-family:var(--mono);font-size:.86em;background:var(--tint);border:1px solid var(--rule);border-radius:6px;padding:.1em .4em;white-space:nowrap}
+.wrap{max-width:1320px;margin:0 auto;padding:0 32px}
+svg.i{width:16px;height:16px;flex:none}
+
+/* header: brand | search aligned with the text column | links */
+header.nav{position:sticky;top:0;z-index:20;background:var(--nav);backdrop-filter:blur(10px);border-bottom:1px solid var(--rule)}
+header.nav .wrap{display:grid;grid-template-columns:208px minmax(0,1fr) 176px;gap:48px;height:64px;align-items:center}
+.hl{display:contents}
+.brand{display:flex;align-items:center;gap:9px;color:var(--word);flex:none} .brand:hover{text-decoration:none}
+.brand svg{width:26px;height:26px}
+.word{font:700 22px/1 'Chakra Petch',system-ui,sans-serif;letter-spacing:-.03em} .word b{color:var(--cam);font-weight:700}
+.brand small{font:600 12px var(--body);letter-spacing:.04em;text-transform:uppercase;color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent);padding:3px 8px;border-radius:999px;margin-left:4px}
+.search{display:flex;align-items:center;gap:10px;width:100%;max-width:440px;height:38px;padding:0 10px 0 12px;border:1px solid var(--rule);border-radius:10px;background:var(--tint);color:var(--faint);font:400 14px var(--body);cursor:pointer;text-align:left}
+.search:hover{border-color:color-mix(in srgb,var(--accent) 40%,var(--rule));color:var(--soft)}
+.search span{flex:1}
+kbd{font:500 11.5px var(--body);color:var(--faint);border:1px solid var(--rule);border-radius:5px;padding:1px 6px;background:var(--card)}
+header.nav nav{display:flex;align-items:center;justify-content:flex-end;gap:22px;font-size:14px;font-weight:500}
+header.nav nav a{color:var(--soft)} header.nav nav a:hover{color:var(--text);text-decoration:none}
+.theme{width:36px;height:36px;border:1px solid var(--rule);border-radius:10px;background:none;color:var(--soft);display:grid;place-items:center;cursor:pointer}
+.theme:hover{color:var(--text)}
+.theme .sun,[data-theme=dark] .theme .moon{display:none} [data-theme=dark] .theme .sun{display:block}
+
+/* page: text column + "on this page" rail */
+.layout{display:grid;grid-template-columns:208px minmax(0,1fr) 176px;gap:48px;padding-top:48px;padding-bottom:96px}
+.side{position:sticky;top:104px;align-self:start;font-size:14.5px}
+.side h4{margin:0 0 8px;font:600 12px var(--body);letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+.side ul{list-style:none;margin:0 0 26px;padding:0}
+.side a{display:block;padding:6px 10px;margin:0 0 2px -10px;border-radius:8px;color:var(--soft)}
+.side a:hover{background:var(--tint);color:var(--text);text-decoration:none}
+.side a.here{background:color-mix(in srgb,var(--accent) 9%,transparent);color:var(--accent);font-weight:600}
+main{min-width:0}
+.rail{position:sticky;top:104px;align-self:start;font-size:14px}
+.rail h4{margin:0 0 10px;font:600 12px var(--body);letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+.rail ol,.rail ul{list-style:none;margin:0 0 28px;padding:0}
+.rail ol{border-left:1px solid var(--rule)}
+.rail ol a{display:block;padding:5px 0 5px 14px;margin-left:-1px;border-left:2px solid transparent;color:var(--soft)}
+.rail ol a:hover{color:var(--text);text-decoration:none}
+.rail ol a.on{color:var(--accent);font-weight:600;border-left-color:var(--accent)}
+.rail ul a{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 0;color:var(--soft)}
+.rail ul a:hover{color:var(--accent);text-decoration:none}
+.rail ul a .i{width:14px;height:14px;color:var(--faint)}
+@media (max-width:1180px){.layout,header.nav .wrap{grid-template-columns:200px minmax(0,1fr)}.rail{display:none}header.nav nav{grid-column:2;justify-self:end}.search{display:none}}
+@media (max-width:860px){.layout,header.nav .wrap{grid-template-columns:minmax(0,1fr)}.side{display:none}header.nav nav{position:absolute;right:32px;top:14px}header.nav nav a.opt{display:none}}
+
+
+/* type */
+.crumbs{margin:0 0 12px;font-size:14px;color:var(--faint)} .crumbs a{color:var(--faint)} .crumbs b{color:var(--text);font-weight:500}
+h1{font:700 44px/1.1 var(--body);letter-spacing:-.034em;margin:0 0 12px}
+.lede{font-size:19px;line-height:1.55;color:var(--soft);margin:0 0 24px;max-width:640px;text-wrap:pretty}
+section{margin-top:72px}
+section.first{border:0;margin-top:0;padding-top:0}
+h2{font:700 30px/1.2 var(--body);letter-spacing:-.028em;margin:0 0 6px}
+h2 a{color:inherit} h2 a:hover{text-decoration:none}
+.sub{margin:0 0 20px;color:var(--soft)}
+p{margin:0 0 16px}
+.more{margin:14px 0 0;color:var(--soft);font-size:15px}
+@media (max-width:560px){.wrap{padding:0 16px}h1{font-size:34px}h2{font-size:23px}.lede{font-size:17px}section{margin-top:52px}header.nav nav{right:16px}}
+
+/* facts */
+.facts{display:grid;grid-template-columns:auto 1fr;gap:8px 20px;margin:0 0 32px;padding:14px 18px;border-radius:14px;background:var(--tint);font-size:15px}
+.facts dt{white-space:nowrap;font-weight:600;color:var(--faint);font-size:12.5px;letter-spacing:.05em;text-transform:uppercase;padding-top:2px}
+.facts dd{margin:0;display:flex;flex-wrap:wrap;row-gap:2px}
+.facts dd span{white-space:nowrap}
+.facts dd span+span::before{content:"·";margin:0 8px;color:var(--prompt)}
+@media (max-width:560px){.facts{grid-template-columns:1fr;gap:2px}.facts dd{margin-bottom:10px;gap:2px 14px}.facts dd span+span::before{content:none}}
+
+/* steps */
+.steps{list-style:none;counter-reset:s;margin:0;padding:0}
+.steps>li{position:relative;counter-increment:s;padding:0 0 24px 46px}
+.steps>li::before{content:counter(s);position:absolute;left:0;top:-1px;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font:600 14px var(--body);color:#fff;background:var(--accent)}
+.steps>li:not(:last-child)::after{content:"";position:absolute;left:15px;top:36px;bottom:6px;width:2px;border-radius:2px;background:var(--rule)}
+.steps h3{margin:0 0 10px;font:600 17px/1.5 var(--body)}
+.note{display:flex;gap:8px;align-items:flex-start;margin:10px 0 0;font-size:15px;color:var(--soft)}
+.note .i{color:var(--accent);margin-top:3px;width:15px;height:15px}
+
+/* code: one compact style for blocks and chips */
+.code{position:relative;border:1px solid var(--rule);border-radius:10px;background:var(--codebg)}
+.code pre{margin:0;padding:12px 56px 12px 16px;color:var(--cmd);font:14.5px/1.75 var(--mono);overflow-x:auto;white-space:pre}
+.code .c{color:var(--faint)}
+.cbtn{display:grid;place-items:center;width:32px;height:32px;border:1px solid var(--rule);border-radius:8px;background:var(--card);color:var(--soft);cursor:pointer}
+.cbtn:hover{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 40%,var(--rule))}
+.cbtn.done{color:var(--ok)}
+.cbtn .i{width:15px;height:15px}
+.code .cbtn{position:absolute;top:7px;right:8px}
+.cmd{display:flex;align-items:center;gap:8px;width:100%;padding:5px 5px 5px 13px;border:1px solid var(--rule);border-radius:10px;background:var(--codebg);font:14px/1.5 var(--mono);color:var(--cmd)}
+.cmd span{flex:1;min-width:0;overflow-wrap:anywhere}
+.ph{color:var(--accent)} .fl{color:var(--flag)} .bin{color:var(--faint)}
+
+/* tabs */
+.tabs{display:flex;gap:2px;margin:0 0 22px;border-bottom:1px solid var(--rule);overflow-x:auto}
+.tabs button{position:relative;border:0;background:none;padding:10px 14px;font:500 15px var(--body);color:var(--soft);cursor:pointer;white-space:nowrap}
+.tabs button:hover{color:var(--text)}
+.tabs button[aria-selected=true]{color:var(--accent);font-weight:600}
+.tabs button[aria-selected=true]::after{content:"";position:absolute;left:10px;right:10px;bottom:-1px;height:2px;border-radius:2px;background:var(--accent)}
+.panel[hidden]{display:none}
+
+/* picture sources: rows with an aligned, full-width command */
+.sources{list-style:none;margin:0;padding:0;border:1px solid var(--rule);border-radius:14px;background:var(--card)}
+.sources li{display:grid;grid-template-columns:272px minmax(0,1fr);gap:20px;align-items:center;padding:13px 16px;border-bottom:1px solid var(--rule)}
+.sources li:last-child{border-bottom:0}
+.sources .top{display:flex;gap:12px;align-items:center}
+.ico{flex:none;display:grid;place-items:center;width:38px;height:38px;border-radius:10px;background:color-mix(in srgb,var(--accent) 10%,transparent);color:var(--accent)}
+.ico svg{width:20px;height:20px}
+.sources b{display:block;font-weight:600;font-size:15.5px;line-height:1.3}
+.sources .d{display:block;font-size:14.5px;color:var(--soft)}
+@media (max-width:760px){.sources li{grid-template-columns:1fr;gap:10px}}
+
+/* plain feature list */
+.feats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px 32px;list-style:none;margin:0;padding:0}
+.feats li{display:flex;gap:14px;align-items:flex-start}
+.feats b{display:block;font-weight:600;font-size:16px;line-height:1.35}
+.feats .d{display:block;color:var(--soft);font-size:15px;line-height:1.5;margin-top:2px}
+@media (max-width:620px){.feats{grid-template-columns:1fr}}
+
+/* table */
+.tbl{border:1px solid var(--rule);border-radius:14px;overflow:hidden;background:var(--card)}
+table{width:100%;border-collapse:collapse;font-size:15px}
+th,td{padding:11px 16px;border-bottom:1px solid var(--rule);text-align:left;vertical-align:middle}
+th{font-size:12.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);background:var(--tint)}
+tr:last-child td{border-bottom:0}
+td:first-child{white-space:nowrap;font-weight:500;width:1%}
+td[data-cmd]{width:44%}
+td .cmd span{white-space:nowrap}
+@media (max-width:620px){table,tbody,tr,td{display:block;width:100%!important}tr:first-child{display:none}tr{padding:12px 14px;border-bottom:1px solid var(--rule)}tr:last-child{border-bottom:0}td{padding:0;border:0;white-space:normal!important}td+td{margin-top:8px;color:var(--soft)}td .cmd span{white-space:normal}}
+.st{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;font-size:13px;font-weight:600;white-space:nowrap;margin-right:8px}
+.st::before{font-size:11px;font-weight:700}
+.st.p{background:var(--partbg);color:var(--part)} .st.p::before{content:"~";content:"~" / ""}
+.st.n{background:var(--nobg);color:var(--no)} .st.n::before{content:"✕";content:"✕" / ""}
+
+/* troubleshooting: expandable questions */
+.qa{border:1px solid var(--rule);border-radius:14px;background:var(--card);overflow:hidden}
+.qa details{border-bottom:1px solid var(--rule)}
+.qa details:last-child{border-bottom:0}
+.qa summary{display:flex;align-items:center;gap:12px;padding:14px 18px;font:600 15.5px/1.4 var(--body);cursor:pointer;list-style:none}
+.qa summary::-webkit-details-marker{display:none}
+.qa summary::after{content:"";margin-left:auto;width:8px;height:8px;border-right:2px solid var(--faint);border-bottom:2px solid var(--faint);transform:rotate(45deg) translateY(-3px);transition:transform .15s}
+.qa details[open] summary::after{transform:rotate(-135deg) translateY(-1px)}
+.qa summary:hover{background:var(--tint)}
+.qa details>p{margin:0 18px 10px;color:var(--soft);font-size:15.5px}
+.qa details>[data-cmd]{display:block;margin:0 18px 16px}
+
+/* checklist */
+.checks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 32px;list-style:none;margin:0;padding:0}
+.checks li{display:flex;gap:12px;align-items:flex-start}
+.checks li::before{flex:none;margin-top:2px;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;content:"✓";content:"✓" / "";background:var(--okbg);color:var(--ok)}
+.checks b{display:block;font-weight:600}
+.checks .d{display:block;color:var(--soft);font-size:15px}
+@media (max-width:620px){.checks{grid-template-columns:1fr}}
+
+/* next steps */
+.links{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;list-style:none;margin:0;padding:0}
+.links a{display:flex;align-items:center;gap:14px;padding:16px 18px;border:1px solid var(--rule);border-radius:14px;background:var(--card);color:var(--text)}
+.links a:hover{border-color:var(--accent);text-decoration:none}
+.links b{display:block;font-weight:600;font-size:15.5px;color:var(--link)}
+.links .d{display:block;color:var(--soft);font-size:15px}
+.links .arrow{margin-left:auto;color:var(--accent);width:18px;height:18px}
+@media (max-width:620px){.links{grid-template-columns:1fr}}
+
+footer{border-top:1px solid var(--rule)}
+footer .wrap{display:flex;flex-wrap:wrap;gap:10px 24px;padding-top:24px;padding-bottom:36px;font-size:14px;color:var(--faint)}
+footer a{color:var(--soft)}
+
+/* search dialog */
+dialog{width:min(620px,calc(100vw - 32px));margin:12vh auto auto;padding:0;border:1px solid var(--rule);border-radius:16px;background:var(--card);color:var(--text);box-shadow:0 30px 80px -20px rgba(10,22,64,.45)}
+dialog::backdrop{background:rgba(7,12,34,.35);backdrop-filter:blur(2px)}
+.sbox{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--rule)}
+.sbox .i{color:var(--faint)}
+.sbox input{flex:1;border:0;outline:0;background:none;color:var(--text);font:16px var(--body)}
+.results{list-style:none;margin:0;padding:8px;max-height:min(420px,60vh);overflow:auto}
+.results a{display:block;padding:9px 12px;border-radius:9px;color:var(--text)}
+.results a:hover,.results a.sel{background:color-mix(in srgb,var(--accent) 9%,transparent);text-decoration:none}
+.results small{display:block;color:var(--faint);font-size:12.5px}
+.results .none{padding:14px 12px;color:var(--faint);font-size:14.5px}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+<symbol id="mark" viewBox="0 0 100 100">
+<polygon points="50,4 89.84,27 65.62,53.45" fill="#1F4BFF"/><polygon points="89.84,27 89.84,73 54.82,65.26" style="fill:var(--blade)"/><polygon points="89.84,73 50,96 39.2,61.8" fill="#8DB8FF"/>
+<polygon points="50,96 10.16,73 34.38,46.55" fill="#1F4BFF"/><polygon points="10.16,73 10.16,27 45.18,34.74" style="fill:var(--blade)"/><polygon points="10.16,27 50,4 60.8,38.2" fill="#8DB8FF"/>
+</symbol>
+<symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+<symbol id="i-ext" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M8 7h9v9"/></symbol>
+<symbol id="i-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+</svg>
+<header class="nav">
+  <div class="wrap">
+    <div class="hl">
+      <a class="brand" href="/" aria-label="stuntcam home"><svg aria-hidden="true"><use href="#mark"/></svg><span class="word">stunt<b>cam</b></span><small>Docs</small></a>
+      <button type="button" class="search" id="open-search"><svg class="i"><use href="#i-search"/></svg><span>Search docs</span><kbd>/</kbd></button>
+    </div>
+    <nav>
+      <a class="opt" href="https://www.npmjs.com/package/stuntcam">npm</a>
+      <a href="https://github.com/avinav-b/stuntcam">GitHub</a>
+      <button type="button" class="theme" id="theme" aria-label="Dark mode" aria-pressed="false"><svg class="i moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg><svg class="i sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg></button>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap layout">
+<aside class="side" aria-label="Docs">
+  <h4>Guide</h4>
+  <ul><li><a class="here" href="#top" aria-current="page">Getting started</a></li></ul>
+  <h4>Reference</h4>
+  <ul>
+    <li><a href="https://github.com/avinav-b/stuntcam/blob/main/cli/README.md">CLI reference</a></li>
+    <li><a href="https://github.com/avinav-b/stuntcam/blob/main/docs/TROUBLESHOOTING.md">Troubleshooting guide</a></li>
+    <li><a href="https://github.com/avinav-b/stuntcam/blob/main/docs/SUPPORT.md">What's tested</a></li>
+    <li><a href="https://github.com/avinav-b/stuntcam/blob/main/docs/ARCHITECTURE.md">How it works</a></li>
+  </ul>
+  <h4>Community</h4>
+  <ul>
+    <li><a href="https://github.com/avinav-b/stuntcam/issues/new/choose">Report a bug</a></li>
+    <li><a href="/llms.txt">For AI agents</a></li>
+  </ul>
+</aside>
+<main id="top">
+<p class="crumbs"><a href="/">stuntcam</a> › <b>Getting started</b></p>
+<h1>Getting started</h1>
+<p class="lede">stuntcam gives the iOS Simulator a working camera. Turn it on with one command, then run your app as usual. No code changes.</p>
+
+<dl class="facts">
+  <dt>Needs</dt><dd><span>Apple silicon Mac</span><span>Xcode 27</span><span>iOS 17.5–27.2 simulator</span><span>Node.js</span></dd>
+  <dt>Works with</dt><dd><span>AVFoundation</span><span>VisionCamera 5</span><span>expo-camera</span><span>Flutter camera</span><span>mobile_scanner</span></dd>
+</dl>
+
+<section id="start" class="first">
+<h2><a href="#start">Quick start</a></h2>
+<p class="sub">Pick how you build your app.</p>
+
+<div class="tabs" role="tablist" aria-label="How you build your app">
+  <button type="button" role="tab" id="t-rn" aria-controls="p-rn" aria-selected="true">React Native / Expo</button>
+  <button type="button" role="tab" id="t-xcode" aria-controls="p-xcode" aria-selected="false" tabindex="-1">Xcode</button>
+  <button type="button" role="tab" id="t-flutter" aria-controls="p-flutter" aria-selected="false" tabindex="-1">Flutter</button>
+  <button type="button" role="tab" id="t-ci" aria-controls="p-ci" aria-selected="false" tabindex="-1">UI tests &amp; CI</button>
+</div>
+
+<div class="panel" role="tabpanel" id="p-rn" aria-labelledby="t-rn">
+<ol class="steps">
+  <li><h3>Turn on the camera in the booted simulator</h3>
+    <div class="code"><pre>npx stuntcam up</pre></div>
+    <p class="note"><svg class="i"><use href="#i-info"/></svg><span>The first run takes about a minute: a one-time self-test.</span></p></li>
+  <li><h3>Run your app</h3>
+    <div class="code"><pre>npx expo run:ios</pre></div>
+    <p class="note"><svg class="i"><use href="#i-info"/></svg><span>Or <code>npx react-native run-ios</code>. Use a development build; Expo Go isn't tested.</span></p></li>
+</ol>
+</div>
+
+<div class="panel" role="tabpanel" id="p-xcode" aria-labelledby="t-xcode" hidden>
+<ol class="steps">
+  <li><h3>Boot the simulator with the camera on</h3>
+    <div class="code"><pre><span class="c"># simulator shut down</span>
+npx stuntcam up --udid &lt;simulator&gt;
+<span class="c"># simulator already booted</span>
+npx stuntcam up --reboot</pre></div>
+    <p class="note"><svg class="i"><use href="#i-info"/></svg><span><code>xcrun simctl list devices</code> lists simulator ids. The first run takes about a minute.</span></p></li>
+  <li><h3>Run (⌘R) in Xcode, as usual</h3></li>
+</ol>
+</div>
+
+<div class="panel" role="tabpanel" id="p-flutter" aria-labelledby="t-flutter" hidden>
+<ol class="steps">
+  <li><h3>Turn on the camera in the booted simulator</h3>
+    <div class="code"><pre>npx stuntcam up</pre></div>
+    <p class="note"><svg class="i"><use href="#i-info"/></svg><span>The first run takes about a minute: a one-time self-test.</span></p></li>
+  <li><h3>Run your app</h3>
+    <div class="code"><pre>flutter run</pre></div></li>
+</ol>
+</div>
+
+<div class="panel" role="tabpanel" id="p-ci" aria-labelledby="t-ci" hidden>
+<ol class="steps">
+  <li><h3>Turn on the camera and allow it for your app</h3>
+    <div class="code"><pre>npx stuntcam up --udid $SIM --grant com.example.app</pre></div>
+    <p class="note"><svg class="i"><use href="#i-info"/></svg><span><code>--grant</code> allows camera and microphone, so no prompt appears.</span></p></li>
+  <li><h3>Run your tests</h3>
+    <div class="code"><pre>npx stuntcam exec -- xcodebuild test -scheme MyApp \
+    -destination "platform=iOS Simulator,id=$SIM"</pre></div>
+    <p class="note"><svg class="i"><use href="#i-info"/></svg><span>Use <code>id=</code> destinations, not <code>name=</code>.</span></p></li>
+</ol>
+</div>
+</section>
+
+<section id="picture">
+<h2><a href="#picture">Change the picture</a></h2>
+<p class="sub">Switches live. Running apps pick it up without a relaunch.</p>
+<ul class="sources">
+  <li><div class="top"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="m21 16-5-5-8 8"/></svg></span><span><b>Your image</b><span class="d">Any photo on your Mac</span></span></div><span data-cmd>npx stuntcam source image:/path/photo.png</span></li>
+  <li><div class="top"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3z"/></svg></span><span><b>Your video</b><span class="d">Any clip on your Mac</span></span></div><span data-cmd>npx stuntcam source video:/path/clip.mov</span></li>
+  <li><div class="top"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="M14 14h2v2M20 14v.01M14 20h.01M17 17h3v3h-3z"/></svg></span><span><b>A QR code</b><span class="d">Of any text or link</span></span></div><span data-cmd>npx stuntcam source qr:'https://example.com'</span></li>
+  <li><div class="top"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="10" r="6"/><circle cx="12" cy="10" r="2"/><path d="M8 20h8M12 16v4"/></svg></span><span><b>Your Mac's camera</b><span class="d">macOS asks for access once</span></span></div><span data-cmd>npx stuntcam source webcam</span></li>
+  <li><div class="top"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 15l5-5 4 4 3-3 6 6"/></svg></span><span><b>Built-in test scene</b><span class="d">The default, with codes to scan</span></span></div><span data-cmd>npx stuntcam source scene</span></li>
+</ul>
+</section>
+
+<section id="gets">
+<h2><a href="#gets">What your app gets</a></h2>
+<p class="sub">Apple's own AVFoundation objects, so it behaves as on an iPhone.</p>
+<ul class="feats">
+  <li><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><circle cx="12" cy="12" r="3"/></svg></span><span><b>Live preview</b><span class="d">Back wide, ultra-wide, telephoto and front</span></span></li>
+  <li><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></span><span><b>Photos</b><span class="d">JPEG and HEIC, with EXIF</span></span></li>
+  <li><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3z"/></svg></span><span><b>Video with audio</b><span class="d">1080p and 4K, with a generated audio tone</span></span></li>
+  <li><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="M14 14h2v2M20 14v.01M14 20h.01M17 17h3v3h-3z"/></svg></span><span><b>QR and EAN-13 scanning</b><span class="d">Through AVFoundation and Vision</span></span></li>
+</ul>
+</section>
+
+<section id="commands">
+<h2><a href="#commands">Commands</a></h2>
+<p class="sub">The ones you'll use. Add <code>-h</code> to any command for its options.</p>
+<div class="tbl"><table>
+  <tr><th>Command</th><th>What it does</th></tr>
+  <tr><td data-cmd>npx stuntcam up</td><td>Turns on the camera. <code>--udid</code> picks a simulator</td></tr>
+  <tr><td data-cmd>npx stuntcam down</td><td>Turns it off, with no reboot</td></tr>
+  <tr><td data-cmd>npx stuntcam status</td><td>Shows what each simulator is doing</td></tr>
+  <tr><td data-cmd>npx stuntcam doctor</td><td>Explains why there's no camera</td></tr>
+  <tr><td data-cmd>npx stuntcam orient landscapeLeft</td><td>Rotates the device, or <code>portrait</code>, <code>auto</code></td></tr>
+</table></div>
+<p class="more">Every command and flag: <a href="https://github.com/avinav-b/stuntcam/blob/main/cli/README.md">CLI reference</a>.</p>
+</section>
+
+<section id="fix">
+<h2><a href="#fix">Troubleshooting</a></h2>
+<p class="sub">Start with <code>npx stuntcam doctor</code>. It names the problem.</p>
+<div class="qa">
+  <details open><summary>No camera after Xcode Run (⌘R)?</summary><p>Xcode needs the simulator booted with the camera on.</p><span data-cmd>npx stuntcam up --reboot</span></details>
+  <details><summary>No camera after the simulator restarted?</summary><p>A restart turns the camera off. Turn it on again.</p><span data-cmd>npx stuntcam up</span></details>
+  <details><summary>Tests ran, but no app used the camera?</summary><p>Give the simulator by id in the destination, not by name.</p><span data-cmd>-destination 'platform=iOS Simulator,id=&lt;UDID&gt;'</span></details>
+  <details><summary>Using Detox, or a tool that injects libraries?</summary><p>Use launchd mode, then give the tool <code>eval "$(stuntcam env)"</code>.</p><span data-cmd>npx stuntcam up --mode launchd</span></details>
+  <details><summary>The camera stopped for one app?</summary><p>stuntcam crashed twice in it and turned itself off there. Turn it back on:</p><span data-cmd>npx stuntcam sentinel clear --bundle &lt;bundle id&gt;</span></details>
+  <details><summary>Using VisionCamera 4?</summary><p>Version 4 leaves its camera code out of simulator builds. Upgrade to VisionCamera 5.</p></details>
+</div>
+<p class="more">Every known problem: <a href="https://github.com/avinav-b/stuntcam/blob/main/docs/TROUBLESHOOTING.md">troubleshooting guide</a>.</p>
+</section>
+
+<section id="limits">
+<h2><a href="#limits">Limits</a></h2>
+<p class="sub">What doesn't match a real iPhone yet.</p>
+<div class="tbl"><table>
+  <tr><th>Feature</th><th>Status</th></tr>
+  <tr><td>4K at 60 fps</td><td><span class="st p">Partly</span>Records at about 16–32 fps</td></tr>
+  <tr><td>Zoom</td><td><span class="st p">Partly</span>Accepted, but the picture doesn't zoom</td></tr>
+  <tr><td>Flutter camera in landscape</td><td><span class="st p">Partly</span>The picture is 90° off</td></tr>
+  <tr><td>Focus lock</td><td><span class="st n">No</span>Focus can't be locked</td></tr>
+  <tr><td>Flash</td><td><span class="st n">No</span>Never fires</td></tr>
+  <tr><td>720p, Live Photo, depth data</td><td><span class="st n">No</span>Reported as unavailable</td></tr>
+</table></div>
+</section>
+
+<section id="changes">
+<h2><a href="#changes">What it changes</a></h2>
+<p class="sub">Nothing in your app or project.</p>
+<ul class="checks">
+  <li><span><b>Simulator only</b><span class="d">Nothing is linked into your app; device builds never load it</span></span></li>
+  <li><span><b>One folder</b><span class="d">~/Library/Application Support/stuntcam</span></span></li>
+  <li><span><b>No sudo, no network</b><span class="d">Never asks for admin rights; sends nothing anywhere</span></span></li>
+  <li><span><b>Verifiable build</b><span class="d">Built from the public repo by CI, with npm provenance</span></span></li>
+</ul>
+</section>
+
+<section id="next">
+<h2><a href="#next">Next steps</a></h2>
+<ul class="links">
+  <li><a href="https://github.com/avinav-b/stuntcam/blob/main/cli/README.md"><span><b>CLI reference</b><span class="d">Every command and flag</span></span><svg class="i arrow"><use href="#i-arrow"/></svg></a></li>
+  <li><a href="https://github.com/avinav-b/stuntcam/blob/main/docs/TROUBLESHOOTING.md"><span><b>Troubleshooting guide</b><span class="d">Every known problem and fix</span></span><svg class="i arrow"><use href="#i-arrow"/></svg></a></li>
+  <li><a href="https://github.com/avinav-b/stuntcam/blob/main/docs/SUPPORT.md"><span><b>What's tested</b><span class="d">Xcode builds, runtimes, frameworks</span></span><svg class="i arrow"><use href="#i-arrow"/></svg></a></li>
+  <li><a href="https://github.com/avinav-b/stuntcam/issues/new/choose"><span><b>Report a bug</b><span class="d">Include <code>stuntcam doctor --json</code></span></span><svg class="i arrow"><use href="#i-arrow"/></svg></a></li>
+</ul>
+</section>
+</main>
+
+<aside class="rail">
+  <h4>On this page</h4>
+  <ol>
+    <li><a href="#start">Quick start</a></li>
+    <li><a href="#picture">Change the picture</a></li>
+    <li><a href="#gets">What your app gets</a></li>
+    <li><a href="#commands">Commands</a></li>
+    <li><a href="#fix">Troubleshooting</a></li>
+    <li><a href="#limits">Limits</a></li>
+    <li><a href="#changes">What it changes</a></li>
+    <li><a href="#next">Next steps</a></li>
+  </ol>
+
+</aside>
+</div>
+
+<footer><div class="wrap"><span>stuntcam is Apache-2.0 and not affiliated with Apple.</span><a href="/">Home</a><a href="https://github.com/avinav-b/stuntcam">GitHub</a><a href="https://www.npmjs.com/package/stuntcam">npm</a><a href="/llms.txt">llms.txt</a></div></footer>
+
+<dialog id="search" aria-label="Search docs">
+  <div class="sbox"><svg class="i"><use href="#i-search"/></svg><input id="q" type="search" placeholder="Search docs" autocomplete="off" aria-label="Search docs"><kbd>Esc</kbd></div>
+  <ul class="results" id="results"></ul>
+</dialog>
+
+<script>
+(() => {
+  const $ = q => document.querySelector(q), $$ = q => [...document.querySelectorAll(q)];
+  const root = document.documentElement, themeBtn = $('#theme');
+  const sync = () => themeBtn.setAttribute('aria-pressed', root.dataset.theme === 'dark');
+  themeBtn.onclick = () => { const t = root.dataset.theme === 'dark' ? 'light' : 'dark'; root.dataset.theme = t; sync(); try { localStorage.setItem('theme', t); } catch (e) {} };
+  sync();
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => { let s; try { s = localStorage.getItem('theme'); } catch (_) {} if (!s) { root.dataset.theme = e.matches ? 'dark' : 'light'; sync(); } });
+
+  const icon = id => `<svg class="i" aria-hidden="true"><use href="#${id}"/></svg>`;
+  const esc = t => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const PH = /(\/path\/[^\s']+|&lt;[^&]+&gt;|\$SIM|com\.example\.app|MyApp|'https:\/\/example\.com')/g;
+  const hl = h => h.replace(PH, '<span class="ph">$1</span>').replace(/(^|\s)(--?[a-z][\w-]*)/g, '$1<span class="fl">$2</span>').replace(/(^|\n)(npx|flutter|xcrun)(?= )/g, '$1<span class="bin">$2</span>');
+  const copyBtn = text => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'cbtn'; b.setAttribute('aria-label', 'Copy'); b.innerHTML = icon('i-copy');
+    b.onclick = async () => { try { await navigator.clipboard.writeText(text); } catch (e) {} b.classList.add('done'); b.innerHTML = icon('i-check'); setTimeout(() => { b.classList.remove('done'); b.innerHTML = icon('i-copy'); }, 1300); };
+    return b;
+  };
+
+  /* code blocks: copy the commands, not the comments */
+  $$('.code').forEach(box => {
+    const pre = box.querySelector('pre');
+    const text = pre.innerText.split('\n').filter(l => l.trim() && !l.trim().startsWith('#')).join('\n');
+    pre.innerHTML = pre.innerHTML.split('\n').map(l => l.includes('class="c"') ? l : hl(l)).join('\n');
+    box.appendChild(copyBtn(text));
+  });
+  /* every other command: a chip with its own copy button */
+  $$('[data-cmd]').forEach(el => {
+    const text = el.textContent.trim();
+    el.innerHTML = `<span class="cmd"><span>${hl(esc(text))}</span></span>`;
+    el.querySelector('.cmd').appendChild(copyBtn(text));
+  });
+
+  /* tabs, remembered between visits */
+  const tabs = $$('[role=tab]');
+  const pick = (tab, focus) => {
+    tabs.forEach(t => { const on = t === tab; t.setAttribute('aria-selected', on); t.tabIndex = on ? 0 : -1; document.getElementById(t.getAttribute('aria-controls')).hidden = !on; });
+    if (focus) tab.focus();
+    try { localStorage.setItem('docs-tab', tab.id); } catch (e) {}
+  };
+  tabs.forEach((t, i) => {
+    t.onclick = () => pick(t);
+    t.onkeydown = e => { const d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0; if (d) { e.preventDefault(); pick(tabs[(i + d + tabs.length) % tabs.length], true); } };
+  });
+  let saved; try { saved = localStorage.getItem('docs-tab'); } catch (e) {}
+  const s = saved && document.getElementById(saved); if (s) pick(s);
+
+  /* on this page: highlight the section on screen */
+  const links = $$('.rail ol a'), heads = links.map(a => document.querySelector(a.hash));
+  const spy = () => {
+    let i = 0; heads.forEach((h, j) => { if (h.getBoundingClientRect().top < 160) i = j; });
+    if (innerHeight + scrollY >= document.body.scrollHeight - 4) i = heads.length - 1;
+    links.forEach((a, j) => a.classList.toggle('on', j === i));
+  };
+  addEventListener('scroll', spy, { passive: true }); spy();
+
+  /* search: sections, rows, answers and the reference pages */
+  const index = [];
+  $$('main section').forEach(sec => {
+    const h = sec.querySelector('h2').textContent, id = '#' + sec.id;
+    index.push({ t: h, d: sec.querySelector('.sub')?.textContent || '', href: id });
+    sec.querySelectorAll('.sources li, tr, .qa details, .feats li, .checks li, .links li').forEach(el => {
+      if (el.tagName === 'TR' && !el.querySelector('td')) return;
+      const t = (el.querySelector('b, h3, summary, td') || el).textContent.trim();
+      if (t) index.push({ t, d: h + ' · ' + el.textContent.replace(/\s+/g, ' ').trim().slice(0, 90), href: id });
+    });
+  });
+  $$('.side a').forEach(a => index.push({ t: a.textContent.trim(), d: 'Page', href: a.getAttribute('href') }));
+  const dlg = $('#search'), q = $('#q'), res = $('#results');
+  let sel = 0;
+  const mark = () => res.querySelectorAll('a').forEach((a, i) => a.classList.toggle('sel', i === sel));
+  const render = () => {
+    const words = q.value.toLowerCase().split(/\s+/).filter(Boolean);
+    const shown = index.filter(r => words.every(w => (r.t + ' ' + r.d).toLowerCase().includes(w))).slice(0, 12);
+    sel = 0;
+    res.innerHTML = shown.length ? '' : '<li class="none">No results</li>';
+    shown.forEach(r => { const li = document.createElement('li'), a = document.createElement('a'); a.href = r.href; a.innerHTML = '<span></span><small></small>'; a.children[0].textContent = r.t; a.children[1].textContent = r.d; a.onclick = () => dlg.close(); li.appendChild(a); res.appendChild(li); });
+    mark();
+  };
+  const open = () => { if (!dlg.open) { dlg.showModal(); q.value = ''; render(); q.focus(); } };
+  $('#open-search').onclick = open;
+  addEventListener('keydown', e => {
+    if ((e.key === '/' || (e.key === 'k' && (e.metaKey || e.ctrlKey))) && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); open(); }
+  });
+  q.oninput = render;
+  q.onkeydown = e => {
+    const as = res.querySelectorAll('a');
+    if (e.key === 'ArrowDown') { e.preventDefault(); sel = Math.min(as.length - 1, sel + 1); mark(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); sel = Math.max(0, sel - 1); mark(); }
+    else if (e.key === 'Enter' && as.length) { e.preventDefault(); as[sel].click(); }
+  };
+  dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close(); });
+})();
+</script>
+</body>
+</html>
