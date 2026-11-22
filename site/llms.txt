@@ -56,6 +56,7 @@ From each tool's own documentation, read 15 Nov 2026; serve-sim's barcode result
 ## Links
 
 - [Docs](https://stuntcam.dev/docs/): quick start, picture sources, commands, troubleshooting, limits
+- [Agent skill](https://github.com/avinav-b/stuntcam/blob/main/packaging/agent-skill/skills/stuntcam/SKILL.md): instructions for coding agents. Install with `npx skills add avinav-b/stuntcam`, or in Claude Code `/plugin install stuntcam --marketplace avinav-b/stuntcam`
 - [GitHub repository](https://github.com/avinav-b/stuntcam): source, README, issues
 - [npm package](https://www.npmjs.com/package/stuntcam)
 - [All CLI commands](https://github.com/avinav-b/stuntcam/blob/main/cli/README.md)

@@ -253,7 +253,7 @@ dialog::backdrop{background:rgba(7,12,34,.35);backdrop-filter:blur(2px)}
   <h4>Community</h4>
   <ul>
     <li><a href="https://github.com/avinav-b/stuntcam/issues/new/choose">Report a bug</a></li>
-    <li><a href="/llms.txt">For AI agents</a></li>
+    <li><a href="#agents">For AI agents</a></li>
   </ul>
 </aside>
 <main id="top">
@@ -374,6 +374,23 @@ npx stuntcam up --reboot</pre></div>
 <p class="more">Every known problem: <a href="https://github.com/avinav-b/stuntcam/blob/main/docs/TROUBLESHOOTING.md">troubleshooting guide</a>.</p>
 </section>
 
+<section id="agents">
+<h2><a href="#agents">For AI agents</a></h2>
+<p class="sub">Coding agents can run stuntcam on their own. The stuntcam skill tells them how.</p>
+<div class="tbl"><table>
+  <tr><th>Agent</th><th>Install the skill</th></tr>
+  <tr><td>Claude Code</td><td data-cmd>/plugin install stuntcam --marketplace avinav-b/stuntcam</td></tr>
+  <tr><td>Codex, Cursor and others</td><td data-cmd>npx skills add avinav-b/stuntcam</td></tr>
+  <tr><td>By hand</td><td><a href="https://raw.githubusercontent.com/avinav-b/stuntcam/main/packaging/agent-skill/skills/stuntcam/SKILL.md" download="SKILL.md">Download SKILL.md</a> into your agent's skills folder, as <code>stuntcam/SKILL.md</code></td></tr>
+</table></div>
+<ul class="checks" style="margin-top:22px">
+  <li><span><b>No permission alert</b><span class="d"><code>--grant</code> allows the camera before the app asks</span></span></li>
+  <li><span><b>A camera it can script</b><span class="d"><code>source qr:</code> and <code>image:</code> test scanning and photo flows</span></span></li>
+  <li><span><b>Output it can check</b><span class="d"><code>status --json</code> and <code>trace</code> show the camera was used</span></span></li>
+  <li><span><b>Works with your test tools</b><span class="d">launchd mode for tools that inject libraries</span></span></li>
+</ul>
+</section>
+
 <section id="limits">
 <h2><a href="#limits">Limits</a></h2>
 <p class="sub">What doesn't match a real iPhone yet.</p>
@@ -418,6 +435,7 @@ npx stuntcam up --reboot</pre></div>
     <li><a href="#gets">What your app gets</a></li>
     <li><a href="#commands">Commands</a></li>
     <li><a href="#fix">Troubleshooting</a></li>
+    <li><a href="#agents">For AI agents</a></li>
     <li><a href="#limits">Limits</a></li>
     <li><a href="#changes">What it changes</a></li>
     <li><a href="#next">Next steps</a></li>

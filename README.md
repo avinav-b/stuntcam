@@ -29,6 +29,17 @@ Needs an Apple silicon Mac and Xcode 27. Works with AVFoundation, VisionCamera 5
 All commands: [cli/README.md](cli/README.md). Problems: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 Upgrading from 1.1.0: [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## AI agents
+
+Coding agents can run stuntcam on their own. The stuntcam skill tells them how: allow the camera up front, script
+what it sees with `source qr:` or `image:`, and check `status --json` and `trace`.
+
+| | |
+|---|---|
+| Claude Code | `/plugin install stuntcam --marketplace avinav-b/stuntcam` |
+| Codex, Cursor and others | `npx skills add avinav-b/stuntcam` |
+| By hand | Copy [SKILL.md](packaging/agent-skill/skills/stuntcam/SKILL.md) to your agent's skills folder as `stuntcam/SKILL.md` |
+
 ## Limits
 
 - 4K60 records at about 16–32 fps

@@ -1,0 +1,15 @@
+{
+  "name": "stuntcam",
+  "owner": {
+    "name": "stuntcam",
+    "url": "https://github.com/avinav-b/stuntcam"
+  },
+  "description": "The stuntcam agent skill, as an installable plugin.",
+  "plugins": [
+    {
+      "name": "stuntcam",
+      "source": "./packaging/agent-skill",
+      "description": "Use stuntcam, the camera for the iOS Simulator."
+    }
+  ]
+}

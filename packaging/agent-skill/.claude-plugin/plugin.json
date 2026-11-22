@@ -1,0 +1,13 @@
+{
+  "name": "stuntcam",
+  "version": "1.2.0",
+  "description": "Gives agents what they need to use stuntcam, the camera for the iOS Simulator.",
+  "author": {
+    "name": "stuntcam",
+    "url": "https://github.com/avinav-b/stuntcam"
+  },
+  "homepage": "https://stuntcam.dev/docs/",
+  "repository": "https://github.com/avinav-b/stuntcam",
+  "license": "Apache-2.0",
+  "keywords": ["ios", "simulator", "camera", "skills"]
+}
