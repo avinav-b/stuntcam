@@ -14,6 +14,10 @@ of an unexpected shape can still end in a Python traceback). Two kinds of tools 
 - `build.sh` — compiles the Swift, C and Objective-C tools below into `tools/bin/` (all of them with no arguments).
 - `spdx-check.sh` — lists tracked source files without an `SPDX-License-Identifier` first line (POSIX sh; runs
   anywhere).
+- `privacy-check.sh` — fails on anything in a tracked file that shouldn't be public: secrets, personal emails, home
+  paths, local hostnames, private IPs, symlinks, files over 5 MB, and the maintainer's local denylist when present
+  (POSIX sh; CI runs it on every push and pull request).
+- `hooks/pre-push` — runs `privacy-check.sh` before each push; enable it with `git config core.hooksPath tools/hooks`.
 
 ## Media (macOS, Swift)
 

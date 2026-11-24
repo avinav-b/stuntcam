@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: Apache-2.0
+# checks: on every push and pull request, fail on anything that shouldn't be public (tools/privacy-check.sh), a source
+# file without its SPDX line (tools/spdx-check.sh), or a CLI that doesn't build, vet or pass its tests on Linux and as
+# darwin. The engine and simulator tests need a Mac; they run in release.yml and on the maintainer's machine.
+name: checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: privacy check
+        run: sh tools/privacy-check.sh
+      - name: SPDX headers
+        run: sh tools/spdx-check.sh
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.27.x'
+          cache-dependency-path: cli/go.mod
+      - name: CLI build, vet and tests
+        working-directory: cli
+        run: |
+          go build ./...
+          GOOS=darwin go build ./...
+          GOOS=darwin go vet ./...
+          go test ./...
