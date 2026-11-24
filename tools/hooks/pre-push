@@ -1,0 +1,5 @@
+#!/bin/sh
+# SPDX-License-Identifier: Apache-2.0
+# pre-push: runs tools/privacy-check.sh (with the maintainer's local denylist, if present) before anything is pushed.
+# Enable it once per clone: git config core.hooksPath tools/hooks
+exec sh "$(git rev-parse --show-toplevel)/tools/privacy-check.sh"
