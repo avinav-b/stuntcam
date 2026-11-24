@@ -130,3 +130,9 @@ The fixtures' npm packages, CocoaPods and pub packages (react-native-vision-came
 `mobile_scanner` and their dependencies) are not in the repo; the lockfiles above pin them and the package managers fetch
 them, each under its own licence. stuntcam's engine, loader, stub and CLI link only Apple's system frameworks and the Go
 standard library (`cli/go.mod` has no `require`).
+
+## Landing page media
+
+`site/cat.mp4` and `site/cat.jpg` are from "Moomin1.webm" by User:Tet on Wikimedia Commons, and `site/cafe.jpg` from
+"Breakfast at JO.CO, Handcross 2026-07-31" on Wikimedia Commons, with a stuntcam.dev QR card added. Both are CC0
+(public domain dedication); credit is given as a courtesy.

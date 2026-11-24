@@ -98,7 +98,36 @@ h1{font:700 52px/1.05 var(--head);letter-spacing:-.025em;margin:0 0 18px}
 
 /* phone (always dark, like a camera app) */
 .demo{justify-self:center;width:280px}
-.phone video{display:block;width:100%;aspect-ratio:720/1566;border-radius:36px;background:#000}
+.screen{position:relative;aspect-ratio:720/1566;border-radius:36px;overflow:hidden;background:#000;container-type:inline-size}
+.screen>.lay{position:absolute;inset:0;opacity:0;transition:opacity .45s var(--ease)}
+.screen>.lay.on{opacity:1}
+.lay>img,video.lay{width:100%;height:100%;object-fit:cover;display:block}
+.qrs{background:#fff}
+.qrs .qrc{position:absolute;left:24%;top:39%;width:52%;height:auto}
+.scan{position:absolute;aspect-ratio:1;border:1.3cqw solid #ffd60a;border-radius:5cqw;box-sizing:border-box;box-shadow:0 0 0 .4cqw rgba(0,0,0,.08)}
+.qrs .scan{left:19%;top:36.6%;width:62%}
+.ui{position:absolute;inset:0;pointer-events:none;color:#fff;transition:color .45s}
+.ui .sb{position:absolute;top:2.6%;left:14%;right:9%;display:flex;justify-content:space-between;align-items:center;font:600 5.4cqw/1 -apple-system,'Inter',sans-serif}
+.ui .sb svg{height:3.6cqw;width:auto;fill:currentColor}
+.ui .di{position:absolute;top:1.6%;left:34.5%;width:31%;height:4.1%;border-radius:99px;background:#000}
+.ui .pill{position:absolute;left:50%;top:76.2%;transform:translateX(-50%);display:flex;align-items:center;gap:2.6cqw;padding:2.2cqw 4.6cqw;border-radius:99px;background:rgba(40,44,52,.78);color:#fff;font:600 4cqw/1.2 'Inter',sans-serif;white-space:nowrap;transition:opacity .45s}
+.ui .pill svg{width:4.4cqw;height:4.4cqw}
+.ui .sh{position:absolute;left:40.2%;top:83.8%;width:19.6%;aspect-ratio:1;border-radius:50%;border:1.3cqw solid #fff;box-sizing:border-box;box-shadow:0 0 0 .3cqw rgba(0,0,0,.12)}
+.ui .sh::after{content:"";position:absolute;inset:1.1cqw;border-radius:50%;background:#fff}
+.screen[data-k=q] .ui{color:#000}
+.screen[data-k=q] .ui .sh{border-color:#d1d1d6} .screen[data-k=q] .ui .sh::after{background:#e5e5ea}
+.screen[data-k=v] .ui .pill{opacity:0}
+/* the terminal that drives the phone */
+.hterm{position:absolute;z-index:2;left:-180px;bottom:-46px;width:340px;border-radius:12px;overflow:hidden;background:#0F1838;box-shadow:0 24px 60px -24px rgba(10,22,64,.7),0 0 0 1px rgba(141,184,255,.16)}
+.hterm .hbar{display:flex;gap:7px;padding:10px 12px;background:rgba(255,255,255,.05);border-bottom:1px solid rgba(255,255,255,.08)}
+.hterm .hbar i{width:11px;height:11px;border-radius:50%;background:#FF5F57} .hterm .hbar i:nth-child(2){background:#FEBC2E} .hterm .hbar i:nth-child(3){background:#28C840}
+.hterm .view{height:calc(3 * 1.75em + 26px);padding:13px 15px;overflow:hidden;font:13px/1.75 var(--mono);color:#E3E9FF}
+.hterm .lines{will-change:transform}
+.hterm .ln{white-space:pre;overflow:hidden;text-overflow:clip}
+.hterm .caret{display:inline-block;width:.6em;height:1.15em;margin-left:1px;background:#E3E9FF;vertical-align:-.2em;animation:blink 1s step-end infinite}
+.hterm .caret.typing{animation:none}
+.hterm .c{color:#7F8BB8} .hterm .o{color:#8FE3A8}
+@media (max-width:860px){.hterm{left:-46px;bottom:-56px;width:310px}.hero .wrap{padding-bottom:120px}.hterm .view{font-size:12px}}
 .phone{position:relative;width:280px;border-radius:46px;background:#111522;padding:10px;box-shadow:0 0 0 1px var(--rule)}
 
 /* sections */
@@ -265,7 +294,8 @@ footer .wrap{display:flex;flex-wrap:wrap;align-items:center;gap:14px 28px;paddin
     </div>
     <div class="demo">
       <svg class="ap" viewBox="0 0 100 100" aria-hidden="true" fill="currentColor"><polygon points="50,4 89.84,27 65.62,53.45"/><polygon points="89.84,27 89.84,73 54.82,65.26" opacity=".55"/><polygon points="89.84,73 50,96 39.2,61.8" opacity=".8"/><polygon points="50,96 10.16,73 34.38,46.55"/><polygon points="10.16,73 10.16,27 45.18,34.74" opacity=".55"/><polygon points="10.16,27 50,4 60.8,38.2" opacity=".8"/></svg>
-      <div class="phone"><video id="rec" autoplay muted loop playsinline preload="auto" poster="demo-poster.jpg" aria-label="Recording: a camera app in the iOS Simulator shows a cat video, then a café table, and scans the QR code on it"><source src="demo.mp4" type="video/mp4"></video></div>
+      <div class="phone"><div class="screen" data-k="v" role="img" aria-label="A camera app in the iOS Simulator. stuntcam switches its camera between a cat video, a café photo with a QR code on the table, and a generated QR code"><video id="s-video" class="lay on" muted loop playsinline preload="auto" poster="cat.jpg"><source src="cat.mp4" type="video/mp4"></video><div id="s-image" class="lay"><img src="cafe.jpg" alt="" decoding="async"><div class="scan" style="left:34.4%;top:41.2%;width:36cqw;transform:rotate(2deg)"></div></div><div id="s-qr" class="lay qrs"><svg class="qrc" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 25 25" shape-rendering="crispEdges"><path d="M0 0h1v1h-1zM1 0h1v1h-1zM2 0h1v1h-1zM3 0h1v1h-1zM4 0h1v1h-1zM5 0h1v1h-1zM6 0h1v1h-1zM8 0h1v1h-1zM10 0h1v1h-1zM11 0h1v1h-1zM13 0h1v1h-1zM14 0h1v1h-1zM15 0h1v1h-1zM16 0h1v1h-1zM18 0h1v1h-1zM19 0h1v1h-1zM20 0h1v1h-1zM21 0h1v1h-1zM22 0h1v1h-1zM23 0h1v1h-1zM24 0h1v1h-1zM0 1h1v1h-1zM6 1h1v1h-1zM12 1h1v1h-1zM13 1h1v1h-1zM18 1h1v1h-1zM24 1h1v1h-1zM0 2h1v1h-1zM2 2h1v1h-1zM3 2h1v1h-1zM4 2h1v1h-1zM6 2h1v1h-1zM10 2h1v1h-1zM18 2h1v1h-1zM20 2h1v1h-1zM21 2h1v1h-1zM22 2h1v1h-1zM24 2h1v1h-1zM0 3h1v1h-1zM2 3h1v1h-1zM3 3h1v1h-1zM4 3h1v1h-1zM6 3h1v1h-1zM8 3h1v1h-1zM9 3h1v1h-1zM11 3h1v1h-1zM12 3h1v1h-1zM13 3h1v1h-1zM14 3h1v1h-1zM16 3h1v1h-1zM18 3h1v1h-1zM20 3h1v1h-1zM21 3h1v1h-1zM22 3h1v1h-1zM24 3h1v1h-1zM0 4h1v1h-1zM2 4h1v1h-1zM3 4h1v1h-1zM4 4h1v1h-1zM6 4h1v1h-1zM8 4h1v1h-1zM9 4h1v1h-1zM10 4h1v1h-1zM13 4h1v1h-1zM14 4h1v1h-1zM15 4h1v1h-1zM18 4h1v1h-1zM20 4h1v1h-1zM21 4h1v1h-1zM22 4h1v1h-1zM24 4h1v1h-1zM0 5h1v1h-1zM6 5h1v1h-1zM8 5h1v1h-1zM10 5h1v1h-1zM11 5h1v1h-1zM13 5h1v1h-1zM16 5h1v1h-1zM18 5h1v1h-1zM24 5h1v1h-1zM0 6h1v1h-1zM1 6h1v1h-1zM2 6h1v1h-1zM3 6h1v1h-1zM4 6h1v1h-1zM5 6h1v1h-1zM6 6h1v1h-1zM8 6h1v1h-1zM10 6h1v1h-1zM12 6h1v1h-1zM14 6h1v1h-1zM16 6h1v1h-1zM18 6h1v1h-1zM19 6h1v1h-1zM20 6h1v1h-1zM21 6h1v1h-1zM22 6h1v1h-1zM23 6h1v1h-1zM24 6h1v1h-1zM8 7h1v1h-1zM10 7h1v1h-1zM11 7h1v1h-1zM12 7h1v1h-1zM14 7h1v1h-1zM15 7h1v1h-1zM0 8h1v1h-1zM4 8h1v1h-1zM6 8h1v1h-1zM7 8h1v1h-1zM8 8h1v1h-1zM15 8h1v1h-1zM17 8h1v1h-1zM18 8h1v1h-1zM19 8h1v1h-1zM20 8h1v1h-1zM21 8h1v1h-1zM24 8h1v1h-1zM1 9h1v1h-1zM2 9h1v1h-1zM3 9h1v1h-1zM4 9h1v1h-1zM7 9h1v1h-1zM9 9h1v1h-1zM13 9h1v1h-1zM15 9h1v1h-1zM16 9h1v1h-1zM17 9h1v1h-1zM20 9h1v1h-1zM21 9h1v1h-1zM23 9h1v1h-1zM0 10h1v1h-1zM1 10h1v1h-1zM4 10h1v1h-1zM6 10h1v1h-1zM7 10h1v1h-1zM8 10h1v1h-1zM9 10h1v1h-1zM12 10h1v1h-1zM13 10h1v1h-1zM14 10h1v1h-1zM15 10h1v1h-1zM19 10h1v1h-1zM20 10h1v1h-1zM21 10h1v1h-1zM22 10h1v1h-1zM1 11h1v1h-1zM3 11h1v1h-1zM5 11h1v1h-1zM7 11h1v1h-1zM8 11h1v1h-1zM9 11h1v1h-1zM12 11h1v1h-1zM15 11h1v1h-1zM16 11h1v1h-1zM17 11h1v1h-1zM22 11h1v1h-1zM23 11h1v1h-1zM2 12h1v1h-1zM4 12h1v1h-1zM5 12h1v1h-1zM6 12h1v1h-1zM7 12h1v1h-1zM9 12h1v1h-1zM11 12h1v1h-1zM13 12h1v1h-1zM14 12h1v1h-1zM17 12h1v1h-1zM18 12h1v1h-1zM21 12h1v1h-1zM22 12h1v1h-1zM23 12h1v1h-1zM24 12h1v1h-1zM0 13h1v1h-1zM2 13h1v1h-1zM3 13h1v1h-1zM5 13h1v1h-1zM8 13h1v1h-1zM9 13h1v1h-1zM12 13h1v1h-1zM14 13h1v1h-1zM15 13h1v1h-1zM16 13h1v1h-1zM17 13h1v1h-1zM20 13h1v1h-1zM23 13h1v1h-1zM4 14h1v1h-1zM6 14h1v1h-1zM7 14h1v1h-1zM11 14h1v1h-1zM12 14h1v1h-1zM13 14h1v1h-1zM14 14h1v1h-1zM15 14h1v1h-1zM19 14h1v1h-1zM20 14h1v1h-1zM21 14h1v1h-1zM22 14h1v1h-1zM2 15h1v1h-1zM3 15h1v1h-1zM4 15h1v1h-1zM8 15h1v1h-1zM9 15h1v1h-1zM11 15h1v1h-1zM13 15h1v1h-1zM16 15h1v1h-1zM19 15h1v1h-1zM20 15h1v1h-1zM22 15h1v1h-1zM23 15h1v1h-1zM0 16h1v1h-1zM1 16h1v1h-1zM2 16h1v1h-1zM3 16h1v1h-1zM4 16h1v1h-1zM6 16h1v1h-1zM7 16h1v1h-1zM10 16h1v1h-1zM12 16h1v1h-1zM13 16h1v1h-1zM16 16h1v1h-1zM17 16h1v1h-1zM18 16h1v1h-1zM19 16h1v1h-1zM20 16h1v1h-1zM21 16h1v1h-1zM22 16h1v1h-1zM8 17h1v1h-1zM9 17h1v1h-1zM10 17h1v1h-1zM13 17h1v1h-1zM14 17h1v1h-1zM16 17h1v1h-1zM20 17h1v1h-1zM0 18h1v1h-1zM1 18h1v1h-1zM2 18h1v1h-1zM3 18h1v1h-1zM4 18h1v1h-1zM5 18h1v1h-1zM6 18h1v1h-1zM8 18h1v1h-1zM16 18h1v1h-1zM18 18h1v1h-1zM20 18h1v1h-1zM0 19h1v1h-1zM6 19h1v1h-1zM12 19h1v1h-1zM14 19h1v1h-1zM16 19h1v1h-1zM20 19h1v1h-1zM21 19h1v1h-1zM22 19h1v1h-1zM23 19h1v1h-1zM0 20h1v1h-1zM2 20h1v1h-1zM3 20h1v1h-1zM4 20h1v1h-1zM6 20h1v1h-1zM8 20h1v1h-1zM10 20h1v1h-1zM11 20h1v1h-1zM13 20h1v1h-1zM14 20h1v1h-1zM16 20h1v1h-1zM17 20h1v1h-1zM18 20h1v1h-1zM19 20h1v1h-1zM20 20h1v1h-1zM21 20h1v1h-1zM22 20h1v1h-1zM23 20h1v1h-1zM24 20h1v1h-1zM0 21h1v1h-1zM2 21h1v1h-1zM3 21h1v1h-1zM4 21h1v1h-1zM6 21h1v1h-1zM9 21h1v1h-1zM12 21h1v1h-1zM17 21h1v1h-1zM18 21h1v1h-1zM19 21h1v1h-1zM22 21h1v1h-1zM23 21h1v1h-1zM24 21h1v1h-1zM0 22h1v1h-1zM2 22h1v1h-1zM3 22h1v1h-1zM4 22h1v1h-1zM6 22h1v1h-1zM11 22h1v1h-1zM12 22h1v1h-1zM13 22h1v1h-1zM14 22h1v1h-1zM16 22h1v1h-1zM17 22h1v1h-1zM18 22h1v1h-1zM21 22h1v1h-1zM23 22h1v1h-1zM0 23h1v1h-1zM6 23h1v1h-1zM10 23h1v1h-1zM11 23h1v1h-1zM13 23h1v1h-1zM18 23h1v1h-1zM19 23h1v1h-1zM20 23h1v1h-1zM21 23h1v1h-1zM22 23h1v1h-1zM23 23h1v1h-1zM0 24h1v1h-1zM1 24h1v1h-1zM2 24h1v1h-1zM3 24h1v1h-1zM4 24h1v1h-1zM5 24h1v1h-1zM6 24h1v1h-1zM8 24h1v1h-1zM12 24h1v1h-1zM13 24h1v1h-1zM15 24h1v1h-1zM22 24h1v1h-1zM23 24h1v1h-1zM24 24h1v1h-1z"/></svg><div class="scan"></div></div><div class="ui"><div class="sb"><span>9:41</span><svg viewBox="0 0 46 13"><rect x="0" y="8" width="3.5" height="5" rx="1"/><rect x="5.5" y="5.5" width="3.5" height="7.5" rx="1"/><rect x="11" y="3" width="3.5" height="10" rx="1"/><rect x="16.5" y="0" width="3.5" height="13" rx="1"/><rect x="23.5" y="0.5" width="20" height="12" rx="3.5" fill="none" stroke="currentColor" opacity=".45"/><rect x="25.5" y="2.5" width="16" height="8" rx="2" fill="#30d158"/></svg></div><div class="di"></div><div class="pill"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>stuntcam.dev</div><div class="sh"></div></div></div></div>
+      <div class="hterm" aria-hidden="true"><div class="hbar"><i></i><i></i><i></i></div><div class="view"><div class="lines" id="hcode"></div></div></div>
     </div>
   </div>
 </div>
@@ -450,10 +480,84 @@ footer .wrap{display:flex;flex-wrap:wrap;align-items:center;gap:14px 28px;paddin
 })();
 </script>
 <script>
-(function(){var v=document.getElementById('rec');if(!v)return;
-if(matchMedia('(prefers-reduced-motion: reduce)').matches){v.removeAttribute('autoplay');v.pause();v.controls=true;v.currentTime=7.7;return}
-v.play().catch(function(){v.controls=true});
-if('IntersectionObserver' in window)new IntersectionObserver(function(e){e[e.length-1].isIntersecting?v.play().catch(function(){}):v.pause()}).observe(v)})();
+/* hero: a terminal types `stuntcam source …`, the phone switches to that picture, and the terminal scrolls on */
+(() => {
+  const box = document.getElementById('hcode'), vid = document.getElementById('s-video');
+  if (!box || !vid) return;
+  const layers = { v: vid, i: document.getElementById('s-image'), q: document.getElementById('s-qr') };
+  const steps = [
+    ['video:cat.mov', 'Now showing cat.mov', 'v'],
+    ['image:cafe.jpg', 'Now showing cafe.jpg', 'i'],
+    ['qr:stuntcam.dev', 'Now showing a QR code', 'q']
+  ];
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let seen = true;
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  const whenSeen = async () => { while (!seen) await wait(250); };
+  const show = k => {
+    for (const [key, el] of Object.entries(layers)) el.classList.toggle('on', key === k);
+    vid.parentElement.dataset.k = k;
+    if (k !== 'v') vid.pause();
+  };
+  const P = '<span class="c">$ </span>npx stuntcam source ';
+  const caret = () => '<span class="caret"></span>';
+  const addLine = html => { const d = document.createElement('div'); d.className = 'ln'; d.innerHTML = html; box.appendChild(d); return d; };
+
+  if (reduce) {
+    show('i');
+    addLine(P + steps[1][0]); addLine('<span class="o">✓ ' + steps[1][1] + '</span>'); addLine('<span class="c">$ </span>');
+    return;
+  }
+
+  /* scroll the finished command and its result up, so the new prompt sits at the top */
+  async function scrollUp(prompt) {
+    const dy = prompt.offsetTop - box.firstElementChild.offsetTop;
+    box.style.transition = 'transform .55s cubic-bezier(.2,.7,.2,1)';
+    box.style.transform = `translateY(${-dy}px)`;
+    await wait(600);
+    while (box.firstElementChild !== prompt) box.firstElementChild.remove();
+    box.style.transition = 'none';
+    box.style.transform = 'none';
+  }
+
+  async function loop() {
+    /* the page opens on the first step already run: its command, its result, and a waiting prompt */
+    addLine('<span class="c">$ </span>npx stuntcam source ' + steps[0][0]);
+    addLine('<span class="o">✓ ' + steps[0][1] + '</span>');
+    let prompt = addLine('<span class="c">$ </span>' + caret());
+    vid.play().catch(() => {});
+    await whenSeen();
+    await wait(2800);
+    await scrollUp(prompt);
+    for (let n = 1; ; n = (n + 1) % steps.length) {
+      const [arg, out, k] = steps[n];
+      await whenSeen();
+      await wait(700);
+      const cmd = 'npx stuntcam source ' + arg;
+      for (let c = 1; c <= cmd.length; c++) {
+        await whenSeen();
+        prompt.innerHTML = '<span class="c">$ </span>' + cmd.slice(0, c) + '<span class="caret typing"></span>';
+        await wait(30 + Math.random() * 45);
+      }
+      prompt.innerHTML = '<span class="c">$ </span>' + cmd;
+      await wait(260);
+      show(k);
+      addLine('<span class="o">✓ ' + out + '</span>');
+      const next = addLine('<span class="c">$ </span>' + caret());
+      if (k === 'v') { vid.currentTime = 0; if (seen) vid.play().catch(() => {}); }
+      await wait(2800);
+      await scrollUp(next);
+      prompt = next;
+    }
+  }
+  show('v');
+  if ('IntersectionObserver' in window) new IntersectionObserver(e => {
+    seen = e[e.length - 1].isIntersecting;
+    if (!seen) vid.pause();
+    else if (layers.v.classList.contains('on')) vid.play().catch(() => {});
+  }).observe(vid);
+  loop();
+})();
 </script>
 </body>
 </html>
